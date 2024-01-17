@@ -30,12 +30,40 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples{
     null
   }
 
-  test("my4") {
+  test("infinite paths") {
     val code =
       """
         |main() {
         |  var y;
         |  y = input;
+        |  while (y > 0) {
+        |   y = y - 1;
+        |  }
+        |  return 0;
+        |}
+        |""".stripMargin;
+    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+    val executor = new SymbolicExecutor(cfg);
+    try {
+      executor.run()
+      fail("Expected a StackOverflowError but it did not occur.")
+    }
+    catch {
+      case _: StackOverflowError =>
+      case other: Throwable => fail("Expected a StackOverflowError, but caught different exception: " + other)
+    }
+
+    null
+  }
+
+
+  test("infinite paths 2") {
+    val code =
+      """
+        |main() {
+        |  var y;
+        |  y = input;
+        |  y = y + 1;
         |  while (y > 0) {
         |   y = y - 1;
         |  }

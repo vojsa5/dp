@@ -1,7 +1,7 @@
 package microc.symbolic_execution
 
 import microc.ProgramException
-import microc.ast.{AndAnd, AssignStmt, BinaryOp, CodeLoc, Divide, Equal, Expr, FunDecl, GreatThan, Identifier, IfStmt, Input, Loc, Minus, Not, Null, Number, OrOr, Plus, Program, ReturnStmt, Times, VarStmt, WhileStmt}
+import microc.ast.{AndAnd, AssignStmt, BinaryOp, CodeLoc, Divide, Equal, Expr, FunDecl, Identifier, IfStmt, Input, Loc, Minus, Not, Number, Plus, Program, ReturnStmt, Times, VarStmt, WhileStmt}
 import microc.cfg.ProgramCfg
 import microc.cli.Reporter
 import microc.symbolic_execution.ExecutionException.{errorNonIntArithmetics, errorUninitializedReference}

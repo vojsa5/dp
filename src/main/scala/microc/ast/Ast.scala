@@ -1,5 +1,7 @@
 package microc.ast
 
+import microc.symbolic_execution.Value.Symbolic
+
 trait Loc extends Ordered[Loc] {
   def line: Int
   def col: Int
@@ -121,7 +123,7 @@ sealed trait StmtInNestedBlock extends Stmt
 
 case class Null(loc: Loc) extends Expr
 
-case class Number(value: Int, loc: Loc) extends Expr
+case class Number(value: Int, loc: Loc) extends Expr with Symbolic
 
 case class Identifier(name: String, loc: Loc) extends Expr
 

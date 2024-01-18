@@ -28,10 +28,6 @@ object Value {
     override def toString: String = "return"
   }
 
-  case class IntVal(value: Int, loc: Loc) extends Symbolic {
-    override def toString: String = value.toString
-  }
-
   case class SymbolicVal(loc: Loc) extends Symbolic {
     override def toString: String = "unknown"
   }

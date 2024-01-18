@@ -4,8 +4,8 @@ import microc.ProgramException
 import microc.ast.{AndAnd, AssignStmt, BinaryOp, CodeLoc, Divide, Equal, Expr, FunDecl, Identifier, IfStmt, Input, Loc, Minus, Not, Number, Plus, Program, ReturnStmt, Times, VarStmt, WhileStmt}
 import microc.cfg.ProgramCfg
 import microc.cli.Reporter
-import microc.symbolic_execution.ExecutionException.{errorNonIntArithmetics, errorUninitializedReference}
-import microc.symbolic_execution.Value.{IntVal, PointerVal, Symbolic, SymbolicExpr, SymbolicVal, UninitializedRef, Val}
+import microc.symbolic_execution.ExecutionException.{errorDivByZero, errorNonIntArithmetics, errorPossibleDivByZero, errorUninitializedReference}
+import microc.symbolic_execution.Value.{PointerVal, Symbolic, SymbolicExpr, SymbolicVal, UninitializedRef, Val}
 import com.microsoft.z3._
 
 case class ExecutionException(message: String, loc: Loc) extends ProgramException(message) {
@@ -64,6 +64,9 @@ object ExecutionException {
   def errorDivByZero(loc: Loc): ExecutionException =
     ExecutionException(s"Division by zero", loc)
 
+  def errorPossibleDivByZero(loc: Loc): ExecutionException =
+    ExecutionException(s"Possible Division by zero", loc)
+
 }
 
 
@@ -92,40 +95,40 @@ class SymbolicExecutor(program: ProgramCfg) {
       case AssignStmt(lhs, rhs, _) =>
         symbolicState.updatedVar(getTarget(lhs, symbolicState), evaluate(rhs, symbolicState))
       case IfStmt(guard, _, _, _) =>
-        solver.solveConstraint(symbolicState.pathCondition, guard, symbolicState) match {
+        solver.solveCondition(symbolicState.pathCondition, guard, symbolicState) match {
           case Status.SATISFIABLE =>
             step(symbolicState.getIfTrueState())
           case Status.UNSATISFIABLE =>
             return
           case Status.UNKNOWN =>
-            throw new Exception("This should not happen")
+            throw new Exception("IMPLEMENT")
         }
 
-        solver.solveConstraint(symbolicState.pathCondition, Not(guard, guard.loc), symbolicState) match {
+        solver.solveCondition(symbolicState.pathCondition, Not(guard, guard.loc), symbolicState) match {
           case Status.SATISFIABLE =>
             step(symbolicState.getIfFalseState())
           case Status.UNSATISFIABLE =>
             return
           case Status.UNKNOWN =>
-            throw new Exception("This should not happen")
+            throw new Exception("IMPLEMENT")
         }
         return
       case WhileStmt(guard, _, _) =>
-        solver.solveConstraint(symbolicState.pathCondition, guard, symbolicState) match {
+        solver.solveCondition(symbolicState.pathCondition, guard, symbolicState) match {
           case Status.SATISFIABLE =>
             step(symbolicState.getIfTrueState())
           case Status.UNSATISFIABLE =>
             return
           case Status.UNKNOWN =>
-            throw new Exception("This should not happen")
+            throw new Exception("IMPLEMENT")
         }
-        solver.solveConstraint(symbolicState.pathCondition, Not(guard, guard.loc), symbolicState) match {
+        solver.solveCondition(symbolicState.pathCondition, Not(guard, guard.loc), symbolicState) match {
           case Status.SATISFIABLE =>
             step(symbolicState.getIfFalseState())
           case Status.UNSATISFIABLE =>
             return
           case Status.UNKNOWN =>
-            throw new Exception("This should not happen")
+            throw new Exception("IMPLEMENT")
         }
         return
       case ReturnStmt(expr, _) =>
@@ -138,23 +141,33 @@ class SymbolicExecutor(program: ProgramCfg) {
     expr match {
       case BinaryOp(operator, left, right, loc) =>
         (evaluate(left, symbolicState), evaluate(right, symbolicState)) match {
-          case (IntVal(l, _), IntVal(r, _)) =>
+          case (Number(l, _), Number(r, _)) =>
             operator match {
-              case Plus => IntVal(l + r, loc)
-              case Minus => IntVal(l - r, loc)
-              case Times => IntVal(l * r, loc)
-              case Divide => IntVal(l / r, loc)
+              case Plus => Number(l + r, loc)
+              case Minus => Number(l - r, loc)
+              case Times => Number(l * r, loc)
+              case Divide =>
+                if (r == 0) {
+                  throw errorDivByZero(loc)
+                }
+                Number(l / r, loc)
             }
           case (e1: Symbolic, e2: Symbolic) =>
               operator match {
                 case Plus => SymbolicExpr(BinaryOp(Plus, e1, e2, loc), loc)
                 case Minus => SymbolicExpr(BinaryOp(Minus, e1, e2, loc), loc)
                 case Times => SymbolicExpr(BinaryOp(Times, e1, e2, loc), loc)
-                case Divide => SymbolicExpr(BinaryOp(Divide, e1, e2, loc), loc)
+                case Divide => {
+                  solver.solveConstraint(solver.createConstraint(BinaryOp(Equal, e2, Number(0, loc), loc), symbolicState)) match {
+                    case Status.SATISFIABLE => throw errorPossibleDivByZero(loc)
+                    case Status.UNSATISFIABLE => SymbolicExpr(BinaryOp(Divide, e1, e2, loc), loc)
+                    case Status.UNKNOWN => throw new Exception("IMPLEMENT")
+                  }
+                }
               }
           case _ => throw errorNonIntArithmetics(loc)
         }
-      case Number(value, loc) => IntVal(value, loc)
+      case Number(value, loc) => Number(value, loc)
       case id@Identifier(_, _) =>
         symbolicState.getSymbolicValForId(id)
       case Input(loc) => SymbolicVal(loc)

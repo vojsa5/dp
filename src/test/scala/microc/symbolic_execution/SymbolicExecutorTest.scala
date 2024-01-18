@@ -5,28 +5,25 @@ import microc.{Examples, MicrocSupport}
 import munit.FunSuite
 
 class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples{
-  test("my") {
+  test("possible error") {
     val code =
       """
-        |f() {
-        |  var x,y,z,a,b;
-        |  z = a+b;
-        |  y = a*b;
-        |  while (y > a+b) {
-        |    a = a+1;
-        |    x = a+b;
-        |  }
-        |  return 0;
-        |}
         |main() {
         |  var x;
-        |  x = f();
-        |  return x;
+        |  x = input;
+        |  return 1/x;
         |}
         |""".stripMargin;
     val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
     val executor = new SymbolicExecutor(cfg);
-    executor.run()
+    try {
+      executor.run()
+      fail("Expected a ExecutionException but it did not occur.")
+    }
+    catch {
+      case _: ExecutionException =>
+      case other: Throwable => fail("Expected a ExecutionException, but caught different exception: " + other)
+    }
     null
   }
 

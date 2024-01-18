@@ -1,19 +1,24 @@
 package microc.symbolic_execution
 
-import com.microsoft.z3.{ArithExpr, ArithSort, BoolExpr, Context}
+import com.microsoft.z3.{ArithExpr, ArithSort, BoolExpr, Context, Status}
 import microc.ast.{AndAnd, BinaryOp, Divide, Equal, Expr, GreatThan, Identifier, Minus, Not, Number, OrOr, Plus, Times}
-import microc.symbolic_execution.Value.{IntVal, SymbolicExpr, SymbolicVal}
+import microc.symbolic_execution.Value.{SymbolicExpr, SymbolicVal}
 
 class ConstraintSolver() {
 
   val ctx = new Context()
 
 
-  def solveConstraint(pathCondition: Expr, guard: Expr, symbolicState: SymbolicState) = {
-    val solver = ctx.mkSolver()
+  def solveCondition(pathCondition: Expr, guard: Expr, symbolicState: SymbolicState): Status = {
     val ifPathCondition = BinaryOp(AndAnd, pathCondition, guard, guard.loc)
     val ifConstraint = createConstraint(ifPathCondition, symbolicState)
-    ifConstraint match {
+    solveConstraint(ifConstraint)
+  }
+
+
+  def solveConstraint(constraint: com.microsoft.z3.Expr[_]): Status = {
+    val solver = ctx.mkSolver()
+    constraint match {
       case cond: BoolExpr => solver.add(cond)
     }
     solver.check()
@@ -64,17 +69,13 @@ class ConstraintSolver() {
             }
         }
       case Identifier(name, loc) =>
-        val u = state.getSymbolicValForId(Identifier(name, loc))
         state.getSymbolicValForId(Identifier(name, loc)) match {
-          case IntVal(value, _) => ctx.mkInt(value)
+          case Number(value, _) => ctx.mkInt(value)
           case SymbolicVal(_) => ctx.mkIntConst(name)
           case SymbolicExpr(expr, _) => createConstraint(expr, state)
-          case other@_ =>
-            printf("other: %s\n", other.getClass);
-            throw new Exception("IMPLEMENT")
+          case _ => throw new Exception("IMPLEMENT")
         }
       case Number(value, _) => ctx.mkInt(value)
-      case IntVal(value, _) => ctx.mkInt(value)
       case SymbolicVal(loc) => ctx.mkIntConst(loc.toString)
       case SymbolicExpr(expr, _) => createConstraint(expr, state)
     }

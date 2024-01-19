@@ -73,6 +73,7 @@ object ExecutionException {
 class SymbolicExecutor(program: ProgramCfg) {
 
   val solver = new ConstraintSolver()
+  var unfinishedPaths: Set[SymbolicState] = Set()
 
   def run(): Unit = {
     step(new SymbolicState(program.getFce("main"), BinaryOp(Equal, Number(1, CodeLoc(0, 0)), Number(1, CodeLoc(0, 0)), CodeLoc(0, 0))))
@@ -158,7 +159,8 @@ class SymbolicExecutor(program: ProgramCfg) {
                 case Minus => SymbolicExpr(BinaryOp(Minus, e1, e2, loc), loc)
                 case Times => SymbolicExpr(BinaryOp(Times, e1, e2, loc), loc)
                 case Divide => {
-                  solver.solveConstraint(solver.createConstraint(BinaryOp(Equal, e2, Number(0, loc), loc), symbolicState)) match {
+                  solver.solveConstraint(
+                    solver.createConstraint(BinaryOp(AndAnd, BinaryOp(Equal, e2, Number(0, loc), loc), symbolicState.pathCondition, loc), symbolicState)) match {
                     case Status.SATISFIABLE => throw errorPossibleDivByZero(loc)
                     case Status.UNSATISFIABLE => SymbolicExpr(BinaryOp(Divide, e1, e2, loc), loc)
                     case Status.UNKNOWN => throw new Exception("IMPLEMENT")
@@ -169,6 +171,7 @@ class SymbolicExecutor(program: ProgramCfg) {
         }
       case Number(value, loc) => Number(value, loc)
       case id@Identifier(_, _) =>
+        val a = symbolicState.getSymbolicValForId(id)
         symbolicState.getSymbolicValForId(id)
       case Input(loc) => SymbolicVal(loc)
     }

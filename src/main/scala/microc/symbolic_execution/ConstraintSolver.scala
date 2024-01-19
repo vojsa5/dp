@@ -69,14 +69,15 @@ class ConstraintSolver() {
             }
         }
       case Identifier(name, loc) =>
+        val a = state.getSymbolicValForId(Identifier(name, loc))
         state.getSymbolicValForId(Identifier(name, loc)) match {
           case Number(value, _) => ctx.mkInt(value)
-          case SymbolicVal(_) => ctx.mkIntConst(name)
+          case v@SymbolicVal(_) => ctx.mkIntConst(v.name)
           case SymbolicExpr(expr, _) => createConstraint(expr, state)
           case _ => throw new Exception("IMPLEMENT")
         }
       case Number(value, _) => ctx.mkInt(value)
-      case SymbolicVal(loc) => ctx.mkIntConst(loc.toString)
+      case v@SymbolicVal(loc) => ctx.mkIntConst(v.name)
       case SymbolicExpr(expr, _) => createConstraint(expr, state)
     }
   }

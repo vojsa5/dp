@@ -2,6 +2,8 @@ package microc.symbolic_execution
 
 import microc.ast.{CodeLoc, Expr, Loc}
 
+import scala.util.Random
+
 object Value {
 
   sealed trait Val
@@ -29,6 +31,7 @@ object Value {
   }
 
   case class SymbolicVal(loc: Loc) extends Symbolic {
+    val name = (1 to 10).map(_ => "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"(new Random().nextInt(52))).mkString
     override def toString: String = "unknown"
   }
 

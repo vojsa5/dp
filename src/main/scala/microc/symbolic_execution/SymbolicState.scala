@@ -1,7 +1,8 @@
 package microc.symbolic_execution
 
-import microc.ast.{Expr, Identifier, IfStmt, NestedBlockStmt, WhileStmt}
+import microc.ast.{AndAnd, BinaryOp, Expr, Identifier, IfStmt, NestedBlockStmt, Not, WhileStmt}
 import microc.cfg.CfgNode
+import microc.parser.TokenType.ANDAND
 import microc.symbolic_execution.Value.{PointerVal, RefVal, Symbolic, Val}
 
 
@@ -42,12 +43,13 @@ class SymbolicState(val nextStatement: CfgNode, val pathCondition: Expr, val sym
     nextStatement.succ.foreach(
       node => {
         ast match {
-          case IfStmt(_, thenBranch, _, _) =>
+          case IfStmt(guard, thenBranch, _, loc) =>
             if (thenBranch.asInstanceOf[NestedBlockStmt].body.head == node.ast)
-              return new SymbolicState(node, pathCondition, symbolicStore)
-          case WhileStmt(_, block, _) =>
+              return new SymbolicState(node, BinaryOp(AndAnd, pathCondition, guard, loc), symbolicStore)
+          case WhileStmt(guard, block, loc) =>
             if (block.asInstanceOf[NestedBlockStmt].body.head == node.ast)
-              return new SymbolicState(node, pathCondition, symbolicStore)
+              return new SymbolicState(node, BinaryOp(AndAnd, pathCondition, guard, loc), symbolicStore)
+          case _ =>
         }
       }
     )
@@ -59,15 +61,15 @@ class SymbolicState(val nextStatement: CfgNode, val pathCondition: Expr, val sym
     nextStatement.succ.foreach(
       node => {
         ast match {
-          case IfStmt(_, thenBranch, _, _) =>
-            if (thenBranch != node.ast)
-              return new SymbolicState(node, pathCondition, symbolicStore)
-          case WhileStmt(_, block, _) =>
-            if (block != node.ast)
-              return new SymbolicState(node, pathCondition, symbolicStore)
+          case IfStmt(guard, _, Some(NestedBlockStmt(elseBranch, loc)), _) =>
+            if (elseBranch.head == node.ast) {
+              return new SymbolicState(node, BinaryOp(AndAnd, pathCondition, Not(guard, loc), loc), symbolicStore)
+            }
+          case _ =>
         }
       }
     )
-    throw new Exception("This should not happen")
+    new SymbolicState(nextStatement.succ.maxBy(node => node.id), pathCondition, symbolicStore)//TODO add to path condition
   }
+
 }

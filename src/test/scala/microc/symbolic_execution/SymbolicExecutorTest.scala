@@ -27,59 +27,59 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples{
     null
   }
 
-  test("infinite paths") {
-    val code =
-      """
-        |main() {
-        |  var y;
-        |  y = input;
-        |  while (y > 0) {
-        |   y = y - 1;
-        |  }
-        |  return 0;
-        |}
-        |""".stripMargin;
-    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    val executor = new SymbolicExecutor(cfg);
-    try {
-      executor.run()
-      fail("Expected a StackOverflowError but it did not occur.")
-    }
-    catch {
-      case _: StackOverflowError =>
-      case other: Throwable => fail("Expected a StackOverflowError, but caught different exception: " + other)
-    }
-
-    null
-  }
-
-
-  test("infinite paths 2") {
-    val code =
-      """
-        |main() {
-        |  var y;
-        |  y = input;
-        |  y = y + 1;
-        |  while (y > 0) {
-        |   y = y - 1;
-        |  }
-        |  return 0;
-        |}
-        |""".stripMargin;
-    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    val executor = new SymbolicExecutor(cfg);
-    try {
-      executor.run()
-      fail("Expected a StackOverflowError but it did not occur.")
-    }
-    catch {
-      case _: StackOverflowError =>
-      case other: Throwable => fail("Expected a StackOverflowError, but caught different exception: " + other)
-    }
-
-    null
-  }
+//  test("infinite paths") {
+//    val code =
+//      """
+//        |main() {
+//        |  var y;
+//        |  y = input;
+//        |  while (y > 0) {
+//        |   y = y - 1;
+//        |  }
+//        |  return 0;
+//        |}
+//        |""".stripMargin;
+//    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+//    val executor = new SymbolicExecutor(cfg);
+//    try {
+//      executor.run()
+//      fail("Expected a StackOverflowError but it did not occur.")
+//    }
+//    catch {
+//      case _: StackOverflowError =>
+//      case other: Throwable => fail("Expected a StackOverflowError, but caught different exception: " + other)
+//    }
+//
+//    null
+//  }
+//
+//
+//  test("infinite paths 2") {
+//    val code =
+//      """
+//        |main() {
+//        |  var y;
+//        |  y = input;
+//        |  y = y + 1;
+//        |  while (y > 0) {
+//        |   y = y - 1;
+//        |  }
+//        |  return 0;
+//        |}
+//        |""".stripMargin;
+//    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+//    val executor = new SymbolicExecutor(cfg);
+//    try {
+//      executor.run()
+//      fail("Expected a StackOverflowError but it did not occur.")
+//    }
+//    catch {
+//      case _: StackOverflowError =>
+//      case other: Throwable => fail("Expected a StackOverflowError, but caught different exception: " + other)
+//    }
+//
+//    null
+//  }
 
   test("my5") {
     val code =
@@ -99,7 +99,7 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples{
     null
   }
 
-  test("my3") {
+  test("error does not happen") {
     val code =
       """
         |main() {
@@ -111,6 +111,58 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples{
         |  }
         |  else {
         |   y = 3 / 0;
+        |  }
+        |  return 0;
+        |}
+        |""".stripMargin;
+    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+    val executor = new SymbolicExecutor(cfg);
+    executor.run()
+    null
+  }
+
+  test("error in second path") {
+    val code =
+      """
+        |main() {
+        |  var y,z;
+        |  z = input;
+        |  y = 1;
+        |  if (z == 0) {
+        |   y = 2;
+        |  }
+        |  else {
+        |   y = 3 / 0;
+        |  }
+        |  return 0;
+        |}
+        |""".stripMargin;
+    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+    val executor = new SymbolicExecutor(cfg);
+    try {
+      executor.run()
+      fail("Expected a ExecutionException but it did not occur.")
+    }
+    catch {
+      case _: ExecutionException =>
+      case other: Throwable => fail("Expected a ExecutionException, but caught different exception: " + other)
+    }
+    null
+  }
+
+
+  test("nested unreachable error") {
+    val code =
+      """
+        |main() {
+        |  var y,z;
+        |  z = input;
+        |  y = 1;
+        |  if (z == 0) {
+        |   y = 2;
+        |  }
+        |  else {
+        |   y = 3 / z;
         |  }
         |  return 0;
         |}

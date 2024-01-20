@@ -1,6 +1,6 @@
 package microc.symbolic_execution
 
-import microc.ast.{CodeLoc, Expr, Loc}
+import microc.ast.{CodeLoc, Expr, FunDecl, Loc}
 
 import scala.util.Random
 
@@ -38,6 +38,8 @@ object Value {
   case class SymbolicExpr(value: Expr, loc: Loc) extends Symbolic {
     override def toString: String = value.toString
   }
+
+  case class FunVal(fun: FunDecl) extends Val
 
 }
 

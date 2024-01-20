@@ -195,7 +195,7 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples{
     null
   }
 
-  /*test("multi functional") {
+  test("multi functional") {
     val code =
       """
         |
@@ -207,16 +207,46 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples{
         |}
         |
         |main() {
-        |  var x,y,z,a,b;
+        |  var a,b;
         |  b = 5;
         |  a = fce(b);
         |  return a;
         |}
         |""".stripMargin;
-    val (cfg, declarations) = parseCfg(code);
-    val executor = new SymbolicExecutor(cfg, declarations);
+    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+    val executor = new SymbolicExecutor(cfg);
     executor.run()
     null
   }
-*/
+
+  test("factorial") {
+    val code =
+      """
+        |
+        |fac(n) {
+        |    var f;
+        |
+        |    if (n == 0) {
+        |      f = 1;
+        |    } else {
+        |      f = n * fac(n - 1);
+        |    }
+        |
+        |    return f;
+        |}
+        |
+        |
+        |main() {
+        |  var a,b;
+        |  b = 3;
+        |  a = fac(b);
+        |  return a;
+        |}
+        |""".stripMargin;
+    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+    val executor = new SymbolicExecutor(cfg);
+    executor.run()
+    null
+  }
+
 }

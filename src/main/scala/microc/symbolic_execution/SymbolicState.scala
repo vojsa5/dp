@@ -2,8 +2,7 @@ package microc.symbolic_execution
 
 import microc.ast.{AndAnd, BinaryOp, Expr, Identifier, IfStmt, NestedBlockStmt, Not, WhileStmt}
 import microc.cfg.CfgNode
-import microc.parser.TokenType.ANDAND
-import microc.symbolic_execution.Value.{PointerVal, RefVal, Symbolic, Val}
+import microc.symbolic_execution.Value.{PointerVal, RefVal, Val}
 
 
 
@@ -17,8 +16,17 @@ class SymbolicState(val nextStatement: CfgNode, val pathCondition: Expr, val sym
     new SymbolicState(nextStatement, pathCondition, symbolicStore)
   }
 
-  def addedVar(variable: String): SymbolicState = {
+  def addedNewVar(variable: String): SymbolicState = {
     symbolicStore.addNewVar(variable)
+    val ptr = symbolicStore.storage.getAddress
+    symbolicStore.addVar(variable, ptr)
+    new SymbolicState(nextStatement, pathCondition, symbolicStore)
+  }
+
+  def addedVar(variable: String, v: Val): SymbolicState = {
+    val ptr = symbolicStore.storage.getAddress
+    symbolicStore.storage.addVal(ptr, v)
+    symbolicStore.addVar(variable, ptr)
     new SymbolicState(nextStatement, pathCondition, symbolicStore)
   }
 

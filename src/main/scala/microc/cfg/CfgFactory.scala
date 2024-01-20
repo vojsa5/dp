@@ -113,7 +113,9 @@ trait CfgFactory {
       val fce = new CfgFunEntryNode(id, f)
       programCfg.addFce(fce)
       addCell(fce)
-      addCfgStmt(f.block.vars.last, programCfg)
+      if (f.block.vars.nonEmpty) {
+        addCfgStmt(f.block.vars.last, programCfg)
+      }
       for (s <- f.block.stmts) {
         addCfgStmt(s, programCfg)
       }

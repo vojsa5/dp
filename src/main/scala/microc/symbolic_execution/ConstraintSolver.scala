@@ -17,6 +17,7 @@ class ConstraintSolver() {
 
 
   def solveConstraint(constraint: com.microsoft.z3.Expr[_]): Status = {
+    System.out.println(constraint)
     val solver = ctx.mkSolver()
     constraint match {
       case cond: BoolExpr => solver.add(cond)
@@ -69,7 +70,6 @@ class ConstraintSolver() {
             }
         }
       case Identifier(name, loc) =>
-        val a = state.getSymbolicValForId(Identifier(name, loc))
         state.getSymbolicValForId(Identifier(name, loc)) match {
           case Number(value, _) => ctx.mkInt(value)
           case v@SymbolicVal(_) => ctx.mkIntConst(v.name)
@@ -77,7 +77,7 @@ class ConstraintSolver() {
           case _ => throw new Exception("IMPLEMENT")
         }
       case Number(value, _) => ctx.mkInt(value)
-      case v@SymbolicVal(loc) => ctx.mkIntConst(v.name)
+      case v@SymbolicVal(_) => ctx.mkIntConst(v.name)
       case SymbolicExpr(expr, _) => createConstraint(expr, state)
     }
   }

@@ -8,7 +8,7 @@ import scala.collection.mutable.ArrayBuffer
 
 class SymbolicStore {
 
-  private case class Storage() {
+  case class Storage() {
     var size: Int = 0
 
     var memory: ArrayBuffer[Val] = ArrayBuffer()
@@ -38,7 +38,7 @@ class SymbolicStore {
     }
   }
 
-  private val storage = Storage()
+  val storage = Storage()
 
   private var frames: List[Map[String, RefVal]] = List(Map.empty)
 

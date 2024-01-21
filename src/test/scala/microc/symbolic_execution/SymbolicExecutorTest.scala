@@ -238,8 +238,9 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples{
         |
         |main() {
         |  var a,b;
-        |  b = 3;
+        |  b = 5;
         |  a = fac(b);
+        |  output(a);
         |  return a;
         |}
         |""".stripMargin;

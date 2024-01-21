@@ -1,6 +1,6 @@
 package microc.symbolic_execution
 
-import microc.ast.{AndAnd, BinaryOp, Expr, Identifier, IfStmt, NestedBlockStmt, Not, WhileStmt}
+import microc.ast.{AndAnd, BinaryOp, CodeLoc, Expr, Identifier, IfStmt, NestedBlockStmt, Not, Number, WhileStmt}
 import microc.cfg.CfgNode
 import microc.symbolic_execution.Value.{PointerVal, RefVal, Val}
 
@@ -8,8 +8,9 @@ import microc.symbolic_execution.Value.{PointerVal, RefVal, Val}
 
 
 
-class SymbolicState(val nextStatement: CfgNode, val pathCondition: Expr, val symbolicStore: SymbolicStore = new SymbolicStore()) {
+class SymbolicState(val nextStatement: CfgNode, var pathCondition: PathCondition, val symbolicStore: SymbolicStore = new SymbolicStore()) {
 
+  var returnValue: Val = Number(0, CodeLoc(0, 0))
 
   def updatedVar(variable: PointerVal, value: Val): SymbolicState = {
     symbolicStore.updateRef(variable, value)
@@ -34,6 +35,10 @@ class SymbolicState(val nextStatement: CfgNode, val pathCondition: Expr, val sym
     nextStatement.succ.map { node => new SymbolicState(node, pathCondition, symbolicStore)}.toArray
   }
 
+  def nextState(): SymbolicState = {
+    new SymbolicState(nextStatement.succ.head, pathCondition, symbolicStore)
+  }
+
   def goTo(nextStatement: CfgNode): SymbolicState = {
     new SymbolicState(nextStatement, pathCondition, symbolicStore)
   }
@@ -52,11 +57,12 @@ class SymbolicState(val nextStatement: CfgNode, val pathCondition: Expr, val sym
       node => {
         ast match {
           case IfStmt(guard, thenBranch, _, loc) =>
-            if (thenBranch.asInstanceOf[NestedBlockStmt].body.head == node.ast)
-              return new SymbolicState(node, BinaryOp(AndAnd, pathCondition, guard, loc), symbolicStore)
+            if (thenBranch.asInstanceOf[NestedBlockStmt].body.head == node.ast) {
+              return new SymbolicState(node, new PathCondition(pathCondition.prev, BinaryOp(AndAnd, pathCondition.expr, guard, loc)), symbolicStore.deepCopy())
+            }
           case WhileStmt(guard, block, loc) =>
             if (block.asInstanceOf[NestedBlockStmt].body.head == node.ast)
-              return new SymbolicState(node, BinaryOp(AndAnd, pathCondition, guard, loc), symbolicStore)
+              return new SymbolicState(node, new PathCondition(pathCondition.prev, BinaryOp(AndAnd, pathCondition.expr, guard, loc)), symbolicStore.deepCopy())
           case _ =>
         }
       }
@@ -71,13 +77,13 @@ class SymbolicState(val nextStatement: CfgNode, val pathCondition: Expr, val sym
         ast match {
           case IfStmt(guard, _, Some(NestedBlockStmt(elseBranch, loc)), _) =>
             if (elseBranch.head == node.ast) {
-              return new SymbolicState(node, BinaryOp(AndAnd, pathCondition, Not(guard, loc), loc), symbolicStore)
+              return new SymbolicState(node, new PathCondition(pathCondition.prev, BinaryOp(AndAnd, pathCondition.expr, Not(guard, loc), loc)), symbolicStore.deepCopy())
             }
           case _ =>
         }
       }
     )
-    new SymbolicState(nextStatement.succ.maxBy(node => node.id), pathCondition, symbolicStore)//TODO add to path condition
+    new SymbolicState(nextStatement.succ.maxBy(node => node.id), pathCondition, symbolicStore.deepCopy())//TODO add to path condition
   }
 
 }

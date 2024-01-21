@@ -1,7 +1,7 @@
 package microc.symbolic_execution
 
 import microc.ProgramException
-import microc.ast.{AndAnd, AssignStmt, BinaryOp, CallFuncExpr, CodeLoc, Divide, Equal, Expr, FunDecl, Identifier, IfStmt, Input, Loc, Minus, Not, Number, Plus, Program, ReturnStmt, Times, VarStmt, WhileStmt}
+import microc.ast.{AndAnd, AssignStmt, BinaryOp, CallFuncExpr, CodeLoc, Divide, Equal, Expr, FunDecl, Identifier, IfStmt, Input, Loc, Minus, Not, Number, OutputStmt, Plus, Program, ReturnStmt, Times, VarStmt, WhileStmt}
 import microc.cfg.ProgramCfg
 import microc.cli.Reporter
 import microc.symbolic_execution.ExecutionException.{errorDivByZero, errorInvalidArgumentList, errorNonFunctionApplication, errorNonIntArithmetics, errorPossibleDivByZero, errorUninitializedReference}
@@ -74,11 +74,10 @@ class SymbolicExecutor(program: ProgramCfg) {
 
   val solver = new ConstraintSolver()
   var unfinishedPaths: Set[SymbolicState] = Set()
-  var returnValue: Val = Number(0, CodeLoc(0, 0))
 
   def run(): Unit = {
 
-    unfinishedPaths += new SymbolicState(program.getFce("main"), BinaryOp(Equal, Number(1, CodeLoc(0, 0)), Number(1, CodeLoc(0, 0)), CodeLoc(0, 0)))
+    unfinishedPaths += new SymbolicState(program.getFce("main"), new PathCondition(None, BinaryOp(Equal, Number(1, CodeLoc(0, 0)), Number(1, CodeLoc(0, 0)), CodeLoc(0, 0))))
     while (unfinishedPaths.nonEmpty) {
       val path = unfinishedPaths.head
       unfinishedPaths = unfinishedPaths.tail
@@ -90,12 +89,16 @@ class SymbolicExecutor(program: ProgramCfg) {
   def runFunction(name: String, symbolicState: SymbolicState, args: List[Expr]): Val = {
     val fce = program.getFce(name)
     symbolicState.symbolicStore.pushFrame()
+    symbolicState.pathCondition = new PathCondition(Some(symbolicState.pathCondition), BinaryOp(Equal, Number(1, CodeLoc(0, 0)), Number(1, CodeLoc(0, 0)), CodeLoc(0, 0)))
     for ((arg, param) <- args.zip(fce.ast.asInstanceOf[FunDecl].params)) {
       symbolicState.addedVar(param.name, evaluate(arg, symbolicState))
     }
-    step(symbolicState.goTo(fce))
+    val fceState = symbolicState.goTo(fce)
+    step(fceState)
+    symbolicState.returnValue = fceState.returnValue
+    symbolicState.pathCondition = symbolicState.pathCondition.prev.get
     symbolicState.symbolicStore.popFrame()
-    returnValue
+    symbolicState.returnValue
   }
 
   def step(symbolicState: SymbolicState): Unit = {
@@ -110,32 +113,37 @@ class SymbolicExecutor(program: ProgramCfg) {
       case AssignStmt(lhs, rhs, _) =>
         symbolicState.updatedVar(getTarget(lhs, symbolicState), evaluate(rhs, symbolicState))
       case IfStmt(guard, _, _, _) =>
-        solver.solveCondition(symbolicState.pathCondition, guard, symbolicState) match {
+        solver.solveCondition(symbolicState.pathCondition.expr, guard, symbolicState) match {
           case Status.SATISFIABLE =>
-            step(symbolicState.getIfTrueState())
+            val nextState = symbolicState.getIfTrueState()
+            step(nextState)
+            symbolicState.returnValue = nextState.returnValue
           case Status.UNKNOWN =>
             throw new Exception("IMPLEMENT")
           case Status.UNSATISFIABLE =>
         }
 
-        solver.solveCondition(symbolicState.pathCondition, Not(guard, guard.loc), symbolicState) match {
+        solver.solveCondition(symbolicState.pathCondition.expr, Not(guard, guard.loc), symbolicState) match {
           case Status.SATISFIABLE =>
-            step(symbolicState.getIfFalseState())
+            val nextState = symbolicState.getIfFalseState()
+            step(nextState)
+            symbolicState.returnValue = nextState.returnValue
+            return
             //unfinishedPaths += symbolicState.getIfFalseState()
           case Status.UNKNOWN =>
             throw new Exception("IMPLEMENT")
           case Status.UNSATISFIABLE =>
+            return
         }
-        return
       case WhileStmt(guard, _, _) =>
-        solver.solveCondition(symbolicState.pathCondition, guard, symbolicState) match {
+        solver.solveCondition(symbolicState.pathCondition.expr, guard, symbolicState) match {
           case Status.SATISFIABLE =>
             step(symbolicState.getIfTrueState())
           case Status.UNKNOWN =>
             throw new Exception("IMPLEMENT")
           case Status.UNSATISFIABLE =>
         }
-        solver.solveCondition(symbolicState.pathCondition, Not(guard, guard.loc), symbolicState) match {
+        solver.solveCondition(symbolicState.pathCondition.expr, Not(guard, guard.loc), symbolicState) match {
           case Status.SATISFIABLE =>
             unfinishedPaths += symbolicState.getIfFalseState()
           case Status.UNKNOWN =>
@@ -144,10 +152,21 @@ class SymbolicExecutor(program: ProgramCfg) {
         }
         return
       case ReturnStmt(expr, _) =>
-        returnValue = evaluate(expr, symbolicState)
+        symbolicState.returnValue = evaluate(expr, symbolicState)
         return
+      case OutputStmt(expr, _) =>
+        val value = evaluate(expr, symbolicState)
+        value match {
+          case Number(value, _) =>
+            System.out.println(value)
+          case SymbolicVal(_) =>
+            System.out.println("Symbolic value")
+        }
     }
-    newState.nextStates().foreach(step)
+    //newState.nextStates().foreach(step)
+    val nextState = symbolicState.nextState()
+    step(nextState)
+    symbolicState.returnValue = nextState.returnValue
   }
 
   def evaluate(expr: Expr, symbolicState: SymbolicState): Val = {
@@ -172,7 +191,7 @@ class SymbolicExecutor(program: ProgramCfg) {
                 case Times => SymbolicExpr(BinaryOp(Times, e1, e2, loc), loc)
                 case Divide => {
                   solver.solveConstraint(
-                    solver.createConstraint(BinaryOp(AndAnd, BinaryOp(Equal, e2, Number(0, loc), loc), symbolicState.pathCondition, loc), symbolicState)) match {
+                    solver.createConstraint(BinaryOp(AndAnd, BinaryOp(Equal, e2, Number(0, loc), loc), symbolicState.pathCondition.expr, loc), symbolicState)) match {
                     case Status.SATISFIABLE => throw errorPossibleDivByZero(loc)
                     case Status.UNSATISFIABLE => SymbolicExpr(BinaryOp(Divide, e1, e2, loc), loc)
                     case Status.UNKNOWN => throw new Exception("IMPLEMENT")
@@ -188,7 +207,8 @@ class SymbolicExecutor(program: ProgramCfg) {
       case CallFuncExpr(targetFun, args, loc) =>
         targetFun match {
           case Identifier(name, _) => {
-            runFunction(name, symbolicState, args)
+            val r = runFunction(name, symbolicState, args)
+            r
           }
           case _ => throw errorNonFunctionApplication(loc, targetFun.toString)
         }

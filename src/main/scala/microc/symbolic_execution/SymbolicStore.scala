@@ -6,12 +6,22 @@ import microc.symbolic_execution.Value.{NullRef, PointerVal, RefVal, Uninitializ
 
 import scala.collection.mutable.ArrayBuffer
 
-class SymbolicStore {
+class SymbolicStore() {
 
   case class Storage() {
     var size: Int = 0
 
     var memory: ArrayBuffer[Val] = ArrayBuffer()
+
+    def deepCopy(): Storage = {
+      val newStorage = Storage()
+      newStorage.size = this.size
+      newStorage.memory = ArrayBuffer()
+      for (v <- this.memory) {
+        newStorage.memory += v
+      }
+      newStorage
+    }
 
     def getAddress: PointerVal = {
       val res = PointerVal(size)
@@ -38,7 +48,7 @@ class SymbolicStore {
     }
   }
 
-  val storage = Storage()
+  var storage: Storage = Storage()
 
   private var frames: List[Map[String, RefVal]] = List(Map.empty)
 
@@ -97,6 +107,16 @@ class SymbolicStore {
 
   def updateRef(ptr: PointerVal, v: Val): Unit = {
     storage.addVal(ptr, v)
+  }
+
+  def deepCopy(): SymbolicStore = {
+    val res = new SymbolicStore()
+    res.frames = List.empty
+    for (frame <- this.frames) {
+      res.frames = res.frames.appended(frame)
+    }
+    res.storage = this.storage.asInstanceOf[res.Storage].deepCopy()
+    res
   }
 
 }

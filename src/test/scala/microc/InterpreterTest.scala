@@ -32,4 +32,21 @@ class InterpreterTest extends FunSuite with MicrocSupport {
     val res = interpreter.run(List.empty)
     null
   }
+
+  test("indirect-assign") {
+    val code =
+      """
+        |main() {
+        |   var x, y;
+        |   x = 1;
+        |   y = &x;
+        |   *y = 42;
+        |   return x;
+        | }
+        |
+        |""".stripMargin;
+    val interpreter = new MicroCInterpreter(parseUnsafe(code), null, null, false);
+    val res = interpreter.run(List.empty)
+    null
+  }
 }

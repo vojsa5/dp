@@ -250,4 +250,23 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples{
     null
   }
 
+  test("indirect assign") {
+    val code =
+      """
+        | main() {
+        |   var x, y;
+        |   x = 1;
+        |   y = &x;
+        |   *y = 42;
+        |   output x;
+        |   return x;
+        | }
+        |
+        |""".stripMargin;
+    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+    val executor = new SymbolicExecutor(cfg);
+    executor.run()
+    null
+  }
+
 }

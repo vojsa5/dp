@@ -234,6 +234,9 @@ class MicroCInterpreter(program: Program, stdin: Reader, stdout: Writer, ascii: 
   private def getTarget(expr: Expr, stackFrames: StackFrames): PointerVal = {
     expr match {
       case Deref(pointer, loc) =>
+        val u = storage.getVal(
+          getTarget(pointer, stackFrames)
+        )
         storage.getVal(
           getTarget(pointer, stackFrames)
         ) match {
@@ -461,7 +464,8 @@ class MicroCInterpreter(program: Program, stdin: Reader, stdout: Writer, ascii: 
         )
         RecVal(fieldsMap)
       case RecordField(_, expr, _) => interpretNode(expr, stackFrames)
-      case VarRef(id, _) => stackFrames.find(id.name).get
+      case VarRef(id, _) =>
+        stackFrames.find(id.name).get
       case VarStmt(decls, _) =>
         decls.foreach(decl => interpretNode(decl, stackFrames))
         NullRef

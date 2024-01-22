@@ -18,7 +18,7 @@ class SymbolicState(val nextStatement: CfgNode, var pathCondition: PathCondition
   }
 
   def addedNewVar(variable: String): SymbolicState = {
-    symbolicStore.addNewVar(variable)
+    //symbolicStore.addNewVar(variable)
     val ptr = symbolicStore.storage.getAddress
     symbolicStore.addVar(variable, ptr)
     new SymbolicState(nextStatement, pathCondition, symbolicStore)
@@ -45,6 +45,10 @@ class SymbolicState(val nextStatement: CfgNode, var pathCondition: PathCondition
 
   def getSymbolicVal(name: String): Option[RefVal] = {
     symbolicStore.findVar(name)
+  }
+
+  def getVal(ptr: PointerVal): Option[Val] = {
+    symbolicStore.getVal(ptr)
   }
 
   def getSymbolicValForId(id: Identifier): Val = {

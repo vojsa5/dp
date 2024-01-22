@@ -31,8 +31,9 @@ class SymbolicStore() {
     }
 
     def getVal(ptr: PointerVal): Option[Val] = {
-      if (memory.size <= ptr.address)
-        None
+      if (memory.size <= ptr.address) {
+        return None
+      }
       memory(ptr.address) match {
         case UninitializedRef => None
         case v => Some(v)
@@ -84,11 +85,15 @@ class SymbolicStore() {
     None
   }
 
+  def getVal(ptr: PointerVal): Option[Val] = {
+    storage.getVal(ptr)
+  }
+
   def getValForId(id: Identifier): Val = {
-    var t = findVar(id.name)
+    val t = findVar(id.name)
     t match {
       case Some(PointerVal(decl)) =>
-        var e = storage.getVal(PointerVal(decl))
+        val e = storage.getVal(PointerVal(decl))
         e match {
           case Some(res) => res
           case None => throw errorUninitializedReference(id.loc)

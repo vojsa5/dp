@@ -1,11 +1,11 @@
 package microc.symbolic_execution
 
 import microc.ProgramException
-import microc.ast.{AndAnd, AssignStmt, BinaryOp, CallFuncExpr, CodeLoc, Divide, Equal, Expr, FunDecl, Identifier, IfStmt, Input, Loc, Minus, Not, Number, OutputStmt, Plus, Program, ReturnStmt, Times, VarStmt, WhileStmt}
+import microc.ast.{AndAnd, AssignStmt, BinaryOp, CallFuncExpr, CodeLoc, Deref, Divide, Equal, Expr, FunDecl, Identifier, IfStmt, Input, Loc, Minus, Not, Number, OutputStmt, Plus, Program, ReturnStmt, Times, VarRef, VarStmt, WhileStmt}
 import microc.cfg.ProgramCfg
 import microc.cli.Reporter
-import microc.symbolic_execution.ExecutionException.{errorDivByZero, errorInvalidArgumentList, errorNonFunctionApplication, errorNonIntArithmetics, errorPossibleDivByZero, errorUninitializedReference}
-import microc.symbolic_execution.Value.{FunVal, PointerVal, Symbolic, SymbolicExpr, SymbolicVal, UninitializedRef, Val}
+import microc.symbolic_execution.ExecutionException.{errorDivByZero, errorInvalidArgumentList, errorNonFunctionApplication, errorNonIntArithmetics, errorNonPointerDereference, errorNullDereference, errorPossibleDivByZero, errorUninitializedReference}
+import microc.symbolic_execution.Value.{FunVal, NullRef, PointerVal, Symbolic, SymbolicExpr, SymbolicVal, UninitializedRef, Val}
 import com.microsoft.z3._
 
 case class ExecutionException(message: String, loc: Loc) extends ProgramException(message) {
@@ -108,7 +108,8 @@ class SymbolicExecutor(program: ProgramCfg) {
       case FunDecl(_, _, _, _) =>
       case VarStmt(decls, _) =>
         newState = decls.foldLeft(symbolicState) {
-          (state, decl) => state.addedNewVar(decl.name)
+          (state, decl) =>
+            state.addedNewVar(decl.name)
         }
       case AssignStmt(lhs, rhs, _) =>
         symbolicState.updatedVar(getTarget(lhs, symbolicState), evaluate(rhs, symbolicState))
@@ -212,6 +213,8 @@ class SymbolicExecutor(program: ProgramCfg) {
           }
           case _ => throw errorNonFunctionApplication(loc, targetFun.toString)
         }
+      case VarRef(id, loc) =>
+        symbolicState.getSymbolicVal(id.name).get
     }
   }
 
@@ -221,6 +224,14 @@ class SymbolicExecutor(program: ProgramCfg) {
         symbolicState.getSymbolicVal(name) match {
           case Some(PointerVal(address)) => PointerVal(address)
           case _ => throw errorUninitializedReference(loc)
+        }
+      case Deref(pointer, loc) =>
+        val i = symbolicState.getVal(getTarget(pointer, symbolicState))
+        i match {
+          case Some(PointerVal(address)) => PointerVal(address)
+          case Some(NullRef) => throw errorNullDereference(loc)
+          case Some(v) => throw errorNonPointerDereference(pointer.loc, v.toString)
+          case None => throw errorUninitializedReference(pointer.loc)
         }
     }
   }

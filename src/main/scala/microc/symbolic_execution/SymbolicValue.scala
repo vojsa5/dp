@@ -22,7 +22,7 @@ object Value {
 
   }
 
-  object NullRef extends RefVal {
+  case object NullRef extends RefVal {
     override def toString: String = "null"
   }
 
@@ -32,7 +32,7 @@ object Value {
 
   case class SymbolicVal(loc: Loc) extends Symbolic {
     val name = (1 to 10).map(_ => "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"(new Random().nextInt(52))).mkString
-    override def toString: String = "unknown"
+    override def toString: String = name
   }
 
   case class SymbolicExpr(value: Expr, loc: Loc) extends Symbolic {

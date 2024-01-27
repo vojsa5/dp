@@ -17,6 +17,7 @@ case class CfgConstructionException(message: String, loc: Loc) extends ProgramEx
 trait CfgFactory {
   var id = 0
   var preds: mutable.Set[CfgNode] = mutable.Set.empty
+  var lastNode: Option[CfgNode] = None
   val programCfg = new ProgramCfg()
 
   def addCell(cfgNode: CfgNode) = {
@@ -81,6 +82,7 @@ trait CfgFactory {
             addCfgStmt(node, programCfg)
         }
         last = null
+        tmpPreds.addAll(preds)
         preds.clear()
         preds.add(qNode)
         elseBranch match {
@@ -109,12 +111,13 @@ trait CfgFactory {
 
 
   def fromProgram(p: Program): ProgramCfg = {
-    for (f <- p.funs) {
+    val normalized = new AstNormalizer().normalize(p)
+    for (f <- normalized.funs) {
       val fce = new CfgFunEntryNode(id, f)
       programCfg.addFce(fce)
       addCell(fce)
-      if (f.block.vars.nonEmpty) {
-        addCfgStmt(f.block.vars.last, programCfg)
+      for (v <- f.block.vars) {
+        addCfgStmt(v, programCfg)
       }
       for (s <- f.block.stmts) {
         addCfgStmt(s, programCfg)
@@ -124,6 +127,49 @@ trait CfgFactory {
     }
     programCfg
   }
+
+//  def simplifyExpression(expr: Expr): Expr = {
+//    expr match {
+//      case BinaryOp(op, left, right, loc) =>
+//        BinaryOp(op, simplifyExpression(left), simplifyExpression(right), loc)
+//      case CallFuncExpr(_, _, loc) =>
+//        val iden = Identifier("_t" + id, loc)
+//        id += 1;
+//        val newNode = new CfgStmtNode(id, AssignStmt(iden, expr, loc))
+//        newNode.succ.addAll(lastNode.get.succ)
+//        newNode.pred.add(lastNode.get)
+//        lastNode.get.succ.clear()
+//        lastNode.get.succ.add(newNode)
+//        lastNode = Some(newNode)
+//        iden
+//      case Not(expr, loc) =>
+//        Not(simplifyExpression(expr), loc)
+//      case Deref(pointer, loc) =>
+//        Deref(simplifyExpression(pointer), loc)
+//    }
+//  }
+//
+//  def simplifyStatement(node: CfgNode): Unit = {
+//    lastNode = Some(node)
+//    preds = node.succ
+//    node match {
+//      case AssignStmt(_, right, _) =>
+//        simplifyExpression(right)
+//      case OutputStmt(expr, _) =>
+//        simplifyExpression(expr)
+//    }
+//  }
+//
+//  def simplify(programCfg: ProgramCfg): ProgramCfg = {
+//    val u = mutable.Set.empty[CfgNode]
+//    for (node <- programCfg.nodes) {
+//      node.ast match {
+//        case AssignStmt(_, CallFuncExpr(_, _, _), _) =>
+//        case _ => u.add(node)
+//      }
+//    }
+//    programCfg
+//  }
 }
 
 class IntraproceduralCfgFactory extends CfgFactory {}

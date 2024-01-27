@@ -1,8 +1,9 @@
 package microc.symbolic_execution
 
-import com.microsoft.z3.{ArithExpr, ArithSort, BoolExpr, Context, Status}
-import microc.ast.{AndAnd, BinaryOp, Divide, Equal, Expr, GreatThan, Identifier, Minus, Not, Number, OrOr, Plus, Times}
-import microc.symbolic_execution.Value.{SymbolicExpr, SymbolicVal}
+import com.microsoft.z3.{ArithExpr, ArithSort, BoolExpr, Context, IntNum, Status}
+import microc.ast.{AndAnd, BinaryOp, CodeLoc, Divide, Equal, Expr, GreatThan, Identifier, Minus, Not, NotEqual, Number, OrOr, Plus, Times}
+import microc.interpreter.Value.IntVal
+import microc.symbolic_execution.Value.{SymbolicExpr, SymbolicVal, Val}
 
 class ConstraintSolver() {
 
@@ -28,11 +29,9 @@ class ConstraintSolver() {
 
   def createConstraint(expr: Expr, state: SymbolicState): com.microsoft.z3.Expr[_] = {
     expr match {
-      case Not(expr, loc) =>
-        createConstraint(expr, state) match {
-          case op: BoolExpr => ctx.mkNot(op)
-        }
-      case BinaryOp(operator, left, right, loc) =>
+      case Not(expr, _) =>
+          ctx.mkNot(getCondition(createConstraint(expr, state)))
+      case BinaryOp(operator, left, right, _) =>
         operator match {
           case Plus => ctx.mkAdd(
             createConstraint(left, state).asInstanceOf[ArithExpr[ArithSort]],
@@ -55,19 +54,22 @@ class ConstraintSolver() {
               createConstraint(left, state).asInstanceOf[ArithExpr[ArithSort]],
               createConstraint(right, state).asInstanceOf[ArithExpr[ArithSort]]
             )
+          case NotEqual =>
+            ctx.mkNot(
+              ctx.mkEq(
+                createConstraint(left, state).asInstanceOf[ArithExpr[ArithSort]],
+                createConstraint(right, state).asInstanceOf[ArithExpr[ArithSort]]
+              )
+            )
           case GreatThan =>
             ctx.mkGt(
               createConstraint(left, state).asInstanceOf[ArithExpr[ArithSort]],
               createConstraint(right, state).asInstanceOf[ArithExpr[ArithSort]]
             )
           case AndAnd =>
-            (createConstraint(left, state), createConstraint(right, state)) match {
-              case (l: BoolExpr, r: BoolExpr) => ctx.mkAnd(l, r)
-            }
+            ctx.mkAnd(getCondition(createConstraint(left, state)), getCondition(createConstraint(right, state)))
           case OrOr =>
-            (createConstraint(left, state), createConstraint(right, state)) match {
-              case (l: BoolExpr, r: BoolExpr) => ctx.mkOr(l, r)
-            }
+            ctx.mkOr(getCondition(createConstraint(left, state)), getCondition(createConstraint(right, state)))
         }
       case Identifier(name, loc) =>
         state.getSymbolicValForId(Identifier(name, loc)) match {
@@ -79,6 +81,14 @@ class ConstraintSolver() {
       case Number(value, _) => ctx.mkInt(value)
       case v@SymbolicVal(_) => ctx.mkIntConst(v.name)
       case SymbolicExpr(expr, _) => createConstraint(expr, state)
+    }
+  }
+
+  def getCondition(expr: com.microsoft.z3.Expr[_]): BoolExpr = {
+    expr match {
+      case op: BoolExpr => op
+      case op: IntNum =>
+        ctx.mkEq(op, ctx.mkInt(1))
     }
   }
 

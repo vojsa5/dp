@@ -31,7 +31,7 @@ class AstNormalizer {
         val pointerNormalized = getTarget(pointer, newStmts, newVars, declaredVars)
         val rightSide = createVar(newVars, declaredVars, loc)
         newStmts.append(AssignStmt(rightSide, Deref(pointerNormalized, loc), loc))
-        Deref(rightSide, loc)
+        rightSide
       case _ =>
         expr
     }
@@ -61,7 +61,7 @@ class AstNormalizer {
       stmt match {
         case AssignStmt(left, right, loc) =>
           val newLeft: Expr = left match {
-            case Deref(pointer, loc) => getTarget(pointer, stmts, vars, declaredVars)
+            case Deref(pointer, loc) => Deref(getTarget(pointer, stmts, vars, declaredVars), loc)
             case FieldAccess(record, field, loc) =>
               FieldAccess(getTarget(record, stmts, vars, declaredVars), field, loc)
             case left => left
@@ -89,7 +89,7 @@ class AstNormalizer {
           val bodyStmts: ListBuffer[StmtInNestedBlock] = ListBuffer.empty
           val guardExpr: Expr = normalizeExpr(guard, guardStmts, vars, declaredVars)
           normalizeStatement(block, bodyStmts, vars, declaredVars)
-          newStmts.append(NestedBlockStmt(bodyStmts.toList, loc))
+          newStmts.appendAll(bodyStmts.toList)
           newStmts.appendAll(guardStmts)
           val loopBlock = NestedBlockStmt(newStmts.toList, loc)
           stmts.appendAll(guardStmts)

@@ -34,6 +34,7 @@ object BinaryOperator {
     case "-"  => Minus
     case "*"  => Times
     case "/"  => Divide
+    case "!=" => NotEqual
     case "==" => Equal
     case ">"  => GreatThan
     case "&&" => AndAnd
@@ -59,6 +60,10 @@ case object Divide extends BinaryOperator {
 
 case object Equal extends BinaryOperator {
   override def toString: String = "=="
+}
+
+case object NotEqual extends BinaryOperator {
+  override def toString: String = "!="
 }
 
 case object GreatThan extends BinaryOperator {
@@ -121,7 +126,7 @@ sealed trait StmtInNestedBlock extends Stmt
 // EXPRESSIONS
 // ----------------------------------------------------------------------------
 
-case class Null(loc: Loc) extends Expr
+case class Null(loc: Loc) extends Expr with Symbolic
 
 case class Number(value: Int, loc: Loc) extends Expr with Symbolic
 

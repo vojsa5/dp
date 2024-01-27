@@ -1,11 +1,11 @@
 package microc.symbolic_execution
 
 import microc.ProgramException
-import microc.ast.{AndAnd, AssignStmt, BinaryOp, CallFuncExpr, CodeLoc, Deref, Divide, Equal, Expr, FunDecl, Identifier, IfStmt, Input, Loc, Minus, Not, Number, OutputStmt, Plus, Program, ReturnStmt, Times, VarRef, VarStmt, WhileStmt}
+import microc.ast.{Alloc, AndAnd, AssignStmt, BinaryOp, CallFuncExpr, CodeLoc, Deref, Divide, Equal, Expr, FunDecl, GreatThan, Identifier, IfStmt, Input, Loc, Minus, NestedBlockStmt, Not, NotEqual, Null, Number, OutputStmt, Plus, Program, ReturnStmt, Times, VarRef, VarStmt, WhileStmt}
 import microc.cfg.ProgramCfg
 import microc.cli.Reporter
-import microc.symbolic_execution.ExecutionException.{errorDivByZero, errorInvalidArgumentList, errorNonFunctionApplication, errorNonIntArithmetics, errorNonPointerDereference, errorNullDereference, errorPossibleDivByZero, errorUninitializedReference}
-import microc.symbolic_execution.Value.{FunVal, NullRef, PointerVal, Symbolic, SymbolicExpr, SymbolicVal, UninitializedRef, Val}
+import microc.symbolic_execution.ExecutionException.{errorDivByZero, errorNonFunctionApplication, errorNonIntArithmetics, errorNonIntReturn, errorNonPointerDereference, errorNullDereference, errorPossibleDivByZero, errorUninitializedReference}
+import microc.symbolic_execution.Value.{NullRef, PointerVal, Symbolic, SymbolicExpr, SymbolicVal, Val}
 import com.microsoft.z3._
 
 case class ExecutionException(message: String, loc: Loc) extends ProgramException(message) {
@@ -75,19 +75,38 @@ class SymbolicExecutor(program: ProgramCfg) {
   val solver = new ConstraintSolver()
   var unfinishedPaths: Set[SymbolicState] = Set()
 
-  def run(): Unit = {
+  def run(): Int = {
+
 
     unfinishedPaths += new SymbolicState(program.getFce("main"), new PathCondition(None, BinaryOp(Equal, Number(1, CodeLoc(0, 0)), Number(1, CodeLoc(0, 0)), CodeLoc(0, 0))))
+    var res: Option[Val] = None
     while (unfinishedPaths.nonEmpty) {
       val path = unfinishedPaths.head
       unfinishedPaths = unfinishedPaths.tail
       step(path)
+      while (path.callStack.nonEmpty) {
+        val lastFceCall = path.callStack.last
+        path.symbolicStore.popFrame()
+        // in the normalized ast, all function calls are in the form of assignments
+        lastFceCall.ast match {
+          case AssignStmt(target, _, _) =>
+            path.updatedVar(getTarget(target, path), path.returnValue)
+        }
+        path.callStack = path.callStack.dropRight(1)
+        path.nextStatement = lastFceCall.succ.head
+        step(path)
+      }
+      res = Some(path.returnValue)
     }
-    null
+    res.get match {
+      case Number(value, _) => value
+      case _ => throw errorNonIntReturn(program.getFce("main").ast.asInstanceOf[FunDecl])
+    }
   }
 
   def runFunction(name: String, symbolicState: SymbolicState, args: List[Expr]): Val = {
     val fce = program.getFce(name)
+    symbolicState.callStack = symbolicState.callStack.appended(symbolicState.nextStatement)
     symbolicState.symbolicStore.pushFrame()
     symbolicState.pathCondition = new PathCondition(Some(symbolicState.pathCondition), BinaryOp(Equal, Number(1, CodeLoc(0, 0)), Number(1, CodeLoc(0, 0)), CodeLoc(0, 0)))
     for ((arg, param) <- args.zip(fce.ast.asInstanceOf[FunDecl].params)) {
@@ -96,8 +115,9 @@ class SymbolicExecutor(program: ProgramCfg) {
     val fceState = symbolicState.goTo(fce)
     step(fceState)
     symbolicState.returnValue = fceState.returnValue
-    symbolicState.pathCondition = symbolicState.pathCondition.prev.get
+    //symbolicState.pathCondition = symbolicState.pathCondition.prev.get
     symbolicState.symbolicStore.popFrame()
+    symbolicState.callStack = symbolicState.callStack.dropRight(1)
     symbolicState.returnValue
   }
 
@@ -111,6 +131,12 @@ class SymbolicExecutor(program: ProgramCfg) {
           (state, decl) =>
             state.addedNewVar(decl.name)
         }
+//      case nested@NestedBlockStmt(stmts, _) =>
+//        symbolicState.symbolicStore.pushFrame()
+//        //symbolicState.nextStatement = nested.body.head
+//        step(symbolicState)
+//        symbolicState.symbolicStore.popFrame()
+//        return
       case AssignStmt(lhs, rhs, _) =>
         symbolicState.updatedVar(getTarget(lhs, symbolicState), evaluate(rhs, symbolicState))
       case IfStmt(guard, _, _, _) =>
@@ -126,11 +152,12 @@ class SymbolicExecutor(program: ProgramCfg) {
 
         solver.solveCondition(symbolicState.pathCondition.expr, Not(guard, guard.loc), symbolicState) match {
           case Status.SATISFIABLE =>
-            val nextState = symbolicState.getIfFalseState()
-            step(nextState)
-            symbolicState.returnValue = nextState.returnValue
+            //val nextState = symbolicState.getIfFalseState()
+            //step(nextState)
+            //symbolicState.returnValue = nextState.returnValue
+            //return
+            unfinishedPaths += symbolicState.getIfFalseState()
             return
-            //unfinishedPaths += symbolicState.getIfFalseState()
           case Status.UNKNOWN =>
             throw new Exception("IMPLEMENT")
           case Status.UNSATISFIABLE =>
@@ -139,7 +166,9 @@ class SymbolicExecutor(program: ProgramCfg) {
       case WhileStmt(guard, _, _) =>
         solver.solveCondition(symbolicState.pathCondition.expr, guard, symbolicState) match {
           case Status.SATISFIABLE =>
-            step(symbolicState.getIfTrueState())
+            val nextState = symbolicState.getIfTrueState()
+            step(nextState)
+            symbolicState.returnValue = nextState.returnValue
           case Status.UNKNOWN =>
             throw new Exception("IMPLEMENT")
           case Status.UNSATISFIABLE =>
@@ -147,6 +176,7 @@ class SymbolicExecutor(program: ProgramCfg) {
         solver.solveCondition(symbolicState.pathCondition.expr, Not(guard, guard.loc), symbolicState) match {
           case Status.SATISFIABLE =>
             unfinishedPaths += symbolicState.getIfFalseState()
+            return
           case Status.UNKNOWN =>
             throw new Exception("IMPLEMENT")
           case Status.UNSATISFIABLE =>
@@ -173,6 +203,8 @@ class SymbolicExecutor(program: ProgramCfg) {
   def evaluate(expr: Expr, symbolicState: SymbolicState): Val = {
     expr match {
       case BinaryOp(operator, left, right, loc) =>
+        val p0 = evaluate(left, symbolicState)
+        val p1 = evaluate(right, symbolicState)
         (evaluate(left, symbolicState), evaluate(right, symbolicState)) match {
           case (Number(l, _), Number(r, _)) =>
             operator match {
@@ -184,6 +216,9 @@ class SymbolicExecutor(program: ProgramCfg) {
                   throw errorDivByZero(loc)
                 }
                 Number(l / r, loc)
+              case Equal => Number(if (l == r) 1 else 0, loc)
+              case NotEqual => Number(if (l != r) 1 else 0, loc)
+              case GreatThan => Number(if (l > r) 1 else 0, loc)
             }
           case (e1: Symbolic, e2: Symbolic) =>
               operator match {
@@ -198,7 +233,14 @@ class SymbolicExecutor(program: ProgramCfg) {
                     case Status.UNKNOWN => throw new Exception("IMPLEMENT")
                   }
                 }
+                case Equal => SymbolicExpr(BinaryOp(Equal, e1, e2, loc), loc)
+                case NotEqual => SymbolicExpr(BinaryOp(NotEqual, e1, e2, loc), loc)
+                case GreatThan => SymbolicExpr(BinaryOp(GreatThan, e1, e2, loc), loc)
               }
+          case (NullRef, NullRef) => Number(1, loc)
+          case (PointerVal(address1), PointerVal(address2)) => if (address1 == address2) Number(1, loc) else Number(0, loc)
+          case (PointerVal(_), NullRef) => Number(0, loc)
+          case (NullRef, PointerVal(_)) => Number(0, loc)
           case _ => throw errorNonIntArithmetics(loc)
         }
       case Number(value, loc) => Number(value, loc)
@@ -213,8 +255,17 @@ class SymbolicExecutor(program: ProgramCfg) {
           }
           case _ => throw errorNonFunctionApplication(loc, targetFun.toString)
         }
-      case VarRef(id, loc) =>
+      case VarRef(id, _) =>
         symbolicState.getSymbolicVal(id.name).get
+      case Null(_) => NullRef
+      case Alloc(expr, loc) =>
+        symbolicState.addedAlloc(evaluate(expr, symbolicState))
+      case Deref(pointer, loc) =>
+        evaluate(pointer, symbolicState) match {
+          case PointerVal(address) => symbolicState.getVal(PointerVal(address)).get
+          case NullRef => throw errorNullDereference(loc)
+          case _ => throw errorNonPointerDereference(loc, evaluate(pointer, symbolicState).toString)
+        }
     }
   }
 

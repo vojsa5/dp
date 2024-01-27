@@ -234,9 +234,6 @@ class MicroCInterpreter(program: Program, stdin: Reader, stdout: Writer, ascii: 
   private def getTarget(expr: Expr, stackFrames: StackFrames): PointerVal = {
     expr match {
       case Deref(pointer, loc) =>
-        val u = storage.getVal(
-          getTarget(pointer, stackFrames)
-        )
         storage.getVal(
           getTarget(pointer, stackFrames)
         ) match {

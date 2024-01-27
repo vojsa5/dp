@@ -26,6 +26,7 @@ object TokenType {
   case object STAR extends TokenType
   case object EQUAL extends TokenType
   case object EQUAL_EQUAL extends TokenType
+  case object NOT_EQUAL extends TokenType
   case object GREATER extends TokenType
   case object AND extends TokenType
   case object ANDAND extends TokenType
@@ -113,6 +114,7 @@ class Lexer(input: String) {
       case '.'                       => addToken(DOT)
       case '-'                       => addToken(MINUS)
       case '+'                       => addToken(PLUS)
+      case '!' if next('=')          => addToken(NOT_EQUAL)
       case '!'                       => addToken(NOT)
       case ':'                       => addToken(COLON)
       case ';'                       => addToken(SEMICOLON)
@@ -355,8 +357,11 @@ class InternalLLParser(source: String, tokens: List[Token]) {
   // RelationalExpr = AdditiveExpr { '>' AdditiveExpr }
   def RelationalExpr(): ast.Expr = binaryOp(AdditiveExpr, GREATER)
 
-  // RelationalExpr = RelationalExpr { '==' RelationalExpr }
-  def EqualityExpr(): ast.Expr = binaryOp(RelationalExpr, EQUAL_EQUAL)
+  // NonEqualityExpr = NonEqualityExpr { '!=' NonEqualityExpr }
+  def NonEqualityExpr(): ast.Expr = binaryOp(RelationalExpr, NOT_EQUAL)
+
+  // EqualityExpr = EqualityExpr { '==' EqualityExpr }
+  def EqualityExpr(): ast.Expr = binaryOp(NonEqualityExpr, EQUAL_EQUAL)
 
   def Expr3(): ast.Expr = binaryOp(EqualityExpr, ANDAND)
 

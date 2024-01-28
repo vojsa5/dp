@@ -30,6 +30,10 @@ object Value {
     override def toString: String = "return"
   }
 
+  case class ArrVal(elems: scala.Array[PointerVal]) extends Val {
+    override def toString: String = elems.mkString("[", ",", "]")
+  }
+
   case class SymbolicVal(loc: Loc) extends Symbolic {
     val name = (1 to 10).map(_ => "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"(new Random().nextInt(52))).mkString
     override def toString: String = name

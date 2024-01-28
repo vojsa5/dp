@@ -5,6 +5,10 @@ import microc.{Examples, MicrocSupport}
 import munit.FunSuite
 
 class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
+
+
+
+
   test("possible error") {
     val code =
       """
@@ -95,7 +99,7 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
         |     x = 2 * (a + b);
         |   }
         |  }
-        |  return 1;
+        |  return 1 / (x - y);
         |}
         |
         |main() {
@@ -108,7 +112,14 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
         |""".stripMargin;
     val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
     val executor = new SymbolicExecutor(cfg);
-    executor.run()
+    try {
+      executor.run()
+      fail("Expected a ExecutionException but it did not occur.")
+    }
+    catch {
+      case _: ExecutionException =>
+      case other: Throwable => fail("Expected a ExecutionException, but caught different exception: " + other)
+    }
     null
   }
 
@@ -692,4 +703,165 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
     }
     null
   }
+
+  test("array") {
+    val code =
+      """
+        | main() {
+        |   var a, b;
+        |   a = [1,2];
+        |   b = a[a[0]];
+        |   a[a[0]-1] = 40;
+        |   return b + a[0];
+        | }
+        |""".stripMargin
+    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+    val executor = new SymbolicExecutor(cfg)
+    assert(executor.run() == 42)
+  }
+
+  test("array out of bounds") {
+    val code =
+      """
+        | main() {
+        |   var a;
+        |   a = [1,2];
+        |   a[2] = 1;
+        |   return 0;
+        | }
+        |""".stripMargin
+
+    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+    val executor = new SymbolicExecutor(cfg)
+    try {
+      executor.run()
+      fail("Expected a ExecutionException but it did not occur.")
+    }
+    catch {
+      case _: ExecutionException =>
+      case other: Throwable => fail("Expected a ExecutionException, but caught different exception: " + other)
+    }
+  }
+
+  test("array out of bounds 2") {
+    val code =
+      """
+        | main() {
+        |   var a, b;
+        |   a = [1,2];
+        |   b = -1;
+        |   a[b] = 1;
+        |   return 0;
+        | }
+        |""".stripMargin
+
+
+    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+    val executor = new SymbolicExecutor(cfg)
+    try {
+      executor.run()
+      fail("Expected a ExecutionException but it did not occur.")
+    }
+    catch {
+      case _: ExecutionException =>
+      case other: Throwable => fail("Expected a ExecutionException, but caught different exception: " + other)
+    }
+  }
+
+  test("array store exception") {
+    val code =
+      """
+        | main() {
+        |   var a;
+        |   a = [1, main];
+        |   return 0;
+        | }
+        |""".stripMargin
+
+
+    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+    val executor = new SymbolicExecutor(cfg)
+    try {
+      executor.run()
+      fail("Expected a ExecutionException but it did not occur.")
+    }
+    catch {
+      case _: ExecutionException =>
+      case other: Throwable => fail("Expected a ExecutionException, but caught different exception: " + other)
+    }
+  }
+
+  test("array definition semantics") {
+    val code =
+      """
+        | inf() {
+        |   return inf();
+        | }
+        | main() {
+        |   var a;
+        |   a = [1, main, inf()];
+        |   return 0;
+        | }
+        |""".stripMargin
+
+
+    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+    val executor = new SymbolicExecutor(cfg)
+    try {
+      executor.run()
+      fail("Expected a ExecutionException but it did not occur.")
+    }
+    catch {
+      case _: ExecutionException =>
+      case other: Throwable => fail("Expected a ExecutionException, but caught different exception: " + other)
+    }
+  }
+
+
+  test("non-array access") {
+    val code =
+      """
+        | inf() {
+        |   return inf();
+        | }
+        | main() {
+        |   var a;
+        |   a = 1;
+        |   return a[inf()];
+        | }
+        |""".stripMargin
+
+
+    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+    val executor = new SymbolicExecutor(cfg)
+    try {
+      executor.run()
+      fail("Expected a ExecutionException but it did not occur.")
+    }
+    catch {
+      case _: ExecutionException =>
+      case other: Throwable => fail("Expected a ExecutionException, but caught different exception: " + other)
+    }
+  }
+
+  test("array wih multiple dimensions") {
+    val code =
+      """
+        | main() {
+        |   var a, b;
+        |   a = [[0,1],[2,3,4]];
+        |   b = a[0];
+        |   b[1] = b[1] + 1;
+        |   a[1][2] = a[1][0] * 2 * 10;
+        |   return a[0][1] + a[1][2];
+        | }
+        |""".stripMargin
+
+
+    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+    val executor = new SymbolicExecutor(cfg)
+    executor.run() == 42
+  }
+
+
 }

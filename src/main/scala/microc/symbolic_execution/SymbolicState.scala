@@ -31,7 +31,7 @@ class SymbolicState(var nextStatement: CfgNode, var pathCondition: PathCondition
     new SymbolicState(nextStatement, pathCondition, symbolicStore, callStack)
   }
 
-  def addedAlloc(v: Val): RefVal = {
+  def addedAlloc(v: Val): PointerVal = {
     val ptr = symbolicStore.storage.getAddress
     symbolicStore.storage.addVal(ptr, v)
     ptr

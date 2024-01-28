@@ -202,7 +202,7 @@ case class FieldAccess(record: Expr, field: String, loc: Loc) extends Expr {
   override def children: Iterable[AstNode] = List(record)
 }
 
-case class Array(elems: List[Expr], loc: Loc) extends Expr {
+case class ArrayNode(elems: List[Expr], loc: Loc) extends Expr {
   override def children: Iterable[AstNode] = elems
 }
 

@@ -274,11 +274,11 @@ class InternalLLParser(source: String, tokens: List[Token]) {
   }
 
   // Array = '[' [ Expr { ',' Expr } ] ']'
-  def Array(): ast.Array = {
+  def Array(): ast.ArrayNode = {
     val op = consume(LBRACKET, "Expected '[' for array definition")
     val elems = repsep(Expr(), COMMA, RBRACKET);
     consume(RBRACKET, "Expected ']' after array definition")
-    ast.Array(elems, op.loc)
+    ast.ArrayNode(elems, op.loc)
   }
 
   // PrimaryExpr = Number | Identifier | Record | Array | Paren

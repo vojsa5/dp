@@ -101,8 +101,8 @@ class PCParser extends StringParsers with microc.parser.Parser {
   // EXPRESSIONS - RECORD DECLARATIONS
   // ----------------------------------------------------------------------------
 
-  lazy val Array: Parser[ast.Array] =
-    (C <~ "[") ~ repsep(Expr, ",") <~ "]" ^^ { case loc ~ elems => ast.Array(elems, loc) }
+  lazy val Array: Parser[ast.ArrayNode] =
+    (C <~ "[") ~ repsep(Expr, ",") <~ "]" ^^ { case loc ~ elems => ast.ArrayNode(elems, loc) }
 
   // ----------------------------------------------------------------------------
   // STATEMENTS

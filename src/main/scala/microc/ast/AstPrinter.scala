@@ -65,7 +65,7 @@ class AstPrinter(indent: Option[Int] = Some(2)) {
         fields.foreachSep(visit(_, out), comma())
         out << "}"
 
-      case Array(elems, _) =>
+      case ArrayNode(elems, _) =>
         out << "["
         elems.foreachSep(visit(_, out), comma())
         out << "]"

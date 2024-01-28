@@ -1,12 +1,12 @@
 package microc.symbolic_execution
 
 import microc.ProgramException
-import microc.ast.{Alloc, AndAnd, AssignStmt, BinaryOp, CallFuncExpr, CodeLoc, Deref, Divide, Equal, Expr, FunDecl, GreatThan, Identifier, IfStmt, Input, Loc, Minus, NestedBlockStmt, Not, NotEqual, Null, Number, OutputStmt, Plus, Program, ReturnStmt, Times, VarRef, VarStmt, WhileStmt}
+import microc.ast.{Alloc, AndAnd, ArrayAccess, ArrayNode, AssignStmt, BinaryOp, CallFuncExpr, CodeLoc, Deref, Divide, Equal, Expr, FunDecl, GreatThan, Identifier, IfStmt, Input, Loc, Minus, NestedBlockStmt, Not, NotEqual, Null, Number, OutputStmt, Plus, Program, ReturnStmt, Times, VarRef, VarStmt, WhileStmt}
 import microc.cfg.ProgramCfg
 import microc.cli.Reporter
-import microc.symbolic_execution.ExecutionException.{errorDivByZero, errorNonFunctionApplication, errorNonIntArithmetics, errorNonIntReturn, errorNonPointerDereference, errorNullDereference, errorPossibleDivByZero, errorUninitializedReference}
-import microc.symbolic_execution.Value.{NullRef, PointerVal, Symbolic, SymbolicExpr, SymbolicVal, Val}
-import com.microsoft.z3._
+import microc.symbolic_execution.ExecutionException.{errorArrayOutOfBounds, errorDivByZero, errorIncompatibleTypes, errorNonArrayAccess, errorNonFunctionApplication, errorNonIntArithmetics, errorNonIntReturn, errorNonPointerDereference, errorNotAssignableExpression, errorNullDereference, errorPossibleDivByZero, errorUninitializedReference}
+import microc.symbolic_execution.Value.{ArrVal, NullRef, PointerVal, Symbolic, SymbolicExpr, SymbolicVal, Val}
+import com.microsoft.z3.{ArrayExpr, _}
 
 case class ExecutionException(message: String, loc: Loc) extends ProgramException(message) {
   override def format(reporter: Reporter): String = reporter.formatError("execution", message, loc)
@@ -67,6 +67,16 @@ object ExecutionException {
   def errorPossibleDivByZero(loc: Loc): ExecutionException =
     ExecutionException(s"Possible Division by zero", loc)
 
+  def errorIncompatibleTypes(loc: Loc, left: String, right: String): ExecutionException =
+    ExecutionException(s"Incompatible types, cannot assign $right into $left", loc)
+
+  def errorArrayOutOfBounds(loc: Loc, length: Int, index: Int): ExecutionException =
+    ExecutionException(s"Array out of bounds (length: $length, index: $index)", loc)
+
+  def errorNonArrayAccess(loc: Loc, value: String): ExecutionException =
+    ExecutionException(s"Non-array ($value) element access", loc)
+
+
 }
 
 
@@ -78,7 +88,7 @@ class SymbolicExecutor(program: ProgramCfg) {
   def run(): Int = {
 
 
-    unfinishedPaths += new SymbolicState(program.getFce("main"), new PathCondition(None, BinaryOp(Equal, Number(1, CodeLoc(0, 0)), Number(1, CodeLoc(0, 0)), CodeLoc(0, 0))))
+    unfinishedPaths += new SymbolicState(program.getFce("main"), PathCondition.initial())
     var res: Option[Val] = None
     while (unfinishedPaths.nonEmpty) {
       val path = unfinishedPaths.head
@@ -119,6 +129,26 @@ class SymbolicExecutor(program: ProgramCfg) {
     symbolicState.symbolicStore.popFrame()
     symbolicState.callStack = symbolicState.callStack.dropRight(1)
     symbolicState.returnValue
+  }
+
+  def stepOnLoop(symbolicState: SymbolicState, loop: WhileStmt): Unit = {
+    solver.solveCondition(symbolicState.pathCondition.expr, loop.guard, symbolicState) match {
+      case Status.SATISFIABLE =>
+        val nextState = symbolicState.getIfTrueState()
+        step(nextState)
+        symbolicState.returnValue = nextState.returnValue
+      case Status.UNKNOWN =>
+        throw new Exception("IMPLEMENT")
+      case Status.UNSATISFIABLE =>
+    }
+    solver.solveCondition(symbolicState.pathCondition.expr, Not(loop.guard, loop.guard.loc), symbolicState) match {
+      case Status.SATISFIABLE =>
+        unfinishedPaths += symbolicState.getIfFalseState()
+        return
+      case Status.UNKNOWN =>
+        throw new Exception("IMPLEMENT")
+      case Status.UNSATISFIABLE =>
+    }
   }
 
   def step(symbolicState: SymbolicState): Unit = {
@@ -163,24 +193,8 @@ class SymbolicExecutor(program: ProgramCfg) {
           case Status.UNSATISFIABLE =>
             return
         }
-      case WhileStmt(guard, _, _) =>
-        solver.solveCondition(symbolicState.pathCondition.expr, guard, symbolicState) match {
-          case Status.SATISFIABLE =>
-            val nextState = symbolicState.getIfTrueState()
-            step(nextState)
-            symbolicState.returnValue = nextState.returnValue
-          case Status.UNKNOWN =>
-            throw new Exception("IMPLEMENT")
-          case Status.UNSATISFIABLE =>
-        }
-        solver.solveCondition(symbolicState.pathCondition.expr, Not(guard, guard.loc), symbolicState) match {
-          case Status.SATISFIABLE =>
-            unfinishedPaths += symbolicState.getIfFalseState()
-            return
-          case Status.UNKNOWN =>
-            throw new Exception("IMPLEMENT")
-          case Status.UNSATISFIABLE =>
-        }
+      case loop@WhileStmt(_, _, _) =>
+        stepOnLoop(symbolicState, loop)
         return
       case ReturnStmt(expr, _) =>
         symbolicState.returnValue = evaluate(expr, symbolicState)
@@ -203,8 +217,6 @@ class SymbolicExecutor(program: ProgramCfg) {
   def evaluate(expr: Expr, symbolicState: SymbolicState): Val = {
     expr match {
       case BinaryOp(operator, left, right, loc) =>
-        val p0 = evaluate(left, symbolicState)
-        val p1 = evaluate(right, symbolicState)
         (evaluate(left, symbolicState), evaluate(right, symbolicState)) match {
           case (Number(l, _), Number(r, _)) =>
             operator match {
@@ -258,13 +270,42 @@ class SymbolicExecutor(program: ProgramCfg) {
       case VarRef(id, _) =>
         symbolicState.getSymbolicVal(id.name).get
       case Null(_) => NullRef
-      case Alloc(expr, loc) =>
+      case Alloc(expr, _) =>
         symbolicState.addedAlloc(evaluate(expr, symbolicState))
       case Deref(pointer, loc) =>
         evaluate(pointer, symbolicState) match {
           case PointerVal(address) => symbolicState.getVal(PointerVal(address)).get
           case NullRef => throw errorNullDereference(loc)
           case _ => throw errorNonPointerDereference(loc, evaluate(pointer, symbolicState).toString)
+        }
+      case ArrayNode(elems, _) =>
+        var prev: Val = null
+        val vals = elems.map { e =>
+          val v = evaluate(e, symbolicState)
+          if (prev != null && !prev.getClass.isAssignableFrom(v.getClass)) {
+            throw errorIncompatibleTypes(e.loc, prev.toString, v.toString)
+          } else {
+            prev = v
+          }
+          symbolicState.addedAlloc(v)
+        }.toArray
+        ArrVal(vals)
+      case ArrayAccess(array, index, loc) =>
+        val i = evaluate(index, symbolicState);
+        i match {
+          case Number(value, _) =>
+            evaluate(array, symbolicState) match {
+              case ArrVal(elems) if value >= elems.length || value < 0 =>
+                throw errorArrayOutOfBounds(loc, value, elems.length)
+              case ArrVal(elems) =>
+                val o = symbolicState.getVal(elems(value))
+                  symbolicState.getVal(elems(value)) match {
+                    case Some(v) => v
+                    case None => throw errorUninitializedReference(loc)
+                }
+              case _ => throw errorNonArrayAccess(loc, evaluate(array, symbolicState).toString)
+            }
+          case _ => throw errorNonIntArithmetics(loc)
         }
     }
   }
@@ -284,8 +325,27 @@ class SymbolicExecutor(program: ProgramCfg) {
           case Some(v) => throw errorNonPointerDereference(pointer.loc, v.toString)
           case None => throw errorUninitializedReference(pointer.loc)
         }
+      case ArrayAccess(array, index, loc) =>
+        val i = evaluate(index, symbolicState);
+        i match {
+          case Number(value, _) =>
+            evaluate(array, symbolicState) match {
+              case ArrVal(elems) if value >= elems.length || value < 0 =>
+                throw errorArrayOutOfBounds(loc, value, elems.length)
+              case ArrVal(elems) => symbolicState.getVal(elems(value)) match {
+                case Some(PointerVal(address)) => PointerVal(address)
+                case Some(n@Number(_, _)) => elems(value)
+                case None => throw errorUninitializedReference(loc)
+                case _ => throw new Exception("IMPLEMENT")
+              }
+              case _ => throw errorNonArrayAccess(index.loc, evaluate(array, symbolicState).toString)
+            }
+          case _ => throw errorNonIntArithmetics(loc)
+        }
+      case e => throw errorNotAssignableExpression(e)
     }
   }
+
 
   /*private def getTarget(expr: Expr, stackFrames: StackFrames): RefVal = {
     expr match {

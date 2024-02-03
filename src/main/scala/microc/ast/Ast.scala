@@ -36,7 +36,10 @@ object BinaryOperator {
     case "/"  => Divide
     case "!=" => NotEqual
     case "==" => Equal
-    case ">"  => GreatThan
+    case ">"  => GreaterThan
+    case "<"  => LowerThan
+    case ">="  => GreaterEqual
+    case "<="  => LowerEqual
     case "&&" => AndAnd
     case "||" => OrOr
   }
@@ -66,8 +69,20 @@ case object NotEqual extends BinaryOperator {
   override def toString: String = "!="
 }
 
-case object GreatThan extends BinaryOperator {
+case object GreaterThan extends BinaryOperator {
   override def toString: String = ">"
+}
+
+case object LowerThan extends BinaryOperator {
+  override def toString: String = "<"
+}
+
+case object GreaterEqual extends BinaryOperator {
+  override def toString: String = ">="
+}
+
+case object LowerEqual extends BinaryOperator {
+  override def toString: String = "<="
 }
 
 case object AndAnd extends BinaryOperator {
@@ -134,6 +149,7 @@ case class Identifier(name: String, loc: Loc) extends Expr
 
 case class BinaryOp(operator: BinaryOperator, left: Expr, right: Expr, loc: Loc) extends Expr {
   override def children: Iterable[AstNode] = List(left, right)
+  override def toString: String = s"($left $operator $right)"
 }
 
 case class CallFuncExpr(targetFun: Expr, args: List[Expr], loc: Loc) extends Expr {
@@ -175,6 +191,7 @@ case class VarRef(id: Identifier, loc: Loc) extends Expr {
   */
 case class Not(expr: Expr, loc: Loc) extends Expr {
   override def children: Iterable[AstNode] = List(expr)
+  override def toString: String = s"!$expr"
 }
 
 case class Deref(pointer: Expr, loc: Loc) extends Expr {
@@ -320,6 +337,11 @@ case class OutputStmt(expr: Expr, loc: Loc) extends StmtInNestedBlock {
   */
 case class VarStmt(decls: List[IdentifierDecl], loc: Loc) extends Stmt {
   override def children: Iterable[AstNode] = decls
+}
+
+case class AddConditionStatement(condition: Expr, loc: Loc) extends Stmt {
+  override def children: Iterable[AstNode] = List(condition)
+  override def toString: String = condition.toString + loc.toString
 }
 
 case class IdentifierDecl(name: String, loc: Loc) extends Decl

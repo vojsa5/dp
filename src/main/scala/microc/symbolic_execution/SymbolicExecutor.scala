@@ -1,12 +1,12 @@
 package microc.symbolic_execution
 
 import microc.ProgramException
-import microc.ast.{Alloc, AndAnd, ArrayAccess, ArrayNode, AssignStmt, BinaryOp, CallFuncExpr, CodeLoc, Deref, Divide, Equal, Expr, FunDecl, GreatThan, Identifier, IfStmt, Input, Loc, Minus, NestedBlockStmt, Not, NotEqual, Null, Number, OutputStmt, Plus, Program, ReturnStmt, Times, VarRef, VarStmt, WhileStmt}
+import microc.ast.{Alloc, AndAnd, ArrayAccess, ArrayNode, AssignStmt, BinaryOp, CallFuncExpr, CodeLoc, Deref, Divide, Equal, Expr, FunDecl, GreaterThan, Identifier, IfStmt, Input, Loc, Minus, NestedBlockStmt, Not, NotEqual, Null, Number, OutputStmt, Plus, Program, ReturnStmt, Times, VarRef, VarStmt, WhileStmt}
 import microc.cfg.ProgramCfg
 import microc.cli.Reporter
 import microc.symbolic_execution.ExecutionException.{errorArrayOutOfBounds, errorDivByZero, errorIncompatibleTypes, errorNonArrayAccess, errorNonFunctionApplication, errorNonIntArithmetics, errorNonIntReturn, errorNonPointerDereference, errorNotAssignableExpression, errorNullDereference, errorPossibleDivByZero, errorUninitializedReference}
 import microc.symbolic_execution.Value.{ArrVal, NullRef, PointerVal, Symbolic, SymbolicExpr, SymbolicVal, Val}
-import com.microsoft.z3.{ArrayExpr, _}
+import com.microsoft.z3._
 
 case class ExecutionException(message: String, loc: Loc) extends ProgramException(message) {
   override def format(reporter: Reporter): String = reporter.formatError("execution", message, loc)
@@ -82,7 +82,7 @@ object ExecutionException {
 
 class SymbolicExecutor(program: ProgramCfg) {
 
-  val solver = new ConstraintSolver()
+  val solver = new ConstraintSolver(new Context())
   var unfinishedPaths: Set[SymbolicState] = Set()
 
   def run(): Int = {
@@ -230,7 +230,7 @@ class SymbolicExecutor(program: ProgramCfg) {
                 Number(l / r, loc)
               case Equal => Number(if (l == r) 1 else 0, loc)
               case NotEqual => Number(if (l != r) 1 else 0, loc)
-              case GreatThan => Number(if (l > r) 1 else 0, loc)
+              case GreaterThan => Number(if (l > r) 1 else 0, loc)
             }
           case (e1: Symbolic, e2: Symbolic) =>
               operator match {
@@ -239,7 +239,7 @@ class SymbolicExecutor(program: ProgramCfg) {
                 case Times => SymbolicExpr(BinaryOp(Times, e1, e2, loc), loc)
                 case Divide => {
                   solver.solveConstraint(
-                    solver.createConstraint(BinaryOp(AndAnd, BinaryOp(Equal, e2, Number(0, loc), loc), symbolicState.pathCondition.expr, loc), symbolicState)) match {
+                    solver.createConstraintWithState(BinaryOp(AndAnd, BinaryOp(Equal, e2, Number(0, loc), loc), symbolicState.pathCondition.expr, loc), symbolicState)) match {
                     case Status.SATISFIABLE => throw errorPossibleDivByZero(loc)
                     case Status.UNSATISFIABLE => SymbolicExpr(BinaryOp(Divide, e1, e2, loc), loc)
                     case Status.UNKNOWN => throw new Exception("IMPLEMENT")
@@ -247,12 +247,19 @@ class SymbolicExecutor(program: ProgramCfg) {
                 }
                 case Equal => SymbolicExpr(BinaryOp(Equal, e1, e2, loc), loc)
                 case NotEqual => SymbolicExpr(BinaryOp(NotEqual, e1, e2, loc), loc)
-                case GreatThan => SymbolicExpr(BinaryOp(GreatThan, e1, e2, loc), loc)
+                case GreaterThan => SymbolicExpr(BinaryOp(GreaterThan, e1, e2, loc), loc)
               }
           case (NullRef, NullRef) => Number(1, loc)
           case (PointerVal(address1), PointerVal(address2)) => if (address1 == address2) Number(1, loc) else Number(0, loc)
           case (PointerVal(_), NullRef) => Number(0, loc)
           case (NullRef, PointerVal(_)) => Number(0, loc)
+          case _ => throw errorNonIntArithmetics(loc)
+        }
+      case Not(expr, loc) =>
+        evaluate(expr, symbolicState) match {
+          case Number(value, _) => Number(if (value == 0) 1 else 0, loc)
+          case v@SymbolicVal(_) => SymbolicExpr(Not(v, loc), loc)
+          case SymbolicExpr(value, _) => SymbolicExpr(Not(value, loc), loc)
           case _ => throw errorNonIntArithmetics(loc)
         }
       case Number(value, loc) => Number(value, loc)
@@ -276,7 +283,7 @@ class SymbolicExecutor(program: ProgramCfg) {
         evaluate(pointer, symbolicState) match {
           case PointerVal(address) => symbolicState.getVal(PointerVal(address)).get
           case NullRef => throw errorNullDereference(loc)
-          case _ => throw errorNonPointerDereference(loc, evaluate(pointer, symbolicState).toString)
+          case e => throw errorNonPointerDereference(loc, e.toString)
         }
       case ArrayNode(elems, _) =>
         var prev: Val = null
@@ -346,29 +353,23 @@ class SymbolicExecutor(program: ProgramCfg) {
     }
   }
 
-
-  /*private def getTarget(expr: Expr, stackFrames: StackFrames): RefVal = {
+  def isConditionBounded(expr: Expr, symbolicState: SymbolicState): Boolean = {
     expr match {
-      case Deref(pointer, loc) =>
-        storage.get(
-          getTarget(pointer, stackFrames)
-        ) match {
-          case Some(PointerVal(address)) => PointerVal(address)
-          case Some(NullRef) => throw errorNullDereference(loc)
-          case Some(v) => throw errorNonPointerDereference(pointer.loc, v)
-          case None => throw errorUninitializedReference(pointer.loc)
+      case BinaryOp(_, lhs, rhs, _) => isConditionBounded(lhs, symbolicState) || isConditionBounded(rhs, symbolicState)
+      case Not(expr, _) => isConditionBounded(expr, symbolicState)
+      case id@Identifier(_, _) =>
+        symbolicState.getSymbolicValForId(id) match {
+          case SymbolicVal(_) => true
+          case SymbolicExpr(_, _) => true
+          case _ => false
         }
-      case Identifier(name, loc) =>
-        stackFrames.find(name) match {
-          case Some(PointerVal(address)) => PointerVal(address)
-          case _ if functionDeclarations.contains(name) => throw errorNonPointerDereference(loc, functionDeclarations(name))
-          case _ => throw errorUninitializedReference(loc)
-        }
-      case e => throw errorNotAssignableExpression(e)
+      case Alloc(expr, _) => isConditionBounded(expr, symbolicState)
+      case Deref(pointer, _) => isConditionBounded(pointer, symbolicState)
+      case ArrayNode(elems, _) => elems.exists(isConditionBounded(_, symbolicState))
+      case ArrayAccess(array, index, _) => isConditionBounded(array, symbolicState) || isConditionBounded(index, symbolicState)
+      case _ => false
     }
-  }*/
-
-
+  }
 
 
 }

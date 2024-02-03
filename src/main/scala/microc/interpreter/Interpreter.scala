@@ -292,7 +292,7 @@ class MicroCInterpreter(program: Program, stdin: Reader, stdout: Writer, ascii: 
                 case (Divide, _, 0) => throw errorDivByZero(loc)
                 case (Divide, value1, value2) => value1 / value2
                 case (Equal, value1, value2) => if (value1 == value2) 1 else 0
-                case (GreatThan, value1, value2) => if (value1 > value2) 1 else 0
+                case (GreaterThan, value1, value2) => if (value1 > value2) 1 else 0
                 case (_, _, _) => throw errorNonIntArithmetics(loc)
               }
             case (Equal, NullRef, NullRef) => 1

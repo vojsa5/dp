@@ -63,7 +63,7 @@ trait CfgFactory {
         val tmpPreds = mutable.Set.empty[CfgNode]
         val qNode = new CfgStmtNode(id, stmt)
         addCfg(qNode)
-        tmpPreds.addAll(preds)
+        //tmpPreds.addAll(preds)
         var last: CfgNode = null
         thenBranch match {
           case NestedBlockStmt(body, _) =>

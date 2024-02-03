@@ -2,7 +2,7 @@ package microc.symbolic_execution
 
 import microc.ast.Identifier
 import microc.symbolic_execution.ExecutionException.errorUninitializedReference
-import microc.symbolic_execution.Value.{NullRef, PointerVal, RefVal, UninitializedRef, Val}
+import microc.symbolic_execution.Value.{NullRef, PointerVal, RefVal, SymbolicExpr, UninitializedRef, Val}
 
 import scala.collection.mutable.ArrayBuffer
 
@@ -99,6 +99,7 @@ class SymbolicStore() {
           case None => throw errorUninitializedReference(id.loc)
         }
       case Some(NullRef) => throw errorUninitializedReference(id.loc)
+      //case Some(e@SymbolicExpr(_, _)) => e
       case Some(_) => throw new Exception("Internal error")
       /*case None =>
         functionDeclarations.get(id.name) match {

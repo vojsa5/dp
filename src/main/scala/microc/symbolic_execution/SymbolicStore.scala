@@ -1,6 +1,6 @@
 package microc.symbolic_execution
 
-import microc.ast.Identifier
+import microc.ast.{CodeLoc, Identifier, Loc}
 import microc.symbolic_execution.ExecutionException.errorUninitializedReference
 import microc.symbolic_execution.Value.{NullRef, PointerVal, RefVal, SymbolicExpr, UninitializedRef, Val}
 
@@ -85,20 +85,20 @@ class SymbolicStore() {
     None
   }
 
-  def getVal(ptr: PointerVal): Option[Val] = {
+  def getValOfPtr(ptr: PointerVal): Option[Val] = {
     storage.getVal(ptr)
   }
 
-  def getValForId(id: Identifier): Val = {
-    val t = findVar(id.name)
+  def getVal(name: String, loc: Loc): Val = {
+    val t = findVar(name)
     t match {
       case Some(PointerVal(decl)) =>
         val e = storage.getVal(PointerVal(decl))
         e match {
           case Some(res) => res
-          case None => throw errorUninitializedReference(id.loc)
+          case None => throw errorUninitializedReference(loc)
         }
-      case Some(NullRef) => throw errorUninitializedReference(id.loc)
+      case Some(NullRef) => throw errorUninitializedReference(loc)
       //case Some(e@SymbolicExpr(_, _)) => e
       case Some(_) => throw new Exception("Internal error")
       /*case None =>
@@ -106,6 +106,7 @@ class SymbolicStore() {
           case Some(fun) => fun
           case None => throw new Exception("Unexpected input in interpreter. Semantic analyses does not work properly.")
         }*/
+      case None => throw new Exception("Internal error")
 
     }
 

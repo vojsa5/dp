@@ -264,7 +264,7 @@ class SymbolicExecutor(program: ProgramCfg) {
         }
       case Number(value, loc) => Number(value, loc)
       case id@Identifier(_, _) =>
-        symbolicState.getSymbolicValForId(id)
+        symbolicState.getSymbolicVal(id.name, id.loc)
       case Input(loc) => SymbolicVal(loc)
       case CallFuncExpr(targetFun, args, loc) =>
         targetFun match {
@@ -275,7 +275,7 @@ class SymbolicExecutor(program: ProgramCfg) {
           case _ => throw errorNonFunctionApplication(loc, targetFun.toString)
         }
       case VarRef(id, _) =>
-        symbolicState.getSymbolicVal(id.name).get
+        symbolicState.getSymbolicValOpt(id.name).get
       case Null(_) => NullRef
       case Alloc(expr, _) =>
         symbolicState.addedAlloc(evaluate(expr, symbolicState))
@@ -320,7 +320,7 @@ class SymbolicExecutor(program: ProgramCfg) {
   private def getTarget(expr: Expr, symbolicState: SymbolicState): PointerVal = {
     expr match {
       case Identifier(name, loc) =>
-        symbolicState.getSymbolicVal(name) match {
+        symbolicState.getSymbolicValOpt(name) match {
           case Some(PointerVal(address)) => PointerVal(address)
           case _ => throw errorUninitializedReference(loc)
         }
@@ -358,7 +358,7 @@ class SymbolicExecutor(program: ProgramCfg) {
       case BinaryOp(_, lhs, rhs, _) => isConditionBounded(lhs, symbolicState) || isConditionBounded(rhs, symbolicState)
       case Not(expr, _) => isConditionBounded(expr, symbolicState)
       case id@Identifier(_, _) =>
-        symbolicState.getSymbolicValForId(id) match {
+        symbolicState.getSymbolicVal(id.name, id.loc) match {
           case SymbolicVal(_) => true
           case SymbolicExpr(_, _) => true
           case _ => false

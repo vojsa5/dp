@@ -1,8 +1,10 @@
 package microc.symbolic_execution
 
-import microc.ast.{AndAnd, BinaryOp, CodeLoc, Equal, Expr, Identifier, IfStmt, NestedBlockStmt, Not, Null, Number, WhileStmt}
+import microc.ast.{AndAnd, BinaryOp, CodeLoc, Equal, Expr, Identifier, IfStmt, Loc, NestedBlockStmt, Not, Null, Number, WhileStmt}
 import microc.cfg.CfgNode
-import microc.symbolic_execution.Value.{NullRef, PointerVal, RefVal, Symbolic, Val}
+import microc.symbolic_execution.Value.{NullRef, PointerVal, RefVal, Symbolic, SymbolicExpr, SymbolicVal, Val}
+
+import scala.collection.mutable
 
 
 
@@ -49,22 +51,22 @@ class SymbolicState(var nextStatement: CfgNode, var pathCondition: PathCondition
     new SymbolicState(nextStatement, pathCondition, symbolicStore, callStack)
   }
 
-  def getSymbolicVal(name: String): Option[RefVal] = {
+  def getSymbolicValOpt(name: String): Option[RefVal] = {
     symbolicStore.findVar(name)
   }
 
   def getVal(ptr: PointerVal): Option[Val] = {
-    symbolicStore.getVal(ptr)
+    symbolicStore.getValOfPtr(ptr)
   }
 
-  def getSymbolicValForId(id: Identifier): Val = {
-    symbolicStore.getValForId(id)
+  def getSymbolicVal(name: String, loc: Loc): Val = {
+    symbolicStore.getVal(name, loc)
   }
 
   def loadVariablesToExpr(expr: Expr): Expr = {
     expr match {
-      case id@Identifier(name, loc) =>
-        getSymbolicValForId(id) match {
+      case Identifier(name, loc) =>
+        getSymbolicVal(name, loc) match {
           case v: Expr => v
           case _ => throw new Exception("This should not happen")
         }
@@ -124,6 +126,19 @@ class SymbolicState(var nextStatement: CfgNode, var pathCondition: PathCondition
       }
     )
     new SymbolicState(nextStatement.succ.maxBy(node => node.id), pathCondition, symbolicStore.deepCopy(), callStack.map(identity))//TODO add to path condition
+  }
+
+  def applyChange(changes: mutable.HashMap[String, Expr => Val]): SymbolicState = {
+    for (change <- changes) {
+      getSymbolicVal(change._1, CodeLoc(0, 0)) match {
+        case SymbolicExpr(expr, _) => {
+          val newVal = change._2(expr)
+          addedVar(change._1, newVal)
+        }
+        case _ =>
+      }
+    }
+    this
   }
 
 }

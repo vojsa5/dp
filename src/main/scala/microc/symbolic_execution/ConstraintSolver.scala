@@ -2,7 +2,7 @@ package microc.symbolic_execution
 
 import com.microsoft.z3.{ArithExpr, ArithSort, BoolExpr, Context, IntExpr, IntNum, Status}
 import microc.ast.{AndAnd, BinaryOp, Divide, Equal, Expr, GreaterEqual, GreaterThan, Identifier, LowerEqual, LowerThan, Minus, Not, NotEqual, Null, Number, OrOr, Plus, Times}
-import microc.symbolic_execution.Value.{SymbolicExpr, SymbolicVal, Val}
+import microc.symbolic_execution.Value.{IteVal, Symbolic, SymbolicExpr, SymbolicVal, Val}
 
 import scala.collection.mutable
 
@@ -20,6 +20,7 @@ class ConstraintSolver(val ctx: Context) {
     val solver = ctx.mkSolver()
     constraint match {
       case cond: BoolExpr => solver.add(cond)
+      case cond: IntNum => solver.add(getCondition(cond))
     }
     solver.check()
   }
@@ -93,6 +94,25 @@ class ConstraintSolver(val ctx: Context) {
   }
 
 
+  def valToExpr(v: Val, state: SymbolicState): com.microsoft.z3.Expr[_] = {
+    v match {
+      case Number(value, _) =>
+        ctx.mkInt(value)
+      case v@SymbolicVal(_) =>
+        ctx.mkIntConst(v.name)
+      case SymbolicExpr(expr, _) =>
+        createConstraintWithState(expr, state)
+      case IteVal(val1, val2, cond, _) =>
+        ctx.mkITE(
+          getCondition(createConstraintWithState(cond, state)),
+          valToExpr(val1, state),
+          valToExpr(val2, state)
+        )
+      case _ => throw new Exception("IMPLEMENT")
+    }
+  }
+
+
   def createConstraintWithState(expr: Expr, state: SymbolicState): com.microsoft.z3.Expr[_] = {
     expr match {
       case Not(expr, _) =>
@@ -153,16 +173,7 @@ class ConstraintSolver(val ctx: Context) {
             ctx.mkOr(getCondition(createConstraintWithState(left, state)), getCondition(createConstraintWithState(right, state)))
         }
       case Identifier(name, loc) =>
-        val c = state.getSymbolicVal(name, loc)
-        c match {
-          case Number(value, _) =>
-            ctx.mkInt(value)
-          case v@SymbolicVal(_) =>
-            ctx.mkIntConst(v.name)
-          case SymbolicExpr(expr, _) =>
-            createConstraintWithState(expr, state)
-          case _ => throw new Exception("IMPLEMENT")
-        }
+        valToExpr(state.getSymbolicVal(name, loc), state)
       case Number(value, _) => ctx.mkInt(value)
       case v@SymbolicVal(_) => ctx.mkIntConst(v.name)
       case SymbolicExpr(expr, _) => createConstraintWithState(expr, state)
@@ -170,19 +181,30 @@ class ConstraintSolver(val ctx: Context) {
     }
   }
 
+
+  def applyVal(v: Val, state: SymbolicState): Expr = {
+    v match {
+      case n@Number(_, _) => n
+      case v@SymbolicVal(_) => v
+      case SymbolicExpr(expr, _) => applyTheState(expr, state)
+      case IteVal(val1, val2, cond, loc) =>
+        (applyVal(val1, state), applyVal(val2, state)) match {
+          case (a: Symbolic, b: Symbolic) => IteVal(a, b, applyTheState(cond, state), loc)
+          case (a: Symbolic, b) => IteVal(a, SymbolicExpr(b, loc), applyTheState(cond, state), loc)
+          case (a, b: Symbolic) => IteVal(SymbolicExpr(a, loc), b, applyTheState(cond, state), loc)
+          case (a, b) => IteVal(SymbolicExpr(a, loc), SymbolicExpr(b, loc), applyTheState(cond, state), loc)
+        }
+      case _ => throw new Exception("IMPLEMENT")
+    }
+  }
+
+
   def applyTheState(expr: Expr, state: SymbolicState): Expr = {
     expr match {
       case Not(expr, loc) =>
         Not(applyTheState(expr, state), loc)
       case BinaryOp(operator, left, right, loc) => BinaryOp(operator, applyTheState(left, state), applyTheState(right, state), loc)
-      case Identifier(name, loc) =>
-        val c = state.getSymbolicVal(name, loc)
-        c match {
-          case n@Number(_, _) => n
-          case v@SymbolicVal(_) => v
-          case SymbolicExpr(expr, _) => applyTheState(expr, state)
-          case _ => throw new Exception("IMPLEMENT")
-        }
+      case Identifier(name, loc) => applyVal(state.getSymbolicVal(name, loc), state)
       case n@Number(_, _) => n
       case v@SymbolicVal(_) => v
       case SymbolicExpr(expr, _) => applyTheState(expr, state)

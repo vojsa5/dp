@@ -1,5 +1,6 @@
 package microc.ast
 
+import microc.symbolic_execution.Value
 import microc.symbolic_execution.Value.Symbolic
 
 trait Loc extends Ordered[Loc] {
@@ -123,7 +124,9 @@ abstract class AstNode extends Ordered[AstNode] {
   override def compare(that: AstNode): Int = this.loc.compare(that.loc)
 }
 
-trait Expr extends AstNode
+trait Expr extends AstNode {
+  def equals(other: Expr): Boolean
+}
 
 sealed trait Stmt extends AstNode
 
@@ -141,19 +144,71 @@ sealed trait StmtInNestedBlock extends Stmt
 // EXPRESSIONS
 // ----------------------------------------------------------------------------
 
-case class Null(loc: Loc) extends Expr with Symbolic
+case class Null(loc: Loc) extends Expr with Symbolic {
 
-case class Number(value: Int, loc: Loc) extends Expr with Symbolic
+  override def equals(other: Expr): Boolean =
+    other match {
+      case Null(_) => true
+      case _ => false
+    }
 
-case class Identifier(name: String, loc: Loc) extends Expr
+  override def equals(other: Value.Val): Boolean =
+    other match {
+      case Null(_) => true
+      case _ => false
+    }
+}
+
+case class Number(value: Int, loc: Loc) extends Expr with Symbolic {
+  override def equals(other: Expr): Boolean =
+    other match {
+      case Number(val2, _) => val2 == value
+      case _ => false
+    }
+
+  override def equals(other: Value.Val): Boolean =
+    other match {
+      case Number(val2, _) => val2 == value
+      case _ => false
+    }
+}
+
+case class Identifier(name: String, loc: Loc) extends Expr {
+  override def equals(other: Expr): Boolean =
+    other match {
+      case Identifier(name2, _) => name == name2
+      case _ => false
+    }
+}
 
 case class BinaryOp(operator: BinaryOperator, left: Expr, right: Expr, loc: Loc) extends Expr {
   override def children: Iterable[AstNode] = List(left, right)
   override def toString: String = s"($left $operator $right)"
+
+  override def equals(other: Expr): Boolean =
+    other match {
+      case BinaryOp(operator2, left2, right2, _) => operator == operator2 && left.equals(left2) && right.equals(right2)
+      case _ => false
+    }
 }
 
 case class CallFuncExpr(targetFun: Expr, args: List[Expr], loc: Loc) extends Expr {
   override def children: Iterable[AstNode] = targetFun :: args
+
+  override def equals(other: Expr): Boolean =
+    other match {
+      case CallFuncExpr(fun2, args2, _) =>
+        if (args.size == args2.size) {
+          for (i <- args.indices) {
+            if (!args(i).equals(args2(i))) {
+              return false
+            }
+          }
+          return targetFun.equals(fun2)
+        }
+        false
+      case _ => false
+    }
 }
 
 /** Read of one integer from standard input.
@@ -161,10 +216,14 @@ case class CallFuncExpr(targetFun: Expr, args: List[Expr], loc: Loc) extends Exp
   * @param loc
   *   The source code location.
   */
-case class Input(loc: Loc) extends Expr
+case class Input(loc: Loc) extends Expr {
+  override def equals(other: Expr): Boolean = ???//TODO this should not inherit this method
+}
 
 case class Alloc(expr: Expr, loc: Loc) extends Expr {
   override def children: Iterable[AstNode] = List(expr)
+
+  override def equals(other: Expr): Boolean = ???//TODO this should not inherit this method
 }
 
 /** Variable reference.
@@ -178,6 +237,8 @@ case class Alloc(expr: Expr, loc: Loc) extends Expr {
   */
 case class VarRef(id: Identifier, loc: Loc) extends Expr {
   override def children: Iterable[AstNode] = List(id)
+
+  override def equals(other: Expr): Boolean = ???//TODO this should not inherit this method
 }
 
 /** Pointer dereference
@@ -192,14 +253,24 @@ case class VarRef(id: Identifier, loc: Loc) extends Expr {
 case class Not(expr: Expr, loc: Loc) extends Expr {
   override def children: Iterable[AstNode] = List(expr)
   override def toString: String = s"!$expr"
+
+  override def equals(other: Expr): Boolean =
+    other match {
+      case Not(expr2, _) => expr.equals(expr2)
+      case _ => false
+    }
 }
 
 case class Deref(pointer: Expr, loc: Loc) extends Expr {
   override def children: Iterable[AstNode] = List(pointer)
+
+  override def equals(other: Expr): Boolean = ???//TODO this should not inherit this method
 }
 
 case class Record(fields: List[RecordField], loc: Loc) extends Expr {
   override def children: Iterable[AstNode] = fields
+
+  override def equals(other: Expr): Boolean = ???//TODO this should not inherit this method
 }
 
 case class RecordField(name: String, expr: Expr, loc: Loc) extends AstNode {
@@ -217,14 +288,20 @@ case class RecordField(name: String, expr: Expr, loc: Loc) extends AstNode {
   */
 case class FieldAccess(record: Expr, field: String, loc: Loc) extends Expr {
   override def children: Iterable[AstNode] = List(record)
+
+  override def equals(other: Expr): Boolean = ???//TODO this should not inherit this method
 }
 
 case class ArrayNode(elems: List[Expr], loc: Loc) extends Expr {
   override def children: Iterable[AstNode] = elems
+
+  override def equals(other: Expr): Boolean = ???//TODO this should not inherit this method
 }
 
 case class ArrayAccess(array: Expr, index: Expr, loc: Loc) extends Expr {
   override def children: Iterable[AstNode] = List(array, index)
+
+  override def equals(other: Expr): Boolean = ???//TODO this should not inherit this method
 }
 
 // ----------------------------------------------------------------------------

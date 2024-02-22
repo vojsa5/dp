@@ -30,6 +30,9 @@ trait CfgFactory {
     programCfg.add(cfgNode)
     for (pred <- preds) {
       cfgNode.pred.add(pred)
+      if (pred == null) {
+        throw new Exception("")
+      }
       pred.succ.add(cfgNode)
     }
     preds.clear()
@@ -54,8 +57,12 @@ trait CfgFactory {
             for (stmt <- body) {
               last = addCfgStmt(stmt, programCfg)
             }
-            qNode.pred.add(last)
-            last.succ.add(qNode)
+//            qNode.pred.add(last)
+//            last.succ.add(qNode)
+            qNode.pred.addAll(preds)
+            for (pred <- preds) {
+              pred.succ.add(qNode)
+            }
         }
         preds = tmpPreds
         qNode
@@ -68,16 +75,14 @@ trait CfgFactory {
         thenBranch match {
           case NestedBlockStmt(body, _) =>
             for (stmt <- body) {
-              if (last == null) {
-                last = addCfgStmt(stmt, programCfg)
-                qNode.succ.add(last)
-                last.pred.add(qNode)
-              }
-              else {
-                last = addCfgStmt(stmt, programCfg)
-              }
+              last = addCfgStmt(stmt, programCfg)
             }
-            tmpPreds.add(last)
+//            if (last == null) {
+//              tmpPreds.addAll(preds)
+//            }
+//            else {
+//              tmpPreds.add(last)
+//            }
           case node =>
             addCfgStmt(node, programCfg)
         }
@@ -88,18 +93,17 @@ trait CfgFactory {
         elseBranch match {
           case Some(NestedBlockStmt(body, _)) =>
             for (stmt <- body) {
-              if (last == null) {
-                last = addCfgStmt(stmt, programCfg)
-                //qNode.pred.add(last)
-                //last.succ.add(qNode)
-              }
-              else {
-                last = addCfgStmt(stmt, programCfg)
-              }
+              last = addCfgStmt(stmt, programCfg)
             }
-            tmpPreds.add(last)
+//            if (last == null) {
+//              tmpPreds.addAll(preds)
+//            }
+//            else {
+//              tmpPreds.add(last)
+//            }
           case None =>
         }
+        tmpPreds.addAll(preds)
         preds = tmpPreds
         qNode
       case _ =>
@@ -124,6 +128,7 @@ trait CfgFactory {
       }
       addCfgStmt(f.block.ret, programCfg)
       addCfg(new CfgFunExitNode(id, f))
+      preds.clear()
     }
     programCfg
   }

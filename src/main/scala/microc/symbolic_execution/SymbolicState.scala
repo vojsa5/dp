@@ -1,7 +1,8 @@
 package microc.symbolic_execution
 
-import microc.ast.{AndAnd, BinaryOp, CodeLoc, Equal, Expr, Identifier, IfStmt, Loc, NestedBlockStmt, Not, Null, Number, WhileStmt}
+import microc.ast.{AndAnd, BinaryOp, CodeLoc, Equal, Expr, Identifier, IfStmt, Loc, NestedBlockStmt, Not, Null, Number, OrOr, WhileStmt}
 import microc.cfg.CfgNode
+import microc.interpreter.Value.FunVal
 import microc.symbolic_execution.Value.{NullRef, PointerVal, RefVal, Symbolic, SymbolicExpr, SymbolicVal, Val}
 
 import scala.collection.mutable
@@ -10,7 +11,7 @@ import scala.collection.mutable
 
 
 
-class SymbolicState(var nextStatement: CfgNode, var pathCondition: PathCondition, val symbolicStore: SymbolicStore = new SymbolicStore(), var callStack: List[CfgNode] = List.empty) {
+class SymbolicState(var nextStatement: CfgNode, var pathCondition: PathCondition, val symbolicStore: SymbolicStore, var callStack: List[CfgNode] = List.empty) {
 
   var returnValue: Val = Number(0, CodeLoc(0, 0))
 
@@ -20,16 +21,13 @@ class SymbolicState(var nextStatement: CfgNode, var pathCondition: PathCondition
   }
 
   def addedNewVar(variable: String): SymbolicState = {
-    //symbolicStore.addNewVar(variable)
-    val ptr = symbolicStore.storage.getAddress
-    symbolicStore.addVar(variable, ptr)
+    symbolicStore.addNewVar(variable)
     new SymbolicState(nextStatement, pathCondition, symbolicStore, callStack)
   }
 
   def addedVar(variable: String, v: Val): SymbolicState = {
-    val ptr = symbolicStore.storage.getAddress
+    val ptr = symbolicStore.addNewVar(variable)
     symbolicStore.storage.addVal(ptr, v)
-    symbolicStore.addVar(variable, ptr)
     new SymbolicState(nextStatement, pathCondition, symbolicStore, callStack)
   }
 
@@ -96,9 +94,11 @@ class SymbolicState(var nextStatement: CfgNode, var pathCondition: PathCondition
       node => {
         ast match {
           case IfStmt(guard, thenBranch, _, _) =>
+            if (thenBranch.asInstanceOf[NestedBlockStmt].body.isEmpty) {//no statements - go to a statement after else
+                return new SymbolicState(nextStatement.succ.maxBy(node => node.id), addToPathCondition(guard), symbolicStore.deepCopy(), callStack.map(identity))
+            }
             if (thenBranch.asInstanceOf[NestedBlockStmt].body.head == node.ast) {
               return new SymbolicState(node, addToPathCondition(guard), symbolicStore.deepCopy(), callStack.map(identity))
-
             }
           case WhileStmt(guard, block, _) =>
             if (block.asInstanceOf[NestedBlockStmt].body.head == node.ast) {
@@ -139,6 +139,18 @@ class SymbolicState(var nextStatement: CfgNode, var pathCondition: PathCondition
       }
     }
     this
+  }
+
+  def stateEquals(other: SymbolicState): Boolean = {
+    this.symbolicStore.storeEquals(other.symbolicStore)
+  }
+
+  def mergeStates(other: SymbolicState): SymbolicState = {
+    new SymbolicState(
+      nextStatement,
+      new PathCondition(None, BinaryOp(OrOr, this.pathCondition.expr, other.pathCondition.expr, CodeLoc(0, 0))),
+      symbolicStore = symbolicStore.mergeStores(other.symbolicStore, pathCondition).get
+    )
   }
 
 }

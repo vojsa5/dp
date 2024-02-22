@@ -1,12 +1,15 @@
 package microc.symbolic_execution
 
+import microc.symbolic_execution.Statistics
 import microc.ProgramException
-import microc.ast.{Alloc, AndAnd, ArrayAccess, ArrayNode, AssignStmt, BinaryOp, CallFuncExpr, CodeLoc, Deref, Divide, Equal, Expr, FunDecl, GreaterThan, Identifier, IfStmt, Input, Loc, Minus, NestedBlockStmt, Not, NotEqual, Null, Number, OutputStmt, Plus, Program, ReturnStmt, Times, VarRef, VarStmt, WhileStmt}
+import microc.ast.{Alloc, AndAnd, ArrayAccess, ArrayNode, AssignStmt, BinaryOp, BinaryOperator, CallFuncExpr, CodeLoc, Deref, Divide, Equal, Expr, FieldAccess, FunDecl, GreaterEqual, GreaterThan, Identifier, IfStmt, Input, Loc, LowerEqual, LowerThan, Minus, NestedBlockStmt, Not, NotEqual, Null, Number, OutputStmt, Plus, Program, Record, ReturnStmt, Times, VarRef, VarStmt, WhileStmt}
 import microc.cfg.ProgramCfg
 import microc.cli.Reporter
-import microc.symbolic_execution.ExecutionException.{errorArrayOutOfBounds, errorDivByZero, errorIncompatibleTypes, errorNonArrayAccess, errorNonFunctionApplication, errorNonIntArithmetics, errorNonIntReturn, errorNonPointerDereference, errorNotAssignableExpression, errorNullDereference, errorPossibleDivByZero, errorUninitializedReference}
-import microc.symbolic_execution.Value.{ArrVal, NullRef, PointerVal, Symbolic, SymbolicExpr, SymbolicVal, Val}
+import microc.symbolic_execution.ExecutionException.{errorArrayOutOfBounds, errorDivByZero, errorIncompatibleTypes, errorNonArrayAccess, errorNonExistingFieldAccess, errorNonFunctionApplication, errorNonIntArithmetics, errorNonIntReturn, errorNonPointerDereference, errorNonRecordFieldAccess, errorNotAssignableExpression, errorNullDereference, errorPossibleDivByZero, errorRecordNestedFields, errorUninitializedReference}
+import microc.symbolic_execution.Value.{ArrVal, FunVal, NullRef, PointerVal, RecVal, Symbolic, SymbolicExpr, SymbolicVal, Val}
 import com.microsoft.z3._
+
+import scala.collection.mutable
 
 case class ExecutionException(message: String, loc: Loc) extends ProgramException(message) {
   override def format(reporter: Reporter): String = reporter.formatError("execution", message, loc)
@@ -80,20 +83,33 @@ object ExecutionException {
 }
 
 
-class SymbolicExecutor(program: ProgramCfg) {
+class SymbolicExecutor(program: ProgramCfg, subsumption: Option[PathSubsumption] = None, ctx: Context = new Context(), searchStrategy: SearchStreategy = new BFSSearchStrategy) {
 
-  val solver = new ConstraintSolver(new Context())
-  var unfinishedPaths: Set[SymbolicState] = Set()
+  val solver = new ConstraintSolver(ctx)
+  var statistics = new Statistics()
+  var currentPathStopped = false
+  private var functionDeclarations: Map[String, FunVal] = Map.empty
+
+
+  for (fun <- program.function) {
+    val fceName = fun.ast.asInstanceOf[FunDecl].name
+    if (fun.ast.asInstanceOf[FunDecl].name != "main") {
+      functionDeclarations = functionDeclarations.updated(fceName, FunVal(fun.ast.asInstanceOf[FunDecl]))
+    }
+  }
+
+
 
   def run(): Int = {
-
-
-    unfinishedPaths += new SymbolicState(program.getFce("main"), PathCondition.initial())
+    searchStrategy.addState(new SymbolicState(program.getFce("main"), PathCondition.initial(), new SymbolicStore(functionDeclarations)))
     var res: Option[Val] = None
-    while (unfinishedPaths.nonEmpty) {
-      val path = unfinishedPaths.head
-      unfinishedPaths = unfinishedPaths.tail
+    while (searchStrategy.statesCount() != 0) {
+      val path = searchStrategy.getState()
+      currentPathStopped = false
       step(path)
+      if (subsumption.nonEmpty) {
+        subsumption.get.addAnnotation(path.nextStatement, solver.createConstraintWithState(path.pathCondition.expr, path))
+      }
       while (path.callStack.nonEmpty) {
         val lastFceCall = path.callStack.last
         path.symbolicStore.popFrame()
@@ -106,6 +122,7 @@ class SymbolicExecutor(program: ProgramCfg) {
         path.nextStatement = lastFceCall.succ.head
         step(path)
       }
+      statistics.numPaths += 1
       res = Some(path.returnValue)
     }
     res.get match {
@@ -136,6 +153,9 @@ class SymbolicExecutor(program: ProgramCfg) {
       case Status.SATISFIABLE =>
         val nextState = symbolicState.getIfTrueState()
         step(nextState)
+        if (subsumption.nonEmpty) {
+          subsumption.get.addAnnotation(symbolicState.nextStatement, solver.createConstraintWithState(symbolicState.pathCondition.expr, symbolicState))
+        }
         symbolicState.returnValue = nextState.returnValue
       case Status.UNKNOWN =>
         throw new Exception("IMPLEMENT")
@@ -143,7 +163,7 @@ class SymbolicExecutor(program: ProgramCfg) {
     }
     solver.solveCondition(symbolicState.pathCondition.expr, Not(loop.guard, loop.guard.loc), symbolicState) match {
       case Status.SATISFIABLE =>
-        unfinishedPaths += symbolicState.getIfFalseState()
+        searchStrategy.addState(symbolicState.getIfFalseState())
         return
       case Status.UNKNOWN =>
         throw new Exception("IMPLEMENT")
@@ -152,6 +172,12 @@ class SymbolicExecutor(program: ProgramCfg) {
   }
 
   def step(symbolicState: SymbolicState): Unit = {
+    if (subsumption.nonEmpty) {
+      if (!subsumption.get.checkSubsumption(symbolicState.nextStatement, symbolicState.pathCondition.expr, symbolicState)) {
+        statistics.stoppedWithSubsumption += 1
+        return
+      }
+    }
     var newState = symbolicState
     val ast = symbolicState.nextStatement.ast
     ast match {
@@ -167,6 +193,15 @@ class SymbolicExecutor(program: ProgramCfg) {
 //        step(symbolicState)
 //        symbolicState.symbolicStore.popFrame()
 //        return
+      case AssignStmt(FieldAccess(record, field, loc), right, _) =>
+        val assigned = evaluate(right, symbolicState)
+        evaluate(record, symbolicState) match {
+          case RecVal(fields) if fields.contains(field) => fields.update(field, assigned)
+          case RecVal(fields) => throw errorNonExistingFieldAccess(loc, RecVal(fields).toString, field)
+          case _ => throw errorNotAssignableExpression(record)
+        }
+        NullRef
+
       case AssignStmt(lhs, rhs, _) =>
         symbolicState.updatedVar(getTarget(lhs, symbolicState), evaluate(rhs, symbolicState))
       case IfStmt(guard, _, _, _) =>
@@ -175,9 +210,13 @@ class SymbolicExecutor(program: ProgramCfg) {
             val nextState = symbolicState.getIfTrueState()
             step(nextState)
             symbolicState.returnValue = nextState.returnValue
+            if (subsumption.nonEmpty) {
+              subsumption.get.addAnnotation(symbolicState.nextStatement, solver.createConstraintWithState(symbolicState.pathCondition.expr, symbolicState))
+            }
           case Status.UNKNOWN =>
             throw new Exception("IMPLEMENT")
           case Status.UNSATISFIABLE =>
+            currentPathStopped = true
         }
 
         solver.solveCondition(symbolicState.pathCondition.expr, Not(guard, guard.loc), symbolicState) match {
@@ -186,7 +225,8 @@ class SymbolicExecutor(program: ProgramCfg) {
             //step(nextState)
             //symbolicState.returnValue = nextState.returnValue
             //return
-            unfinishedPaths += symbolicState.getIfFalseState()
+            val path = symbolicState.getIfFalseState()
+            searchStrategy.addState(path)
             return
           case Status.UNKNOWN =>
             throw new Exception("IMPLEMENT")
@@ -209,51 +249,71 @@ class SymbolicExecutor(program: ProgramCfg) {
         }
     }
     //newState.nextStates().foreach(step)
+    if (currentPathStopped) {
+      return
+    }
     val nextState = symbolicState.nextState()
     step(nextState)
     symbolicState.returnValue = nextState.returnValue
   }
 
+  private def compareValues(operator: BinaryOperator, val1: Val, val2: Val, symbolicState: SymbolicState, loc: Loc): Val = {
+    (val1, val2) match {
+      case (Number(l, _), Number(r, _)) =>
+        operator match {
+          case Plus => Number(l + r, loc)
+          case Minus => Number(l - r, loc)
+          case Times => Number(l * r, loc)
+          case Divide =>
+            if (r == 0) {
+              throw errorDivByZero(loc)
+            }
+            Number(l / r, loc)
+          case Equal => Number(if (l == r) 1 else 0, loc)
+          case NotEqual => Number(if (l != r) 1 else 0, loc)
+          case GreaterThan => Number(if (l > r) 1 else 0, loc)
+          case GreaterEqual => Number(if (l >= r) 1 else 0, loc)
+          case LowerThan => Number(if (l < r) 1 else 0, loc)
+          case LowerEqual => Number(if (l <= r) 1 else 0, loc)
+        }
+      case (e1: Symbolic, e2: Symbolic) =>
+        operator match {
+          case Plus => SymbolicExpr(BinaryOp(Plus, e1, e2, loc), loc)
+          case Minus => SymbolicExpr(BinaryOp(Minus, e1, e2, loc), loc)
+          case Times => SymbolicExpr(BinaryOp(Times, e1, e2, loc), loc)
+          case Divide => {
+            solver.solveConstraint(
+              solver.createConstraintWithState(BinaryOp(AndAnd, BinaryOp(Equal, e2, Number(0, loc), loc), symbolicState.pathCondition.expr, loc), symbolicState)) match {
+              case Status.SATISFIABLE => throw errorPossibleDivByZero(loc)
+              case Status.UNSATISFIABLE => SymbolicExpr(BinaryOp(Divide, e1, e2, loc), loc)
+              case Status.UNKNOWN => throw new Exception("IMPLEMENT")
+            }
+          }
+          case Equal => SymbolicExpr(BinaryOp(Equal, e1, e2, loc), loc)
+          case NotEqual => SymbolicExpr(BinaryOp(NotEqual, e1, e2, loc), loc)
+          case GreaterThan => SymbolicExpr(BinaryOp(GreaterThan, e1, e2, loc), loc)
+          case GreaterEqual => SymbolicExpr(BinaryOp(GreaterEqual, e1, e2, loc), loc)
+          case LowerThan => SymbolicExpr(BinaryOp(LowerThan, e1, e2, loc), loc)
+          case LowerEqual => SymbolicExpr(BinaryOp(LowerEqual, e1, e2, loc), loc)
+        }
+      case (NullRef, NullRef) => Number(1, loc)
+      case (PointerVal(address1), PointerVal(address2)) => if (address1 == address2) Number(1, loc) else Number(0, loc)
+      case (PointerVal(_), NullRef) => Number(0, loc)
+      case (NullRef, PointerVal(_)) => Number(0, loc)
+      case _ =>
+        throw errorNonIntArithmetics(loc)
+    }
+  }
+
   def evaluate(expr: Expr, symbolicState: SymbolicState): Val = {
     expr match {
       case BinaryOp(operator, left, right, loc) =>
-        (evaluate(left, symbolicState), evaluate(right, symbolicState)) match {
-          case (Number(l, _), Number(r, _)) =>
-            operator match {
-              case Plus => Number(l + r, loc)
-              case Minus => Number(l - r, loc)
-              case Times => Number(l * r, loc)
-              case Divide =>
-                if (r == 0) {
-                  throw errorDivByZero(loc)
-                }
-                Number(l / r, loc)
-              case Equal => Number(if (l == r) 1 else 0, loc)
-              case NotEqual => Number(if (l != r) 1 else 0, loc)
-              case GreaterThan => Number(if (l > r) 1 else 0, loc)
-            }
-          case (e1: Symbolic, e2: Symbolic) =>
-              operator match {
-                case Plus => SymbolicExpr(BinaryOp(Plus, e1, e2, loc), loc)
-                case Minus => SymbolicExpr(BinaryOp(Minus, e1, e2, loc), loc)
-                case Times => SymbolicExpr(BinaryOp(Times, e1, e2, loc), loc)
-                case Divide => {
-                  solver.solveConstraint(
-                    solver.createConstraintWithState(BinaryOp(AndAnd, BinaryOp(Equal, e2, Number(0, loc), loc), symbolicState.pathCondition.expr, loc), symbolicState)) match {
-                    case Status.SATISFIABLE => throw errorPossibleDivByZero(loc)
-                    case Status.UNSATISFIABLE => SymbolicExpr(BinaryOp(Divide, e1, e2, loc), loc)
-                    case Status.UNKNOWN => throw new Exception("IMPLEMENT")
-                  }
-                }
-                case Equal => SymbolicExpr(BinaryOp(Equal, e1, e2, loc), loc)
-                case NotEqual => SymbolicExpr(BinaryOp(NotEqual, e1, e2, loc), loc)
-                case GreaterThan => SymbolicExpr(BinaryOp(GreaterThan, e1, e2, loc), loc)
-              }
-          case (NullRef, NullRef) => Number(1, loc)
-          case (PointerVal(address1), PointerVal(address2)) => if (address1 == address2) Number(1, loc) else Number(0, loc)
-          case (PointerVal(_), NullRef) => Number(0, loc)
-          case (NullRef, PointerVal(_)) => Number(0, loc)
-          case _ => throw errorNonIntArithmetics(loc)
+        (operator, evaluate(left, symbolicState), evaluate(right, symbolicState)) match {
+          case (Equal, NullRef, NullRef) => Number(1, loc)
+          case (Equal, PointerVal(address1), PointerVal(address2)) => if (address1.equals(address2)) Number(1, loc) else Number(0, loc)
+          case (Equal, PointerVal(_), NullRef) => Number(0, loc)
+          case (Equal, NullRef, PointerVal(_)) => Number(0, loc)
+          case (op, val1, val2) => compareValues(op, val1, val2, symbolicState, loc)
         }
       case Not(expr, loc) =>
         evaluate(expr, symbolicState) match {
@@ -298,21 +358,39 @@ class SymbolicExecutor(program: ProgramCfg) {
         }.toArray
         ArrVal(vals)
       case ArrayAccess(array, index, loc) =>
-        val i = evaluate(index, symbolicState);
-        i match {
-          case Number(value, _) =>
-            evaluate(array, symbolicState) match {
-              case ArrVal(elems) if value >= elems.length || value < 0 =>
-                throw errorArrayOutOfBounds(loc, value, elems.length)
-              case ArrVal(elems) =>
-                val o = symbolicState.getVal(elems(value))
-                  symbolicState.getVal(elems(value)) match {
-                    case Some(v) => v
-                    case None => throw errorUninitializedReference(loc)
+        evaluate(array, symbolicState) match {
+          case ArrVal(elems) => {
+            evaluate(index, symbolicState) match {
+              case Number(value, _) =>
+                if (value >= elems.length || value < 0) {
+                  throw errorArrayOutOfBounds(loc, value, elems.length)
                 }
-              case _ => throw errorNonArrayAccess(loc, evaluate(array, symbolicState).toString)
+                symbolicState.getVal(elems(value)) match {
+                  case Some(v) => v
+                  case None => throw errorUninitializedReference(loc)
+                }
+              case _ => throw errorNonIntArithmetics(loc)
             }
-          case _ => throw errorNonIntArithmetics(loc)
+          }
+          case _ => throw errorNonArrayAccess(loc, evaluate(array, symbolicState).toString)
+        }
+      case Record(fields, loc) =>
+        val fieldsMap: mutable.HashMap[String, Val] = mutable.HashMap.empty
+        fields.foreach(field =>
+          evaluate(field.expr, symbolicState) match {
+            case RecVal(_) => throw errorRecordNestedFields(field.expr.loc)
+            case res => fieldsMap.update(field.name, res)
+          }
+        )
+        RecVal(fieldsMap)
+      case FieldAccess(record, field, loc) =>
+        evaluate(record, symbolicState) match {
+          case RecVal(fields) =>
+            fields.get(field) match {
+              case Some(res) => res
+              case None => throw errorNonExistingFieldAccess(loc, RecVal(fields).toString, field)
+            }
+          case v => throw errorNonRecordFieldAccess(loc, v.toString)
         }
     }
   }
@@ -322,6 +400,8 @@ class SymbolicExecutor(program: ProgramCfg) {
       case Identifier(name, loc) =>
         symbolicState.getSymbolicValOpt(name) match {
           case Some(PointerVal(address)) => PointerVal(address)
+          case _ if functionDeclarations.contains(name) =>
+            throw errorNonPointerDereference(loc, functionDeclarations(name).toString)
           case _ => throw errorUninitializedReference(loc)
         }
       case Deref(pointer, loc) =>

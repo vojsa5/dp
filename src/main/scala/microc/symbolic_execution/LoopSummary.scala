@@ -116,7 +116,7 @@ class LoopSummary(program: ProgramCfg) extends SymbolicExecutor(program) {
   }
 
   def computeSummary(loop: CfgNode): Unit = {
-    val symbolicState = new SymbolicState(loop, PathCondition.initial())
+    val symbolicState = new SymbolicState(loop, PathCondition.initial(), new SymbolicStore(Map.empty))
     step(symbolicState)
   }
 
@@ -175,7 +175,7 @@ class LoopSummary(program: ProgramCfg) extends SymbolicExecutor(program) {
     val changes = pathToVertex(vertex1.path)
     val iterations = vertex1.path.iterations
 
-    var symbolicState = new SymbolicState(null, PathCondition.initial())
+    var symbolicState = new SymbolicState(null, PathCondition.initial(), new SymbolicStore(Map.empty))
     for (v <- variables) {
       symbolicState = symbolicState.addedVar(v.name, SymbolicVal(v.loc))
     }

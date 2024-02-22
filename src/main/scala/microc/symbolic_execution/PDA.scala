@@ -107,10 +107,16 @@ case class Trace() {
   var resChanges = new mutable.HashMap[String, mutable.HashSet[Expr => Expr]]()
   var cycleTrace: Option[Trace] = None
 
-  def summarizeTrace2(pda: PDA, symbolicState: SymbolicState, currPath: Vertex, traceCondition: Expr, updated_variables: mutable.HashMap[String, Expr => Expr], rec: mutable.LinkedHashMap[Vertex, (Expr, mutable.HashMap[String, Expr => Expr])]): Unit = {
 
+  def summarizeTrace2(pda: PDA, symbolicState: SymbolicState, currPath: Vertex, traceCondition: Expr, updated_variables: mutable.HashMap[String, Expr => Expr], rec: mutable.LinkedHashMap[Vertex, (Expr, mutable.HashMap[String, Expr => Expr])]): Unit = {
     summarizeTrace(pda, symbolicState, currPath, traceCondition, updated_variables, rec)
+    resCondition match {
+      case Number(1, loc) =>
+        resCondition = Number(0, loc)
+      case _ =>
+    }
   }
+
 
   def summarizeTrace(pda: PDA, symbolicState: SymbolicState, currPath: Vertex, traceCondition: Expr, updated_variables: mutable.HashMap[String, Expr => Expr], rec: mutable.LinkedHashMap[Vertex, (Expr, mutable.HashMap[String, Expr => Expr])]): Unit = {
     if (rec.contains(currPath)) {
@@ -152,6 +158,7 @@ case class Trace() {
             }
             nrec.put(currPath, (ncond, edge.change))
             summarizeTrace(pda, symbolicState, edge.destination, ncond, newUpdatedVariables, nrec)
+          case _ =>
         }
       }
     }
@@ -163,7 +170,10 @@ case class Trace() {
       val expr: Expr = symbolicState.getSymbolicVal(v.name, v.loc) match {
         case v@SymbolicVal(_) => v
         case SymbolicExpr(expr, _) => expr
-        case _ => throw new Exception("IMPLEMENT")
+        case n@Number(_, _) => n
+        case o =>
+          System.out.println(o)
+          throw new Exception("IMPLEMENT")
       }
       interestingVars.put(v.name, expr)
     }
@@ -180,6 +190,8 @@ case class Trace() {
               pda.applyIterationsCount(change.apply(expr), r._1.path.iterations, Number(1, CodeLoc(0, 0)))
             case v@SymbolicVal(_) =>
               pda.applyIterationsCount(change.apply(v), r._1.path.iterations, Number(1, CodeLoc(0, 0)))
+            case n@Number(_, _) =>
+              pda.applyIterationsCount(change.apply(n), r._1.path.iterations, Number(1, CodeLoc(0, 0)))
             case _ =>
               throw new Exception("IMPLEMENT")
           }

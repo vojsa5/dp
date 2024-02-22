@@ -1,12 +1,12 @@
 package microc.symbolic_execution
 
 import microc.ast.{CodeLoc, Identifier, Loc}
-import microc.symbolic_execution.ExecutionException.errorUninitializedReference
-import microc.symbolic_execution.Value.{NullRef, PointerVal, RefVal, SymbolicExpr, UninitializedRef, Val}
+import microc.symbolic_execution.ExecutionException.{errorIncompatibleTypes, errorUninitializedReference}
+import microc.symbolic_execution.Value.{FunVal, IteVal, NullRef, PointerVal, RefVal, SymbolicVal, UninitializedRef, Val}
 
 import scala.collection.mutable.ArrayBuffer
 
-class SymbolicStore() {
+class SymbolicStore(functionDeclarations: Map[String, FunVal]) {
 
   case class Storage() {
     var size: Int = 0
@@ -51,7 +51,7 @@ class SymbolicStore() {
 
   var storage: Storage = Storage()
 
-  private var frames: List[Map[String, RefVal]] = List(Map.empty)
+  private var frames: Array[Map[String, RefVal]] = Array(Map.empty)
 
   def pushFrame(): Unit = frames = frames.appended(Map.empty)
 
@@ -70,10 +70,12 @@ class SymbolicStore() {
     frames = frames.appended(frame.updated(name, ref))
   }
 
-  def addNewVar(name: String): Unit = {
+  def addNewVar(name: String): PointerVal = {
+    val res = storage.getAddress
     val frame = frames.last
     frames = frames.dropRight(1)
-    frames = frames.appended(frame.updated(name, storage.getAddress))
+    frames = frames.appended(frame.updated(name, res))
+    res
   }
 
   def findVar(name: String): Option[RefVal] = {
@@ -90,24 +92,20 @@ class SymbolicStore() {
   }
 
   def getVal(name: String, loc: Loc): Val = {
-    val t = findVar(name)
-    t match {
+    findVar(name) match {
       case Some(PointerVal(decl)) =>
-        val e = storage.getVal(PointerVal(decl))
-        e match {
+        storage.getVal(PointerVal(decl)) match {
           case Some(res) => res
           case None => throw errorUninitializedReference(loc)
         }
       case Some(NullRef) => throw errorUninitializedReference(loc)
       //case Some(e@SymbolicExpr(_, _)) => e
       case Some(_) => throw new Exception("Internal error")
-      /*case None =>
-        functionDeclarations.get(id.name) match {
+      case None =>
+        functionDeclarations.get(name) match {
           case Some(fun) => fun
           case None => throw new Exception("Unexpected input in interpreter. Semantic analyses does not work properly.")
-        }*/
-      case None => throw new Exception("Internal error")
-
+        }
     }
 
   }
@@ -117,13 +115,98 @@ class SymbolicStore() {
   }
 
   def deepCopy(): SymbolicStore = {
-    val res = new SymbolicStore()
-    res.frames = List.empty
+    val res = new SymbolicStore(functionDeclarations)
+    res.frames = Array.empty
     for (frame <- this.frames) {
       res.frames = res.frames.appended(frame)
     }
     res.storage = this.storage.asInstanceOf[res.Storage].deepCopy()
     res
+  }
+
+  def storeEquals(symbolicStore: SymbolicStore): Boolean = {
+    if (this.frames.size == symbolicStore.frames.size) {
+      for (i <- 0 until this.frames.size) {
+        val thisFrame = this.frames(i)
+        val otherFrame = symbolicStore.frames(i)
+        if (thisFrame.size == otherFrame.size) {
+          val thisVars = thisFrame.keys
+          val otherVars = otherFrame.keys
+          if (thisVars == otherVars) {
+            for (variable <- thisVars) {
+              (thisFrame(variable), otherFrame(variable)) match {
+                case (PointerVal(ptr1), PointerVal(ptr2)) =>
+                  if (!storage.getVal(PointerVal(ptr1)).get.equals(symbolicStore.storage.getVal(PointerVal(ptr2)).get)) {
+                    return false
+                  }
+                case (NullRef, _) => return false
+                case (_, NullRef) => return false
+                case _ =>
+              }
+            }
+          }
+          else {
+            return false
+          }
+        }
+        else {
+          return false
+        }
+      }
+      return true
+    }
+    false
+  }
+
+
+  def mergeStores(other: SymbolicStore, pathCondition: PathCondition): Option[SymbolicStore] = {
+    val res = new SymbolicStore(functionDeclarations)
+    for (i <- 0 until this.frames.size) {
+      if (i < this.frames.size) {
+        val thisFrame = this.frames(i)
+        if (i < other.frames.size) {
+          val otherFrame = this.frames(i)
+          for (variable <- thisFrame.keys) {
+            if (otherFrame.contains(variable)) {
+              (thisFrame(variable), otherFrame(variable)) match {
+                case (PointerVal(ptr1), PointerVal(ptr2)) => {
+                  (storage.getVal(PointerVal(ptr1)), storage.getVal(PointerVal(ptr2))) match {
+                    case (Some(val1), Some(val2)) if val1 == val2 =>
+                      val addr = res.storage.getAddress
+                      res.addVar(variable, addr)
+                      res.updateRef(addr, val1)
+                    case (Some(val1), Some(val2)) =>
+                      val addr = res.storage.getAddress
+                      res.addVar(variable, addr)
+                      res.updateRef(addr, IteVal(val1, val2, pathCondition.expr, CodeLoc(0, 0)))
+                    case _ => throw new Exception("this should never happen.")
+                  }
+                }
+              }
+            }
+            else {
+              thisFrame(variable) match {
+                case PointerVal(ptr) =>
+                  val addr = res.storage.getAddress
+                  res.addVar(variable, addr)
+                  res.updateRef(addr, storage.getVal(PointerVal(ptr)).get)
+              }
+            }
+          }
+          for (variable <- otherFrame.keys) {
+            if (!thisFrame.contains(variable)) {
+              otherFrame(variable) match {
+                case PointerVal(ptr) =>
+                  val addr = res.storage.getAddress
+                  res.addVar(variable, addr)
+                  res.updateRef(addr, other.storage.getVal(PointerVal(ptr)).get)
+              }
+            }
+          }
+        }
+      }
+    }
+    Some(res)
   }
 
 }

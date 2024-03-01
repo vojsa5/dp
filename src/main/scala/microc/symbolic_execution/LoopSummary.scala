@@ -1,10 +1,10 @@
 package microc.symbolic_execution
 
 import com.microsoft.z3.{BoolExpr, Context, Status}
-import microc.ast.{AndAnd, AssignStmt, BinaryOp, CodeLoc, Divide, Expr, GreaterEqual, GreaterThan, Identifier, IdentifierDecl, IfStmt, Minus, Not, Number, OrOr, Plus, Stmt, Times, WhileStmt}
+import microc.ast.{AndAnd, AssignStmt, BinaryOp, CodeLoc, Divide, Equal, Expr, GreaterEqual, GreaterThan, Identifier, IdentifierDecl, IfStmt, LowerEqual, LowerThan, Minus, Not, NotEqual, Number, OrOr, Plus, Stmt, Times, WhileStmt}
 import microc.cfg.{CfgNode, ProgramCfg}
 import microc.symbolic_execution.LoopSummary.{computeVariableChange, getAllPathsInALoop2, simplifyArithExpr}
-import microc.symbolic_execution.Value.{Symbolic, SymbolicExpr, SymbolicVal, Val}
+import microc.symbolic_execution.Value.{Symbolic, SymbolicExpr, SymbolicVal, UninitializedRef, Val}
 
 import java.util
 import scala.collection.mutable
@@ -32,6 +32,12 @@ object LoopSummary {
               case Minus => Number(value - value2, loc)
               case Times => Number(value * value2, loc)
               case Divide => Number(value / value2, loc)
+              case LowerThan => Number(if (value < value2) 1 else 0, loc)
+              case LowerEqual => Number(if (value <= value2) 1 else 0, loc)
+              case GreaterThan => Number(if (value > value2) 1 else 0, loc)
+              case GreaterEqual => Number(if (value >= value2) 1 else 0, loc)
+              case NotEqual => Number(if (value != value2) 1 else 0, loc)
+              case Equal => Number(if (value == value2) 1 else 0, loc)
             }
           case (a, b) =>
             BinaryOp(operator, a, b, loc)
@@ -105,25 +111,21 @@ object LoopSummary {
 
 class LoopSummary(program: ProgramCfg) extends SymbolicExecutor(program) {
 
-  val thetas = new util.HashMap[String, Symbolic]()
 
-  def executeBackbones(): Unit = {
-
-  }
-
-  def executeBackbone(): Unit = {
-
-  }
-
-  def computeSummary(loop: CfgNode): Unit = {
-    val symbolicState = new SymbolicState(loop, PathCondition.initial(), new SymbolicStore(Map.empty))
-    step(symbolicState)
-  }
-
-  override def stepOnLoop(symbolicState: SymbolicState, loop: WhileStmt): Unit = {
-    val nextState = symbolicState.getIfFalseState()
-    step(nextState)
-    symbolicState.returnValue = nextState.returnValue
+  override def stepOnLoop(symbolicState: SymbolicState): Unit = {
+    var vertices: List[Vertex] = List()
+    val paths = getAllPathsInALoop(symbolicState.nextStatement)
+    for (path <- paths) {
+      vertices = vertices.appended(Vertex(path, path.condition, pathToVertex(path), path.iterations))
+    }
+    val pda = PDA(this, vertices, symbolicState.variableDecls, solver, Number(1, CodeLoc(0, 0)), symbolicState)
+    pda.initialize()
+    val summary = pda.summarizeType1Loop2(symbolicState)
+    for (trace <- summary) {
+      println(trace)
+      val newState = symbolicState.addedLoopTrace(trace)
+      step(newState)
+    }
   }
 
 
@@ -168,56 +170,63 @@ class LoopSummary(program: ProgramCfg) extends SymbolicExecutor(program) {
     }
   }
 
-  def computePathRelationship(vertex1: Vertex, vertex2: Vertex, variables: List[IdentifierDecl]): Option[Edge] = {
+  def computePathRelationship(vertex1: Vertex, vertex2: Vertex, variables: List[IdentifierDecl], symbolicState: SymbolicState): Option[Edge] = {
     val ctx = new Context()
     val solver = new ConstraintSolver(ctx)
 
     val changes = pathToVertex(vertex1.path)
     val iterations = vertex1.path.iterations
 
-    var symbolicState = new SymbolicState(null, PathCondition.initial(), new SymbolicStore(Map.empty))
+    //var tmpSymbolicState = new SymbolicState(null, PathCondition.initial(), new SymbolicStore(Map.empty))
+    var tmpSymbolicState = symbolicState.deepCopy()
     for (v <- variables) {
-      symbolicState = symbolicState.addedVar(v.name, SymbolicVal(v.loc))
+      symbolicState.getSymbolicVal(v.name, CodeLoc(0, 0), true) match {
+        case UninitializedRef => {
+          tmpSymbolicState = tmpSymbolicState.addedVar(v.name, SymbolicVal(v.loc))
+        }
+        case _ =>
+      }
     }
-    val initialValue = SymbolicVal(CodeLoc(0, 0))
     changes.foreach(change => {
-      symbolicState = symbolicState.addedVar(change._1,
+      val initialValue = solver.applyVal(tmpSymbolicState.getSymbolicVal(change._1, CodeLoc(0, 0)), tmpSymbolicState)
+      tmpSymbolicState = tmpSymbolicState.addedVar(change._1,
         change._2.apply(BinaryOp(Minus, iterations, Number(1, CodeLoc(0, 0)), CodeLoc(0, 0))).apply(initialValue) match {
           case s@SymbolicVal(_) => s
           case e: Expr => SymbolicExpr(e, CodeLoc(0, 0))
           case _ => throw new Exception("IMPLEMENT")
         }
       )
-      val v = symbolicState.getSymbolicVal(change._1, CodeLoc(0, 0))
+      val v = tmpSymbolicState.getSymbolicVal(change._1, CodeLoc(0, 0))
       v match {
         case s@SymbolicVal(_) => s
         case e: Expr => SymbolicExpr(e, CodeLoc(0, 0))
         case _ => throw new Exception("This should not happen")
       }
     })
-    val path1Constraint = solver.applyTheState(vertex1.condition, symbolicState)
+    val path1Constraint = solver.applyTheState(vertex1.condition, tmpSymbolicState)
 
     val resChanges = new mutable.HashMap[String, Expr => Expr]()
     for (change <- changes) {
       resChanges.put(change._1, change._2.apply(iterations))
     }
     changes.foreach(change => {
-      symbolicState = symbolicState.addedVar(change._1,
+      val initialValue = solver.applyVal(symbolicState.getSymbolicVal(change._1, CodeLoc(0, 0)), tmpSymbolicState)
+      tmpSymbolicState = tmpSymbolicState.addedVar(change._1,
         change._2.apply(iterations).apply(initialValue) match {
           case s@SymbolicVal(_) => s
           case e: Expr => SymbolicExpr(e, CodeLoc(0, 0))
           case _ => throw new Exception("IMPLEMENT")
         }
       )
-      val v = symbolicState.getSymbolicVal(change._1, CodeLoc(0, 0)) match {
+      val v = tmpSymbolicState.getSymbolicVal(change._1, CodeLoc(0, 0)) match {
         case s@SymbolicVal(_) => s
         case e: Expr => SymbolicExpr(e, CodeLoc(0, 0))
         case _ => throw new Exception("This should not happen")
       }
     })
     val ctxSolver = ctx.mkSolver()
-    val path2Constraint = solver.applyTheState(vertex2.condition, symbolicState)
-    val pathsConstraints = {
+    val path2Constraint = solver.applyTheState(vertex2.condition, tmpSymbolicState)
+    val pathsConstraints =
       simplifyArithExpr(
         BinaryOp(
           AndAnd,
@@ -226,9 +235,7 @@ class LoopSummary(program: ProgramCfg) extends SymbolicExecutor(program) {
           CodeLoc(0, 0)
         )
       )
-    }
-    val constraint = solver.createConstraintWithState(pathsConstraints, symbolicState)
-    val constraint2 = constraint.simplify()
+    val constraint = solver.createConstraintWithState(pathsConstraints, tmpSymbolicState)
     constraint match {
       case cond: BoolExpr => ctxSolver.add(cond)
     }

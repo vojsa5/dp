@@ -90,7 +90,7 @@ object Value {
   }
 
   case class SymbolicVal(loc: Loc) extends Symbolic {
-    val name = (1 to 10).map(_ => "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"(new Random().nextInt(52))).mkString
+    val name = Utility.generateRandomString()
     override def toString: String = name
 
     override def equals(other: Val): Boolean =

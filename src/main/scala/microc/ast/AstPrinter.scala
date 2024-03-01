@@ -1,5 +1,6 @@
 package microc.ast
 
+import microc.symbolic_execution.Value.{IteVal, SymbolicExpr, SymbolicVal}
 import microc.util.Collections._
 import microc.util.IndentWriter
 
@@ -140,6 +141,20 @@ class AstPrinter(indent: Option[Int] = Some(2)) {
 
       case Program(funs, _) =>
         funs.foreachSep(visit(_, out), out.nl().nl())
+
+      case IteVal(trueState, falseState, expr, _) =>
+        out << "if "
+        visit(expr, out)
+        out << "then " << trueState.toString << " else " << falseState.toString
+
+      case SymbolicExpr(expr, _) => visit(expr, out)
+
+      case s@SymbolicVal(_) =>
+        out << s.name
+
+      case Not(expr, _) =>
+        out << "!"
+        visit(expr, out)
     }
   }
 }

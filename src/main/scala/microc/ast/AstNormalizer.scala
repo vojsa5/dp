@@ -150,6 +150,9 @@ class AstNormalizer {
         val alloc = normalizeExpr(expr, stmts, vars, declaredVars)
         rightSide = createVar(vars, declaredVars, loc)
         stmts.append(AssignStmt(rightSide, Alloc(alloc, loc), loc))
+      case Input(loc) =>
+        rightSide = createVar(vars, declaredVars, loc)
+        stmts.append(AssignStmt(rightSide, Input(loc), loc))
       case _ =>
     }
     rightSide

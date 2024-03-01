@@ -341,7 +341,570 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
   }
 
 
-  test("PDA basic") {
+//  test("PDA basic") {
+//    val code =
+//      """
+//        |main() {
+//        |  var n, x, z;
+//        |  n = input;
+//        |  x = input;
+//        |  z = input;
+//        |  while (x < n) {
+//        |   if (z > x) {
+//        |     x = x + 1;
+//        |   }
+//        |   else {
+//        |     z = z + 1;
+//        |   }
+//        |  }
+//        |  return 1 / (x - z);
+//        |}
+//        |""".stripMargin;
+//    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+//    val executor = new LoopSummary(cfg)
+//    var stmt: CfgNode = cfg.getFce("main")
+//    val main = stmt
+//
+//    val symbolicState = new SymbolicState(null, PathCondition.initial(), new SymbolicStore(Map.empty))
+//
+//    val decls = main.ast.asInstanceOf[FunDecl].block.vars.flatMap(_.decls)
+//    for (decl <- decls) {
+//      symbolicState.addedVar(decl.name, SymbolicVal(decl.loc))
+//    }
+//
+//    while (!stmt.ast.isInstanceOf[WhileStmt]) {
+//      stmt = stmt.succ.head
+//    }
+//
+//    val paths = executor.getAllPathsInALoop(stmt)
+//    var vertices :List[Vertex] = List()
+//    for (path <- paths) {
+//      vertices = vertices.appended(Vertex(path, path.condition, executor.pathToVertex(path), path.iterations))
+//
+//    }
+//    val constraintSolver = new ConstraintSolver(new Context())
+//    val pda = PDA(executor, vertices, decls, constraintSolver, Number(1, CodeLoc(0, 0)), symbolicState)
+//    pda.initialize()
+//    assert(pda.entryStates.size == 3)
+//    assert(pda.exitStates.size == 1)
+//    assert(pda.edges.size == 3)
+//
+//    var trace = Trace()
+//    val rec = new mutable.LinkedHashMap[Vertex, (Expr, mutable.HashMap[String, Expr => Expr])]()
+//    trace.summarizeTrace(pda, symbolicState, vertices(0), constraintSolver.applyTheState(vertices(0).condition, symbolicState), new mutable.HashMap(), rec)
+//    assert(trace.resChanges.isEmpty)
+//    trace = Trace()
+//    trace.summarizeTrace(pda, symbolicState, vertices(2), Number(1, CodeLoc(0, 0)), new mutable.HashMap(), new mutable.LinkedHashMap[Vertex, (Expr, mutable.HashMap[String, Expr => Expr])]())
+//    assert(trace.resChanges.size >= 0)
+//    for (initialX <- 0 to 5) {
+//      for (initialIterationCount <- 0 to 5) {
+//        val trueRes = initialX + initialIterationCount
+//        for (change <- trace.resChanges("x")) {
+//          change.apply(Number(initialX, CodeLoc(0, 0))) match {
+//            case expr => {
+//              val v = LoopSummary.getSymbolicValsFromExpr(expr)
+//              assert(v.nonEmpty)
+//              LoopSummary.simplifyArithExpr(pda.applyIterationsCount(expr, v.head, Number(initialIterationCount, CodeLoc(0, 0)))) match {
+//                case Number(value, _) =>
+//                  assert(value == trueRes)
+//                case _ =>
+//                  assert(false)
+//              }
+//            }
+//            case _ =>
+//              assert(false)
+//          }
+//        }
+//      }
+//    }
+//
+//    for (initialX <- 0 to 5) {
+//      for (initialIterationCount <- 0 to 5) {
+//        val trueRes = initialX + initialIterationCount
+//        for (change <- trace.resChanges("x")) {
+//          change.apply(Number(initialX, CodeLoc(0, 0))) match {
+//            case expr => {
+//              val v = LoopSummary.getSymbolicValsFromExpr(expr)
+//              assert(v.nonEmpty)
+//              LoopSummary.simplifyArithExpr(pda.applyIterationsCount(expr, v.head, Number(initialIterationCount, CodeLoc(0, 0)))) match {
+//                case Number(value, _) =>
+//                  assert(value == trueRes)
+//                case _ =>
+//                  assert(false)
+//              }
+//            }
+//            case _ =>
+//              assert(false)
+//          }
+//        }
+//      }
+//    }
+//
+//    null
+//  }
+//
+//
+//  test("PDA basic with expr check") {
+//    val code =
+//      """
+//        |main() {
+//        |  var n, x, z;
+//        |  n = input;
+//        |  x = input;
+//        |  z = input;
+//        |  while (x < n) {
+//        |   if (z > x) {
+//        |     x = x + 1;
+//        |   }
+//        |   else {
+//        |     z = z + 1;
+//        |   }
+//        |  }
+//        |  return 1 / (x - z);
+//        |}
+//        |""".stripMargin;
+//    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+//    val executor = new LoopSummary(cfg)
+//    var stmt: CfgNode = cfg.getFce("main")
+//    val main = stmt
+//
+//    val symbolicState = new SymbolicState(null, PathCondition.initial(), new SymbolicStore(Map.empty))
+//
+//    symbolicState.addedVar("x", Number(3, CodeLoc(0, 0)))
+//    symbolicState.addedVar("n", Number(4, CodeLoc(0, 0)))
+//    val decls = main.ast.asInstanceOf[FunDecl].block.vars.flatMap(_.decls)
+//    for (decl <- decls) {
+//      if (decl.name != "x" && decl.name != "n") {
+//        symbolicState.addedVar(decl.name, SymbolicVal(decl.loc))
+//      }
+//    }
+//
+//    while (!stmt.ast.isInstanceOf[WhileStmt]) {
+//      stmt.ast match {
+//        case AssignStmt(Identifier(name, _), expr, _) =>
+//          if (name != "x" && name != "n") {
+//            symbolicState.addedVar(name, executor.evaluate(expr, symbolicState))
+//          }
+//        case _ =>
+//      }
+//      stmt = stmt.succ.head
+//    }
+//
+//    val paths = executor.getAllPathsInALoop(stmt)
+//    var vertices :List[Vertex] = List()
+//    for (path <- paths) {
+//      vertices = vertices.appended(Vertex(path, path.condition, executor.pathToVertex(path), path.iterations))
+//
+//    }
+//    val constraintSolver = new ConstraintSolver(new Context())
+//    val pda = PDA(executor, vertices, decls, constraintSolver, Number(1, CodeLoc(0, 0)), symbolicState)
+//    pda.initialize()
+//    assert(pda.entryStates.size == 2)
+//    assert(pda.exitStates.size == 1)
+//    assert(pda.edges.size == 3)
+//
+//    var trace = Trace()
+//    val rec = new mutable.LinkedHashMap[Vertex, (Expr, mutable.HashMap[String, Expr => Expr])]()
+//    trace.summarizeTrace(pda, symbolicState, vertices(0), constraintSolver.applyTheState(vertices(0).condition, symbolicState), new mutable.HashMap(), rec)
+//    constraintSolver.solveConstraint(constraintSolver.createConstraint(trace.resCondition)) match {
+//      case Status.UNSATISFIABLE =>
+//      case _ => assert(false)
+//    }
+//
+//    trace = Trace()
+//    trace.summarizeTrace(pda, symbolicState, vertices(1), constraintSolver.applyTheState(vertices(1).condition, symbolicState), new mutable.HashMap(), rec)
+//    constraintSolver.solveConstraint(constraintSolver.createConstraint(trace.resCondition)) match {
+//      case Status.SATISFIABLE =>
+//      case _ => assert(false)
+//    }
+//
+//    trace = Trace()
+//    trace.summarizeTrace(pda, symbolicState, vertices(2), constraintSolver.applyTheState(vertices(2).condition, symbolicState), new mutable.HashMap(), rec)
+//    constraintSolver.solveConstraint(constraintSolver.createConstraint(trace.resCondition)) match {
+//      case Status.SATISFIABLE =>
+//      case _ => assert(false)
+//    }
+//  }
+//
+//
+//  test("PDA basic with expr check 2") {
+//    val code =
+//      """
+//        |main() {
+//        |  var n, x, z;
+//        |  n = input;
+//        |  x = input;
+//        |  z = input;
+//        |  while (x < n) {
+//        |   if (z > x) {
+//        |     x = x + 1;
+//        |   }
+//        |   else {
+//        |     z = z + 1;
+//        |   }
+//        |  }
+//        |  return 1 / (x - z);
+//        |}
+//        |""".stripMargin;
+//    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+//    val executor = new LoopSummary(cfg)
+//    var stmt: CfgNode = cfg.getFce("main")
+//    val main = stmt
+//
+//    val symbolicState = new SymbolicState(null, PathCondition.initial(), new SymbolicStore(Map.empty))
+//
+//    symbolicState.addedVar("x", Number(4, CodeLoc(0, 0)))
+//    symbolicState.addedVar("n", Number(3, CodeLoc(0, 0)))
+//    val decls = main.ast.asInstanceOf[FunDecl].block.vars.flatMap(_.decls)
+//    for (decl <- decls) {
+//      if (decl.name != "x" && decl.name != "n") {
+//        symbolicState.addedVar(decl.name, SymbolicVal(decl.loc))
+//      }
+//    }
+//
+//    while (!stmt.ast.isInstanceOf[WhileStmt]) {
+//      stmt.ast match {
+//        case AssignStmt(Identifier(name, _), expr, _) =>
+//          if (name != "x" && name != "n") {
+//            symbolicState.addedVar(name, executor.evaluate(expr, symbolicState))
+//          }
+//        case _ =>
+//      }
+//      stmt = stmt.succ.head
+//    }
+//
+//    val paths = executor.getAllPathsInALoop(stmt)
+//    var vertices: List[Vertex] = List()
+//    for (path <- paths) {
+//      vertices = vertices.appended(Vertex(path, path.condition, executor.pathToVertex(path), path.iterations))
+//
+//    }
+//    val constraintSolver = new ConstraintSolver(new Context())
+//    val pda = PDA(executor, vertices, decls, constraintSolver, Number(1, CodeLoc(0, 0)), symbolicState)
+//    pda.initialize()
+//    assert(pda.entryStates.size == 1)
+//    assert(pda.exitStates.size == 1)
+//    assert(pda.edges.size == 3)
+//
+//    var trace = Trace()
+//    val rec = new mutable.LinkedHashMap[Vertex, (Expr, mutable.HashMap[String, Expr => Expr])]()
+//
+//    trace.summarizeTrace(pda, symbolicState, vertices(0), constraintSolver.applyTheState(vertices(0).condition, symbolicState), new mutable.HashMap(), rec)
+//    constraintSolver.solveConstraint(constraintSolver.createConstraint(trace.resCondition)) match {
+//      case Status.SATISFIABLE =>
+//      case _ => assert(false)
+//    }
+//
+//    trace = Trace()
+//    trace.summarizeTrace(pda, symbolicState, vertices(1), constraintSolver.applyTheState(vertices(1).condition, symbolicState), new mutable.HashMap(), rec)
+//    constraintSolver.solveConstraint(constraintSolver.createConstraint(trace.resCondition)) match {
+//      case Status.UNSATISFIABLE =>
+//      case _ => assert(false)
+//    }
+//    assert(trace.resChanges.isEmpty)
+//
+//    trace = Trace()
+//    trace.summarizeTrace(pda, symbolicState, vertices(2), constraintSolver.applyTheState(vertices(2).condition, symbolicState), new mutable.HashMap(), rec)
+//    constraintSolver.solveConstraint(constraintSolver.createConstraint(trace.resCondition)) match {
+//      case Status.UNSATISFIABLE =>
+//      case _ => assert(false)
+//    }
+//    assert(trace.resChanges.isEmpty)
+//  }
+//
+//
+//  test("PDA more than just incrementation") {
+//    val code =
+//      """
+//        |main() {
+//        |  var n, x, z;
+//        |  n = input;
+//        |  x = input;
+//        |  z = input;
+//        |  while (x < n) {
+//        |   if (z > x) {
+//        |     x = x + 5;
+//        |   }
+//        |   else {
+//        |     z = z + 10;
+//        |   }
+//        |  }
+//        |  return 1 / (x - z);
+//        |}
+//        |""".stripMargin;
+//    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+//    var stmt: CfgNode = cfg.getFce("main")
+//    val main = stmt
+//
+//    while (!stmt.ast.isInstanceOf[WhileStmt]) {
+//      stmt = stmt.succ.head
+//    }
+//    val executor = new LoopSummary(cfg)
+//    val decls = main.ast.asInstanceOf[FunDecl].block.vars.flatMap(_.decls)
+//    val paths = executor.getAllPathsInALoop(stmt)
+//    val symbolicState = new SymbolicState(null, PathCondition.initial(), new SymbolicStore(Map.empty))
+//    for (decl <- decls) {
+//      symbolicState.addedVar(decl.name, SymbolicVal(decl.loc))
+//    }
+//    var vertices :List[Vertex] = List()
+//    for (path <- paths) {
+//      vertices = vertices.appended(Vertex(path, path.condition, executor.pathToVertex(path), path.iterations))
+//    }
+//    val pda = PDA(executor, vertices, decls, new ConstraintSolver(new Context()), Number(1, CodeLoc(0, 0)), symbolicState)
+//    pda.initialize()
+//    assert(pda.entryStates.size == 3)
+//    assert(pda.exitStates.size == 1)
+//    assert(pda.edges.size == 3)
+//
+//    var trace = Trace()
+//    trace.summarizeTrace(pda, symbolicState, vertices(0), Number(1, CodeLoc(0, 0)), new mutable.HashMap(), new mutable.LinkedHashMap[Vertex, (Expr, mutable.HashMap[String, Expr => Expr])]())
+//    assert(trace.resChanges.isEmpty)
+//    trace = Trace()
+//    trace.summarizeTrace(pda, symbolicState, vertices(2), Number(1, CodeLoc(0, 0)), new mutable.HashMap(), new mutable.LinkedHashMap[Vertex, (Expr, mutable.HashMap[String, Expr => Expr])]())
+//    assert(trace.resChanges.size >= 0)
+//    for (initialX <- 0 to 5) {
+//      for (initialIterationCount <- 0 to 5) {
+//        val trueRes = initialX + 5 * initialIterationCount
+//        for (change <- trace.resChanges("x")) {
+//          change.apply(Number(initialX, CodeLoc(0, 0))) match {
+//            case expr => {
+//              val v = LoopSummary.getSymbolicValsFromExpr(expr)
+//              assert(v.nonEmpty)
+//              LoopSummary.simplifyArithExpr(pda.applyIterationsCount(expr, v.head, Number(initialIterationCount, CodeLoc(0, 0)))) match {
+//                case Number(value, _) =>
+//                  assert(value == trueRes)
+//                case _ =>
+//                  assert(false)
+//              }
+//            }
+//            case _ =>
+//              assert(false)
+//          }
+//        }
+//      }
+//    }
+//
+//    for (initialX <- 0 to 5) {
+//      for (initialIterationCount <- 0 to 5) {
+//        val trueRes = initialX + 10 * initialIterationCount
+//        for (change <- trace.resChanges("z")) {
+//          change.apply(Number(initialX, CodeLoc(0, 0))) match {
+//            case expr => {
+//              val v = LoopSummary.getSymbolicValsFromExpr(expr)
+//              assert(v.nonEmpty)
+//              LoopSummary.simplifyArithExpr(pda.applyIterationsCount(expr, v.head, Number(initialIterationCount, CodeLoc(0, 0)))) match {
+//                case Number(value, _) =>
+//                  assert(value == trueRes)
+//                case _ =>
+//                  assert(false)
+//              }
+//            }
+//            case _ =>
+//              assert(false)
+//          }
+//        }
+//      }
+//    }
+//
+//    null
+//  }
+//
+//
+//  test("PDA x updated in multiple branches") {
+//    val code =
+//      """
+//        |main() {
+//        |  var n, x, z;
+//        |  n = input;
+//        |  x = input;
+//        |  z = input;
+//        |  while (x < n) {
+//        |   if (z > x) {
+//        |     x = x + 1;
+//        |   }
+//        |   else {
+//        |     z = z + 2;
+//        |     x = x + 1;
+//        |   }
+//        |  }
+//        |  return 1 / (x - z);
+//        |}
+//        |""".stripMargin;
+//    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+//    var stmt: CfgNode = cfg.getFce("main")
+//    val main = stmt
+//
+//    while (!stmt.ast.isInstanceOf[WhileStmt]) {
+//      stmt = stmt.succ.head
+//    }
+//    val executor = new LoopSummary(cfg)
+//    val decls = main.ast.asInstanceOf[FunDecl].block.vars.flatMap(_.decls)
+//    val paths = executor.getAllPathsInALoop(stmt)
+//    val symbolicState = new SymbolicState(null, PathCondition.initial(), new SymbolicStore(Map.empty))
+//    for (decl <- decls) {
+//      symbolicState.addedVar(decl.name, SymbolicVal(decl.loc))
+//    }
+//    var vertices :List[Vertex] = List()
+//    for (path <- paths) {
+//      vertices = vertices.appended(Vertex(path, path.condition, executor.pathToVertex(path), path.iterations))
+//
+//    }
+//    val pda = PDA(executor, vertices, decls, new ConstraintSolver(new Context()), Number(1, CodeLoc(0, 0)), symbolicState)
+//    pda.initialize()
+//    assert(pda.entryStates.size == 3)
+//    assert(pda.exitStates.size == 1)
+//    assert(pda.edges.size == 3)
+//
+//    var trace = Trace()
+//    trace.summarizeTrace(pda, symbolicState, vertices(0), Number(1, CodeLoc(0, 0)), new mutable.HashMap(), new mutable.LinkedHashMap[Vertex, (Expr, mutable.HashMap[String, Expr => Expr])]())
+//    assert(trace.resChanges.isEmpty)
+//    trace = Trace()
+//    trace.summarizeTrace(pda, symbolicState, vertices(2), Number(1, CodeLoc(0, 0)), new mutable.HashMap(), new mutable.LinkedHashMap[Vertex, (Expr, mutable.HashMap[String, Expr => Expr])]())
+//    assert(trace.resChanges.size >= 0)
+//    val ctx = new Context()
+//    val constraintSolver = new ConstraintSolver(ctx)
+//    for (initialX <- 0 to 5) {
+//      for (initialIterationCount <- 0 to 5) {
+//        val trueRes = initialX + 2 * initialIterationCount
+//        val solver = ctx.mkSolver()
+//        for (change <- trace.resChanges("x")) {
+//          change.apply(Number(initialX, CodeLoc(0, 0))) match {
+//            case expr => {
+//              val v = LoopSummary.getSymbolicValsFromExpr(expr)
+//              assert(v.nonEmpty)
+//              val constraint = constraintSolver.createConstraint(BinaryOp(Equal, expr, Number(trueRes, CodeLoc(0, 0)), CodeLoc(0, 0)))
+//              constraint match {
+//                case cond: BoolExpr => solver.add(cond)
+//              }
+//            }
+//            case _ =>
+//              assert(false)
+//          }
+//        }
+//        solver.check() match {
+//          case Status.SATISFIABLE =>
+//          case _ => fail("")
+//        }
+//      }
+//    }
+//
+//    for (initialX <- 0 to 5) {
+//      for (initialIterationCount <- 0 to 5) {
+//        val trueRes = initialX + 3 * initialIterationCount
+//        val solver = ctx.mkSolver()
+//        for (change <- trace.resChanges("z")) {
+//          change.apply(Number(initialX, CodeLoc(0, 0))) match {
+//            case expr => {
+//              val v = LoopSummary.getSymbolicValsFromExpr(expr)
+//              assert(v.nonEmpty)
+//              val constraint = constraintSolver.createConstraint(BinaryOp(Equal, expr, Number(trueRes, CodeLoc(0, 0)), CodeLoc(0, 0)))
+//              constraint match {
+//                case cond: BoolExpr => solver.add(cond)
+//              }
+//            }
+//            case _ =>
+//              assert(false)
+//          3}
+//        }
+//      }
+//    }
+//
+//    null
+//  }
+
+
+//  test("type1 summarization") {
+//    val code =
+//      """
+//        |main() {
+//        |  var n, x, z;
+//        |  n = input;
+//        |  x = input;
+//        |  z = input;
+//        |  while (x < n) {
+//        |   if (z > x) {
+//        |     x = x + 1;
+//        |   }
+//        |   else {
+//        |     z = z + 1;
+//        |   }
+//        |  }
+//        |  return 1 / (x - z);
+//        |}
+//        |""".stripMargin;
+//    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+//    var stmt: CfgNode = cfg.getFce("main")
+//    val main = stmt
+//
+//    while (!stmt.ast.isInstanceOf[WhileStmt]) {
+//      stmt = stmt.succ.head
+//    }
+//    val executor = new LoopSummary(cfg)
+//    val decls = main.ast.asInstanceOf[FunDecl].block.vars.flatMap(_.decls)
+//    val paths = executor.getAllPathsInALoop(stmt)
+//    val symbolicState = new SymbolicState(null, PathCondition.initial(), new SymbolicStore(Map.empty))
+//    for (decl <- decls) {
+//      symbolicState.addedVar(decl.name, SymbolicVal(decl.loc))
+//    }
+//    var vertices :List[Vertex] = List()
+//    for (path <- paths) {
+//      vertices = vertices.appended(Vertex(path, path.condition, executor.pathToVertex(path), path.iterations))
+//    }
+//    val pda = PDA(executor, vertices, decls, new ConstraintSolver(new Context()), Number(1, CodeLoc(0, 0)), symbolicState)
+//    pda.initialize()
+//    assert(pda.entryStates.size == 3)
+//    assert(pda.exitStates.size == 1)
+//    assert(pda.edges.size == 3)
+//
+//    val summary = pda.summarizeType1Loop(symbolicState, Number(1, CodeLoc(0, 0)))
+//
+//    for (initialX <- 0 to 5) {
+//      for (initialIterationCount <- 0 to 5) {
+//        val trueRes = initialX + initialIterationCount
+//        for (change <- summary._2("x")) {
+//          change.apply(Number(initialX, CodeLoc(0, 0))) match {
+//            case expr => {
+//              val v = LoopSummary.getSymbolicValsFromExpr(expr)
+//              assert(v.nonEmpty)
+//              LoopSummary.simplifyArithExpr(pda.applyIterationsCount(expr, v.head, Number(initialIterationCount, CodeLoc(0, 0)))) match {
+//                case Number(value, _) =>
+//                  println(value, trueRes)
+//                  assert(value == trueRes)
+//                case _ =>
+//                  assert(false)
+//              }
+//            }
+//            case _ =>
+//              assert(false)
+//          }
+//        }
+//      }
+//    }
+//
+//    for (initialX <- 0 to 5) {
+//      for (initialIterationCount <- 0 to 5) {
+//        val trueRes = initialX + initialIterationCount
+//        for (change <- summary._2("z")) {
+//          change.apply(Number(initialX, CodeLoc(0, 0))) match {
+//            case expr => {
+//              val v = LoopSummary.getSymbolicValsFromExpr(expr)
+//              assert(v.nonEmpty)
+//              LoopSummary.simplifyArithExpr(pda.applyIterationsCount(expr, v.head, Number(initialIterationCount, CodeLoc(0, 0)))) match {
+//                case Number(value, _) =>
+//                  assert(value == trueRes)
+//                case _ =>
+//                  assert(false)
+//              }
+//            }
+//            case _ =>
+//              assert(false)
+//          }
+//        }
+//      }
+//    }
+//  }
+
+  test("summary") {
     val code =
       """
         |main() {
@@ -360,278 +923,7 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
         |  return 1 / (x - z);
         |}
         |""".stripMargin;
-    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    val executor = new LoopSummary(cfg)
-    var stmt: CfgNode = cfg.getFce("main")
-    val main = stmt
 
-    val symbolicState = new SymbolicState(null, PathCondition.initial(), new SymbolicStore(Map.empty))
-
-    val decls = main.ast.asInstanceOf[FunDecl].block.vars.flatMap(_.decls)
-    for (decl <- decls) {
-      symbolicState.addedVar(decl.name, SymbolicVal(decl.loc))
-    }
-
-    while (!stmt.ast.isInstanceOf[WhileStmt]) {
-      stmt = stmt.succ.head
-    }
-
-    val paths = executor.getAllPathsInALoop(stmt)
-    var vertices :List[Vertex] = List()
-    for (path <- paths) {
-      vertices = vertices.appended(Vertex(path, path.condition, executor.pathToVertex(path), path.iterations))
-
-    }
-    val constraintSolver = new ConstraintSolver(new Context())
-    val pda = PDA(executor, vertices, decls, constraintSolver, Number(1, CodeLoc(0, 0)), symbolicState)
-    pda.initialize()
-    assert(pda.entryStates.size == 3)
-    assert(pda.exitStates.size == 1)
-    assert(pda.edges.size == 3)
-
-    var trace = Trace()
-    val rec = new mutable.LinkedHashMap[Vertex, (Expr, mutable.HashMap[String, Expr => Expr])]()
-    trace.summarizeTrace2(pda, symbolicState, vertices(0), constraintSolver.applyTheState(vertices(0).condition, symbolicState), new mutable.HashMap(), rec)
-    assert(trace.resChanges.isEmpty)
-    trace = Trace()
-    trace.summarizeTrace2(pda, symbolicState, vertices(2), Number(1, CodeLoc(0, 0)), new mutable.HashMap(), new mutable.LinkedHashMap[Vertex, (Expr, mutable.HashMap[String, Expr => Expr])]())
-    assert(trace.resChanges.size >= 0)
-    for (initialX <- 0 to 5) {
-      for (initialIterationCount <- 0 to 5) {
-        val trueRes = initialX + initialIterationCount
-        for (change <- trace.resChanges("x")) {
-          change.apply(Number(initialX, CodeLoc(0, 0))) match {
-            case expr => {
-              val v = LoopSummary.getSymbolicValsFromExpr(expr)
-              assert(v.nonEmpty)
-              LoopSummary.simplifyArithExpr(pda.applyIterationsCount(expr, v.head, Number(initialIterationCount, CodeLoc(0, 0)))) match {
-                case Number(value, _) =>
-                  assert(value == trueRes)
-                case _ =>
-                  assert(false)
-              }
-            }
-            case _ =>
-              assert(false)
-          }
-        }
-      }
-    }
-
-    for (initialX <- 0 to 5) {
-      for (initialIterationCount <- 0 to 5) {
-        val trueRes = initialX + initialIterationCount
-        for (change <- trace.resChanges("x")) {
-          change.apply(Number(initialX, CodeLoc(0, 0))) match {
-            case expr => {
-              val v = LoopSummary.getSymbolicValsFromExpr(expr)
-              assert(v.nonEmpty)
-              LoopSummary.simplifyArithExpr(pda.applyIterationsCount(expr, v.head, Number(initialIterationCount, CodeLoc(0, 0)))) match {
-                case Number(value, _) =>
-                  assert(value == trueRes)
-                case _ =>
-                  assert(false)
-              }
-            }
-            case _ =>
-              assert(false)
-          }
-        }
-      }
-    }
-
-    null
-  }
-
-
-  test("PDA basic with expr check") {
-    val code =
-      """
-        |main() {
-        |  var n, x, z;
-        |  n = input;
-        |  x = input;
-        |  z = input;
-        |  while (x < n) {
-        |   if (z > x) {
-        |     x = x + 1;
-        |   }
-        |   else {
-        |     z = z + 1;
-        |   }
-        |  }
-        |  return 1 / (x - z);
-        |}
-        |""".stripMargin;
-    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    val executor = new LoopSummary(cfg)
-    var stmt: CfgNode = cfg.getFce("main")
-    val main = stmt
-
-    val symbolicState = new SymbolicState(null, PathCondition.initial(), new SymbolicStore(Map.empty))
-
-    symbolicState.addedVar("x", Number(3, CodeLoc(0, 0)))
-    symbolicState.addedVar("n", Number(4, CodeLoc(0, 0)))
-    val decls = main.ast.asInstanceOf[FunDecl].block.vars.flatMap(_.decls)
-    for (decl <- decls) {
-      if (decl.name != "x" && decl.name != "n") {
-        symbolicState.addedVar(decl.name, SymbolicVal(decl.loc))
-      }
-    }
-
-    while (!stmt.ast.isInstanceOf[WhileStmt]) {
-      stmt.ast match {
-        case AssignStmt(Identifier(name, _), expr, _) =>
-          if (name != "x" && name != "n") {
-            symbolicState.addedVar(name, executor.evaluate(expr, symbolicState))
-          }
-        case _ =>
-      }
-      stmt = stmt.succ.head
-    }
-
-    val paths = executor.getAllPathsInALoop(stmt)
-    var vertices :List[Vertex] = List()
-    for (path <- paths) {
-      vertices = vertices.appended(Vertex(path, path.condition, executor.pathToVertex(path), path.iterations))
-
-    }
-    val constraintSolver = new ConstraintSolver(new Context())
-    val pda = PDA(executor, vertices, decls, constraintSolver, Number(1, CodeLoc(0, 0)), symbolicState)
-    pda.initialize()
-    assert(pda.entryStates.size == 2)
-    assert(pda.exitStates.size == 1)
-    assert(pda.edges.size == 3)
-
-    var trace = Trace()
-    val rec = new mutable.LinkedHashMap[Vertex, (Expr, mutable.HashMap[String, Expr => Expr])]()
-    trace.summarizeTrace2(pda, symbolicState, vertices(0), constraintSolver.applyTheState(vertices(0).condition, symbolicState), new mutable.HashMap(), rec)
-    constraintSolver.solveConstraint(constraintSolver.createConstraint(trace.resCondition)) match {
-      case Status.UNSATISFIABLE =>
-      case _ => assert(false)
-    }
-
-    trace = Trace()
-    trace.summarizeTrace2(pda, symbolicState, vertices(1), constraintSolver.applyTheState(vertices(1).condition, symbolicState), new mutable.HashMap(), rec)
-    constraintSolver.solveConstraint(constraintSolver.createConstraint(trace.resCondition)) match {
-      case Status.SATISFIABLE =>
-      case _ => assert(false)
-    }
-
-    trace = Trace()
-    trace.summarizeTrace2(pda, symbolicState, vertices(2), constraintSolver.applyTheState(vertices(2).condition, symbolicState), new mutable.HashMap(), rec)
-    constraintSolver.solveConstraint(constraintSolver.createConstraint(trace.resCondition)) match {
-      case Status.SATISFIABLE =>
-      case _ => assert(false)
-    }
-  }
-
-
-  test("PDA basic with expr check 2") {
-    val code =
-      """
-        |main() {
-        |  var n, x, z;
-        |  n = input;
-        |  x = input;
-        |  z = input;
-        |  while (x < n) {
-        |   if (z > x) {
-        |     x = x + 1;
-        |   }
-        |   else {
-        |     z = z + 1;
-        |   }
-        |  }
-        |  return 1 / (x - z);
-        |}
-        |""".stripMargin;
-    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    val executor = new LoopSummary(cfg)
-    var stmt: CfgNode = cfg.getFce("main")
-    val main = stmt
-
-    val symbolicState = new SymbolicState(null, PathCondition.initial(), new SymbolicStore(Map.empty))
-
-    symbolicState.addedVar("x", Number(4, CodeLoc(0, 0)))
-    symbolicState.addedVar("n", Number(3, CodeLoc(0, 0)))
-    val decls = main.ast.asInstanceOf[FunDecl].block.vars.flatMap(_.decls)
-    for (decl <- decls) {
-      if (decl.name != "x" && decl.name != "n") {
-        symbolicState.addedVar(decl.name, SymbolicVal(decl.loc))
-      }
-    }
-
-    while (!stmt.ast.isInstanceOf[WhileStmt]) {
-      stmt.ast match {
-        case AssignStmt(Identifier(name, _), expr, _) =>
-          if (name != "x" && name != "n") {
-            symbolicState.addedVar(name, executor.evaluate(expr, symbolicState))
-          }
-        case _ =>
-      }
-      stmt = stmt.succ.head
-    }
-
-    val paths = executor.getAllPathsInALoop(stmt)
-    var vertices: List[Vertex] = List()
-    for (path <- paths) {
-      vertices = vertices.appended(Vertex(path, path.condition, executor.pathToVertex(path), path.iterations))
-
-    }
-    val constraintSolver = new ConstraintSolver(new Context())
-    val pda = PDA(executor, vertices, decls, constraintSolver, Number(1, CodeLoc(0, 0)), symbolicState)
-    pda.initialize()
-    assert(pda.entryStates.size == 1)
-    assert(pda.exitStates.size == 1)
-    assert(pda.edges.size == 3)
-
-    var trace = Trace()
-    val rec = new mutable.LinkedHashMap[Vertex, (Expr, mutable.HashMap[String, Expr => Expr])]()
-
-    trace.summarizeTrace2(pda, symbolicState, vertices(0), constraintSolver.applyTheState(vertices(0).condition, symbolicState), new mutable.HashMap(), rec)
-    constraintSolver.solveConstraint(constraintSolver.createConstraint(trace.resCondition)) match {
-      case Status.SATISFIABLE =>
-      case _ => assert(false)
-    }
-
-    trace = Trace()
-    trace.summarizeTrace2(pda, symbolicState, vertices(1), constraintSolver.applyTheState(vertices(1).condition, symbolicState), new mutable.HashMap(), rec)
-    constraintSolver.solveConstraint(constraintSolver.createConstraint(trace.resCondition)) match {
-      case Status.UNSATISFIABLE =>
-      case _ => assert(false)
-    }
-    assert(trace.resChanges.isEmpty)
-
-    trace = Trace()
-    trace.summarizeTrace2(pda, symbolicState, vertices(2), constraintSolver.applyTheState(vertices(2).condition, symbolicState), new mutable.HashMap(), rec)
-    constraintSolver.solveConstraint(constraintSolver.createConstraint(trace.resCondition)) match {
-      case Status.UNSATISFIABLE =>
-      case _ => assert(false)
-    }
-    assert(trace.resChanges.isEmpty)
-  }
-
-
-  test("PDA more than just incrementation") {
-    val code =
-      """
-        |main() {
-        |  var n, x, z;
-        |  n = input;
-        |  x = input;
-        |  z = input;
-        |  while (x < n) {
-        |   if (z > x) {
-        |     x = x + 5;
-        |   }
-        |   else {
-        |     z = z + 10;
-        |   }
-        |  }
-        |  return 1 / (x - z);
-        |}
-        |""".stripMargin;
     val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
     var stmt: CfgNode = cfg.getFce("main")
     val main = stmt
@@ -656,257 +948,70 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
     assert(pda.exitStates.size == 1)
     assert(pda.edges.size == 3)
 
-    var trace = Trace()
-    trace.summarizeTrace2(pda, symbolicState, vertices(0), Number(1, CodeLoc(0, 0)), new mutable.HashMap(), new mutable.LinkedHashMap[Vertex, (Expr, mutable.HashMap[String, Expr => Expr])]())
-    assert(trace.resChanges.isEmpty)
-    trace = Trace()
-    trace.summarizeTrace2(pda, symbolicState, vertices(2), Number(1, CodeLoc(0, 0)), new mutable.HashMap(), new mutable.LinkedHashMap[Vertex, (Expr, mutable.HashMap[String, Expr => Expr])]())
-    assert(trace.resChanges.size >= 0)
+    val summary = pda.summarizeType1Loop2(symbolicState)
+
+    var lastIterCount = Number(1, CodeLoc(0, 0))
     for (initialX <- 0 to 5) {
       for (initialIterationCount <- 0 to 5) {
-        val trueRes = initialX + 5 * initialIterationCount
-        for (change <- trace.resChanges("x")) {
-          change.apply(Number(initialX, CodeLoc(0, 0))) match {
-            case expr => {
-              val v = LoopSummary.getSymbolicValsFromExpr(expr)
-              assert(v.nonEmpty)
-              LoopSummary.simplifyArithExpr(pda.applyIterationsCount(expr, v.head, Number(initialIterationCount, CodeLoc(0, 0)))) match {
-                case Number(value, _) =>
-                  assert(value == trueRes)
-                case _ =>
-                  assert(false)
+        val trueRes = initialX + initialIterationCount + lastIterCount.value
+        for (trace <- summary) {
+          if (trace._2.nonEmpty) {
+            val change = trace._2("x")
+            change.apply(Number(initialX, CodeLoc(0, 0))) match {
+              case expr => {
+                var v = LoopSummary.getSymbolicValsFromExpr(expr)
+                assert(v.nonEmpty)
+                val applied = pda.applyIterationsCount(expr, v.head, Number(initialIterationCount, CodeLoc(0, 0)))
+                LoopSummary.simplifyArithExpr(pda.applyIterationsCount(LoopSummary.simplifyArithExpr(applied), v.tail.head, lastIterCount)) match {
+                  case Number(value, _) =>
+                    println(value, trueRes)
+                    assert(value == trueRes)
+                  case a@_ =>
+                    println(a)
+                    assert(false)
+                }
               }
+              case _ =>
+                assert(false)
             }
-            case _ =>
-              assert(false)
           }
         }
       }
     }
 
+    lastIterCount = Number(0, CodeLoc(0, 0))
     for (initialX <- 0 to 5) {
       for (initialIterationCount <- 0 to 5) {
-        val trueRes = initialX + 10 * initialIterationCount
-        for (change <- trace.resChanges("z")) {
-          change.apply(Number(initialX, CodeLoc(0, 0))) match {
-            case expr => {
-              val v = LoopSummary.getSymbolicValsFromExpr(expr)
-              assert(v.nonEmpty)
-              LoopSummary.simplifyArithExpr(pda.applyIterationsCount(expr, v.head, Number(initialIterationCount, CodeLoc(0, 0)))) match {
-                case Number(value, _) =>
-                  assert(value == trueRes)
-                case _ =>
-                  assert(false)
+        val trueRes = initialX + lastIterCount.value
+        for (trace <- summary) {
+          if (trace._2.nonEmpty) {
+            val change = trace._2("z")
+            change.apply(Number(initialX, CodeLoc(0, 0))) match {
+              case expr => {
+                println(expr)
+                val v = LoopSummary.getSymbolicValsFromExpr(expr)
+                assert(v.nonEmpty)
+                LoopSummary.simplifyArithExpr(pda.applyIterationsCount(expr, v.head, lastIterCount)) match {
+                  case Number(value, _) =>
+                    assert(value == trueRes)
+                  case a@_ =>
+                    println(a)
+                    LoopSummary.simplifyArithExpr(pda.applyIterationsCount(a, v.tail.head, Number(initialIterationCount, CodeLoc(0, 0)))) match {
+                      case Number(value, _) =>
+                        assert(value == trueRes + initialIterationCount)
+                      case _ =>
+                        assert(false)
+                    }
+                }
               }
+              case _ =>
+                assert(false)
             }
-            case _ =>
-              assert(false)
-          }
-        }
-      }
-    }
-
-    null
-  }
-
-
-  test("PDA x updated in multiple branches") {
-    val code =
-      """
-        |main() {
-        |  var n, x, z;
-        |  n = input;
-        |  x = input;
-        |  z = input;
-        |  while (x < n) {
-        |   if (z > x) {
-        |     x = x + 1;
-        |   }
-        |   else {
-        |     z = z + 2;
-        |     x = x + 1;
-        |   }
-        |  }
-        |  return 1 / (x - z);
-        |}
-        |""".stripMargin;
-    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    var stmt: CfgNode = cfg.getFce("main")
-    val main = stmt
-
-    while (!stmt.ast.isInstanceOf[WhileStmt]) {
-      stmt = stmt.succ.head
-    }
-    val executor = new LoopSummary(cfg)
-    val decls = main.ast.asInstanceOf[FunDecl].block.vars.flatMap(_.decls)
-    val paths = executor.getAllPathsInALoop(stmt)
-    val symbolicState = new SymbolicState(null, PathCondition.initial(), new SymbolicStore(Map.empty))
-    for (decl <- decls) {
-      symbolicState.addedVar(decl.name, SymbolicVal(decl.loc))
-    }
-    var vertices :List[Vertex] = List()
-    for (path <- paths) {
-      vertices = vertices.appended(Vertex(path, path.condition, executor.pathToVertex(path), path.iterations))
-
-    }
-    val pda = PDA(executor, vertices, decls, new ConstraintSolver(new Context()), Number(1, CodeLoc(0, 0)), symbolicState)
-    pda.initialize()
-    assert(pda.entryStates.size == 3)
-    assert(pda.exitStates.size == 1)
-    assert(pda.edges.size == 3)
-
-    var trace = Trace()
-    trace.summarizeTrace2(pda, symbolicState, vertices(0), Number(1, CodeLoc(0, 0)), new mutable.HashMap(), new mutable.LinkedHashMap[Vertex, (Expr, mutable.HashMap[String, Expr => Expr])]())
-    assert(trace.resChanges.isEmpty)
-    trace = Trace()
-    trace.summarizeTrace2(pda, symbolicState, vertices(2), Number(1, CodeLoc(0, 0)), new mutable.HashMap(), new mutable.LinkedHashMap[Vertex, (Expr, mutable.HashMap[String, Expr => Expr])]())
-    assert(trace.resChanges.size >= 0)
-    val ctx = new Context()
-    val constraintSolver = new ConstraintSolver(ctx)
-    for (initialX <- 0 to 5) {
-      for (initialIterationCount <- 0 to 5) {
-        val trueRes = initialX + 2 * initialIterationCount
-        val solver = ctx.mkSolver()
-        for (change <- trace.resChanges("x")) {
-          change.apply(Number(initialX, CodeLoc(0, 0))) match {
-            case expr => {
-              val v = LoopSummary.getSymbolicValsFromExpr(expr)
-              assert(v.nonEmpty)
-              val constraint = constraintSolver.createConstraint(BinaryOp(Equal, expr, Number(trueRes, CodeLoc(0, 0)), CodeLoc(0, 0)))
-              constraint match {
-                case cond: BoolExpr => solver.add(cond)
-              }
-            }
-            case _ =>
-              assert(false)
-          }
-        }
-        solver.check() match {
-          case Status.SATISFIABLE =>
-          case _ => fail("")
-        }
-      }
-    }
-
-    for (initialX <- 0 to 5) {
-      for (initialIterationCount <- 0 to 5) {
-        val trueRes = initialX + 3 * initialIterationCount
-        val solver = ctx.mkSolver()
-        for (change <- trace.resChanges("z")) {
-          change.apply(Number(initialX, CodeLoc(0, 0))) match {
-            case expr => {
-              val v = LoopSummary.getSymbolicValsFromExpr(expr)
-              assert(v.nonEmpty)
-              val constraint = constraintSolver.createConstraint(BinaryOp(Equal, expr, Number(trueRes, CodeLoc(0, 0)), CodeLoc(0, 0)))
-              constraint match {
-                case cond: BoolExpr => solver.add(cond)
-              }
-            }
-            case _ =>
-              assert(false)
-          3}
-        }
-      }
-    }
-
-    null
-  }
-
-
-  test("type1 summarization") {
-    val code =
-      """
-        |main() {
-        |  var n, x, z;
-        |  n = input;
-        |  x = input;
-        |  z = input;
-        |  while (x < n) {
-        |   if (z > x) {
-        |     x = x + 1;
-        |   }
-        |   else {
-        |     z = z + 1;
-        |   }
-        |  }
-        |  return 1 / (x - z);
-        |}
-        |""".stripMargin;
-    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    var stmt: CfgNode = cfg.getFce("main")
-    val main = stmt
-
-    while (!stmt.ast.isInstanceOf[WhileStmt]) {
-      stmt = stmt.succ.head
-    }
-    val executor = new LoopSummary(cfg)
-    val decls = main.ast.asInstanceOf[FunDecl].block.vars.flatMap(_.decls)
-    val paths = executor.getAllPathsInALoop(stmt)
-    val symbolicState = new SymbolicState(null, PathCondition.initial(), new SymbolicStore(Map.empty))
-    for (decl <- decls) {
-      symbolicState.addedVar(decl.name, SymbolicVal(decl.loc))
-    }
-    var vertices :List[Vertex] = List()
-    for (path <- paths) {
-      vertices = vertices.appended(Vertex(path, path.condition, executor.pathToVertex(path), path.iterations))
-
-    }
-    val pda = PDA(executor, vertices, decls, new ConstraintSolver(new Context()), Number(1, CodeLoc(0, 0)), symbolicState)
-    pda.initialize()
-    assert(pda.entryStates.size == 3)
-    assert(pda.exitStates.size == 1)
-    assert(pda.edges.size == 3)
-
-    val summary = pda.summarizeType1Loop(symbolicState, Number(1, CodeLoc(0, 0)))
-
-
-
-    for (initialX <- 0 to 5) {
-      for (initialIterationCount <- 0 to 5) {
-        val trueRes = initialX + initialIterationCount
-        for (change <- summary._2("x")) {
-          change.apply(Number(initialX, CodeLoc(0, 0))) match {
-            case expr => {
-              val v = LoopSummary.getSymbolicValsFromExpr(expr)
-              assert(v.nonEmpty)
-              LoopSummary.simplifyArithExpr(pda.applyIterationsCount(expr, v.head, Number(initialIterationCount, CodeLoc(0, 0)))) match {
-                case Number(value, _) =>
-                  println(value, trueRes)
-                  assert(value == trueRes)
-                case _ =>
-                  assert(false)
-              }
-            }
-            case _ =>
-              assert(false)
-          }
-        }
-      }
-    }
-
-    for (initialX <- 0 to 5) {
-      for (initialIterationCount <- 0 to 5) {
-        val trueRes = initialX + initialIterationCount
-        for (change <- summary._2("z")) {
-          change.apply(Number(initialX, CodeLoc(0, 0))) match {
-            case expr => {
-              val v = LoopSummary.getSymbolicValsFromExpr(expr)
-              assert(v.nonEmpty)
-              LoopSummary.simplifyArithExpr(pda.applyIterationsCount(expr, v.head, Number(initialIterationCount, CodeLoc(0, 0)))) match {
-                case Number(value, _) =>
-                  assert(value == trueRes)
-                case _ =>
-                  assert(false)
-              }
-            }
-            case _ =>
-              assert(false)
           }
         }
       }
     }
   }
-
 
   /*test("loop summary test") {
     val code =

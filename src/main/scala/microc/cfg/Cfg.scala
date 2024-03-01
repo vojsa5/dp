@@ -45,4 +45,6 @@ class ProgramCfg extends Cfg {
 
 
   def function: mutable.Set[CfgFunEntryNode] = functionsCfg
+
+  def allNodes: mutable.Set[CfgNode] = nodesCfg
 }

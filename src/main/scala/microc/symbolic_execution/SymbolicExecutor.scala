@@ -2,11 +2,11 @@ package microc.symbolic_execution
 
 import microc.symbolic_execution.Statistics
 import microc.ProgramException
-import microc.ast.{Alloc, AndAnd, ArrayAccess, ArrayNode, AssignStmt, BinaryOp, BinaryOperator, CallFuncExpr, CodeLoc, Deref, Divide, Equal, Expr, FieldAccess, FunDecl, GreaterEqual, GreaterThan, Identifier, IfStmt, Input, Loc, LowerEqual, LowerThan, Minus, NestedBlockStmt, Not, NotEqual, Null, Number, OutputStmt, Plus, Program, Record, ReturnStmt, Times, VarRef, VarStmt, WhileStmt}
-import microc.cfg.ProgramCfg
+import microc.ast.{Alloc, AndAnd, ArrayAccess, ArrayNode, AssignStmt, AstNode, BinaryOp, BinaryOperator, CallFuncExpr, CodeLoc, Deref, Divide, Equal, Expr, FieldAccess, FunDecl, GreaterEqual, GreaterThan, Identifier, IdentifierDecl, IfStmt, Input, Loc, LowerEqual, LowerThan, Minus, NestedBlockStmt, Not, NotEqual, Null, Number, OutputStmt, Plus, Program, Record, ReturnStmt, StmtInNestedBlock, Times, VarRef, VarStmt, WhileStmt}
+import microc.cfg.{CfgNode, CfgStmtNode, ProgramCfg}
 import microc.cli.Reporter
 import microc.symbolic_execution.ExecutionException.{errorArrayOutOfBounds, errorDivByZero, errorIncompatibleTypes, errorNonArrayAccess, errorNonExistingFieldAccess, errorNonFunctionApplication, errorNonIntArithmetics, errorNonIntReturn, errorNonPointerDereference, errorNonRecordFieldAccess, errorNotAssignableExpression, errorNullDereference, errorPossibleDivByZero, errorRecordNestedFields, errorUninitializedReference}
-import microc.symbolic_execution.Value.{ArrVal, FunVal, NullRef, PointerVal, RecVal, Symbolic, SymbolicExpr, SymbolicVal, Val}
+import microc.symbolic_execution.Value.{ArrVal, FunVal, IteVal, NullRef, PointerVal, RecVal, Symbolic, SymbolicExpr, SymbolicVal, Val}
 import com.microsoft.z3._
 
 import scala.collection.mutable
@@ -83,12 +83,28 @@ object ExecutionException {
 }
 
 
-class SymbolicExecutor(program: ProgramCfg, subsumption: Option[PathSubsumption] = None, ctx: Context = new Context(), searchStrategy: SearchStreategy = new BFSSearchStrategy) {
+class SymbolicExecutor(program: ProgramCfg,
+                       subsumption: Option[PathSubsumption] = None,
+                       ctx: Context = new Context(),
+                       searchStrategy: SearchStrategy = new BFSSearchStrategy,
+                       useSummarization: Boolean = false
+                      ) {
 
   val solver = new ConstraintSolver(ctx)
   var statistics = new Statistics()
   var currentPathStopped = false
+  var finalBacktracking = false
+  var backTrackingPath: Option[SymbolicState] = None
+  var pathsToNodesToAddAnotations: mutable.HashMap[SymbolicState, mutable.Queue[CfgNode]] = mutable.HashMap.empty
   private var functionDeclarations: Map[String, FunVal] = Map.empty
+  var loops: mutable.HashMap[CfgNode, Identifier] = mutable.HashMap.empty
+  var subsumptionLoopVar = 1
+
+  def createSubsumptionLoopVar(): Identifier = {
+    val rightSide = Identifier("_l" + subsumptionLoopVar.toString, CodeLoc(0, 0))
+    subsumptionLoopVar += 1
+    rightSide
+  }
 
 
   for (fun <- program.function) {
@@ -104,66 +120,130 @@ class SymbolicExecutor(program: ProgramCfg, subsumption: Option[PathSubsumption]
     searchStrategy.addState(new SymbolicState(program.getFce("main"), PathCondition.initial(), new SymbolicStore(functionDeclarations)))
     var res: Option[Val] = None
     while (searchStrategy.statesCount() != 0) {
-      val path = searchStrategy.getState()
+      statistics.printStats()
+      var path = searchStrategy.getState()
       currentPathStopped = false
+      System.out.println(path.nextStatement.ast)
       step(path)
-      if (subsumption.nonEmpty) {
-        subsumption.get.addAnnotation(path.nextStatement, solver.createConstraintWithState(path.pathCondition.expr, path))
-      }
-      while (path.callStack.nonEmpty) {
+//      if (subsumption.nonEmpty) {
+//        subsumption.get.addAnnotation(path.nextStatement, solver.createConstraintWithState(path.pathCondition.expr, path))
+//      }
+//      path.pathCondition = path.pathCondition.prev.get
+      while (path.callStack.nonEmpty && !currentPathStopped) {
         val lastFceCall = path.callStack.last
         path.symbolicStore.popFrame()
         // in the normalized ast, all function calls are in the form of assignments
-        lastFceCall.ast match {
+        lastFceCall._1.ast match {
           case AssignStmt(target, _, _) =>
             path.updatedVar(getTarget(target, path), path.returnValue)
+          case _ =>
+            throw new Exception("this should never happen")
         }
         path.callStack = path.callStack.dropRight(1)
-        path.nextStatement = lastFceCall.succ.head
+        path = path.goTo(lastFceCall._1.succ.head, lastFceCall._2)
         step(path)
       }
+      for (node <- pathsToNodesToAddAnotations.getOrElse(path, mutable.Queue.empty)) {
+        if (!currentPathStopped && subsumption.nonEmpty) {
+          subsumption.get.computeAnnotation(node)
+        }
+      }
+
       statistics.numPaths += 1
       res = Some(path.returnValue)
     }
     res.get match {
       case Number(value, _) => value
-      case _ => throw errorNonIntReturn(program.getFce("main").ast.asInstanceOf[FunDecl])
+      case i: IteVal =>
+        0
+      case _ =>
+        throw errorNonIntReturn(program.getFce("main").ast.asInstanceOf[FunDecl])
     }
   }
 
   def runFunction(name: String, symbolicState: SymbolicState, args: List[Expr]): Val = {
     val fce = program.getFce(name)
-    symbolicState.callStack = symbolicState.callStack.appended(symbolicState.nextStatement)
+    symbolicState.callStack = symbolicState.callStack.appended((symbolicState.nextStatement, fce.ast.asInstanceOf[FunDecl].params))
     symbolicState.symbolicStore.pushFrame()
-    symbolicState.pathCondition = new PathCondition(Some(symbolicState.pathCondition), BinaryOp(Equal, Number(1, CodeLoc(0, 0)), Number(1, CodeLoc(0, 0)), CodeLoc(0, 0)))
     for ((arg, param) <- args.zip(fce.ast.asInstanceOf[FunDecl].params)) {
       symbolicState.addedVar(param.name, evaluate(arg, symbolicState))
     }
-    val fceState = symbolicState.goTo(fce)
+    val fceState = symbolicState.goTo(fce, fce.fun.params)
     step(fceState)
     symbolicState.returnValue = fceState.returnValue
-    //symbolicState.pathCondition = symbolicState.pathCondition.prev.get
+    symbolicState.symbolicStore = fceState.symbolicStore
     symbolicState.symbolicStore.popFrame()
     symbolicState.callStack = symbolicState.callStack.dropRight(1)
     symbolicState.returnValue
+
+//    fceState.symbolicStore.popFrame()
+//    fceState.callStack = fceState.callStack.dropRight(1)
+//    fceState.returnValue
   }
 
-  def stepOnLoop(symbolicState: SymbolicState, loop: WhileStmt): Unit = {
-    solver.solveCondition(symbolicState.pathCondition.expr, loop.guard, symbolicState) match {
+  def addAnotations(node: CfgNode, minId: Int, maxId: Int, annotation: Expr): Unit = {
+    if (node.id < maxId && node.id > minId) {
+      subsumption.get.addAnnotation(node, annotation)
+      node.succ.foreach(s => addAnotations(s, minId, maxId, annotation))
+    }
+  }
+
+  def stepOnLoop(symbolicState: SymbolicState): Unit = {
+    val loop: CfgNode = symbolicState.nextStatement
+    val loopAst = loop.ast.asInstanceOf[WhileStmt]
+    System.out.println(loopAst.guard)
+    if (subsumption.nonEmpty) {
+      if (!loops.contains(loop)) {
+        val loopIter = createSubsumptionLoopVar()
+        val loopIterCond = BinaryOp(LowerThan, loopIter, Number(0, CodeLoc(0, 0)), CodeLoc(0, 0))
+        val succs = loop.succ
+        val maxSucc = succs.maxBy(node => node.id).id
+        for (s <- succs) {
+          addAnotations(s, loop.id, maxSucc, loopIterCond)
+        }
+        subsumption.get.addAnnotation(loop, loopIterCond)
+        val decreaseLoopIter = AssignStmt(loopIter, BinaryOp(Minus, loopIter, Number(1, CodeLoc(0, 0)), CodeLoc(0, 0)), CodeLoc(0, 0))
+        val lastBody = loopAst.block.asInstanceOf[NestedBlockStmt].body
+        val body = lastBody.appended(decreaseLoopIter)
+        loop.ast = WhileStmt(loopAst.guard, NestedBlockStmt(body, loopAst.block.loc), loopAst.loc)
+        loops.put(loop, loopIter)
+
+        val lastLoopStmt = loop.pred.maxBy(node => node.id)
+        val newStmt = new CfgStmtNode(-(subsumptionLoopVar - 1), decreaseLoopIter)
+        lastLoopStmt.succ.foreach(s => {
+          s.pred.remove(lastLoopStmt)
+          s.pred.add(newStmt)
+          newStmt.succ.add(s)
+        })
+        lastLoopStmt.succ.clear()
+        lastLoopStmt.succ.add(newStmt)
+        newStmt.pred.add(lastLoopStmt)
+        null
+      }
+      symbolicState.addedVar(loops(loop).name, Number(0, CodeLoc(0, 0)))
+    }
+    solver.solveCondition(symbolicState.pathCondition.expr, loopAst.guard, symbolicState) match {
       case Status.SATISFIABLE =>
         val nextState = symbolicState.getIfTrueState()
         step(nextState)
-        if (subsumption.nonEmpty) {
-          subsumption.get.addAnnotation(symbolicState.nextStatement, solver.createConstraintWithState(symbolicState.pathCondition.expr, symbolicState))
-        }
+        symbolicState.pathCondition = nextState.pathCondition.prev.get
         symbolicState.returnValue = nextState.returnValue
       case Status.UNKNOWN =>
         throw new Exception("IMPLEMENT")
       case Status.UNSATISFIABLE =>
+        currentPathStopped = true
     }
-    solver.solveCondition(symbolicState.pathCondition.expr, Not(loop.guard, loop.guard.loc), symbolicState) match {
+    solver.solveCondition(symbolicState.pathCondition.expr, Not(loopAst.guard, loopAst.guard.loc), symbolicState) match {
       case Status.SATISFIABLE =>
-        searchStrategy.addState(symbolicState.getIfFalseState())
+
+        val path = symbolicState.getIfFalseState()
+        searchStrategy.addState(path)
+        if (subsumption.nonEmpty) {
+          subsumption.get.addAnnotation(symbolicState.nextStatement, Not(loopAst.guard, loopAst.guard.loc))
+        }
+        finalBacktracking = false
+        pathsToNodesToAddAnotations.put(path, mutable.Queue.empty)
+        backTrackingPath = Some(path)
         return
       case Status.UNKNOWN =>
         throw new Exception("IMPLEMENT")
@@ -172,20 +252,22 @@ class SymbolicExecutor(program: ProgramCfg, subsumption: Option[PathSubsumption]
   }
 
   def step(symbolicState: SymbolicState): Unit = {
+    var newState = symbolicState
+    val ast = symbolicState.nextStatement.ast
     if (subsumption.nonEmpty) {
       if (!subsumption.get.checkSubsumption(symbolicState.nextStatement, symbolicState.pathCondition.expr, symbolicState)) {
         statistics.stoppedWithSubsumption += 1
+        finalBacktracking = true
+        currentPathStopped = true
         return
       }
     }
-    var newState = symbolicState
-    val ast = symbolicState.nextStatement.ast
     ast match {
       case FunDecl(_, _, _, _) =>
       case VarStmt(decls, _) =>
         newState = decls.foldLeft(symbolicState) {
           (state, decl) =>
-            state.addedNewVar(decl.name)
+            state.addedNewVar(decl)
         }
 //      case nested@NestedBlockStmt(stmts, _) =>
 //        symbolicState.symbolicStore.pushFrame()
@@ -197,64 +279,91 @@ class SymbolicExecutor(program: ProgramCfg, subsumption: Option[PathSubsumption]
         val assigned = evaluate(right, symbolicState)
         evaluate(record, symbolicState) match {
           case RecVal(fields) if fields.contains(field) => fields.update(field, assigned)
-          case RecVal(fields) => throw errorNonExistingFieldAccess(loc, RecVal(fields).toString, field)
-          case _ => throw errorNotAssignableExpression(record)
+          case RecVal(fields) =>
+            throw errorNonExistingFieldAccess(loc, RecVal(fields).toString, field)
+          case IteVal(RecVal(fields1), RecVal(fields2), _, _)
+            if fields1.contains(field) && fields2.contains(field) => {
+            fields1.update(field, assigned)
+            fields2.update(field, assigned)
+          }
+          case _ =>
+            throw errorNotAssignableExpression(record)
         }
-        NullRef
-
       case AssignStmt(lhs, rhs, _) =>
         symbolicState.updatedVar(getTarget(lhs, symbolicState), evaluate(rhs, symbolicState))
       case IfStmt(guard, _, _, _) =>
+        var ifState: Option[SymbolicState] = None
         solver.solveCondition(symbolicState.pathCondition.expr, guard, symbolicState) match {
           case Status.SATISFIABLE =>
             val nextState = symbolicState.getIfTrueState()
             step(nextState)
-            symbolicState.returnValue = nextState.returnValue
             if (subsumption.nonEmpty) {
-              subsumption.get.addAnnotation(symbolicState.nextStatement, solver.createConstraintWithState(symbolicState.pathCondition.expr, symbolicState))
+              subsumption.get.addAnnotation(symbolicState.nextStatement, guard)
             }
+            ifState = Some(nextState)
           case Status.UNKNOWN =>
             throw new Exception("IMPLEMENT")
           case Status.UNSATISFIABLE =>
             currentPathStopped = true
         }
 
+//        if (subsumption.nonEmpty) {
+//          val annotation = solver.createConstraintWithState(BinaryOp(AndAnd, symbolicState.pathCondition.expr, guard, guard.loc), symbolicState)
+//          subsumption.get.addAnnotation(symbolicState.nextStatement, annotation)
+//        }
+
         solver.solveCondition(symbolicState.pathCondition.expr, Not(guard, guard.loc), symbolicState) match {
           case Status.SATISFIABLE =>
-            //val nextState = symbolicState.getIfFalseState()
-            //step(nextState)
-            //symbolicState.returnValue = nextState.returnValue
-            //return
             val path = symbolicState.getIfFalseState()
             searchStrategy.addState(path)
-            return
+            if (subsumption.nonEmpty) {
+              subsumption.get.addAnnotation(symbolicState.nextStatement, Not(guard, guard.loc))
+            }
+            finalBacktracking = false
+            pathsToNodesToAddAnotations.put(path, mutable.Queue.empty)
+            backTrackingPath = Some(path)
           case Status.UNKNOWN =>
             throw new Exception("IMPLEMENT")
           case Status.UNSATISFIABLE =>
-            return
         }
+        if (ifState.nonEmpty) {
+          symbolicState.pathCondition = ifState.get.pathCondition.prev.get
+          symbolicState.returnValue = ifState.get.returnValue
+          symbolicState.symbolicStore = ifState.get.symbolicStore
+        }
+
+//        if (subsumption.nonEmpty) {
+//          val annotation = solver.createConstraintWithState(BinaryOp(AndAnd, symbolicState.pathCondition.expr, Not(guard, guard.loc), guard.loc), symbolicState)
+//          subsumption.get.addAnnotation(symbolicState.nextStatement, annotation)
+//        }
+        return
       case loop@WhileStmt(_, _, _) =>
-        stepOnLoop(symbolicState, loop)
+        stepOnLoop(symbolicState)
         return
       case ReturnStmt(expr, _) =>
+        finalBacktracking = true
         symbolicState.returnValue = evaluate(expr, symbolicState)
         return
       case OutputStmt(expr, _) =>
-        val value = evaluate(expr, symbolicState)
-        value match {
-          case Number(value, _) =>
-            System.out.println(value)
-          case SymbolicVal(_) =>
-            System.out.println("Symbolic value")
-        }
+        evaluate(expr, symbolicState)
     }
-    //newState.nextStates().foreach(step)
     if (currentPathStopped) {
       return
     }
-    val nextState = symbolicState.nextState()
+    val nextState = newState.nextState()
     step(nextState)
+    if (subsumption.nonEmpty) {
+      if (finalBacktracking) {
+        if (!currentPathStopped) {
+          subsumption.get.computeAnnotation(symbolicState.nextStatement)
+        }
+      }
+      else {
+          pathsToNodesToAddAnotations(backTrackingPath.get).enqueue(symbolicState.nextStatement)
+      }
+    }
     symbolicState.returnValue = nextState.returnValue
+    symbolicState.symbolicStore = nextState.symbolicStore
   }
 
   private def compareValues(operator: BinaryOperator, val1: Val, val2: Val, symbolicState: SymbolicState, loc: Loc): Val = {
@@ -276,6 +385,7 @@ class SymbolicExecutor(program: ProgramCfg, subsumption: Option[PathSubsumption]
           case LowerThan => Number(if (l < r) 1 else 0, loc)
           case LowerEqual => Number(if (l <= r) 1 else 0, loc)
         }
+
       case (e1: Symbolic, e2: Symbolic) =>
         operator match {
           case Plus => SymbolicExpr(BinaryOp(Plus, e1, e2, loc), loc)
@@ -284,7 +394,8 @@ class SymbolicExecutor(program: ProgramCfg, subsumption: Option[PathSubsumption]
           case Divide => {
             solver.solveConstraint(
               solver.createConstraintWithState(BinaryOp(AndAnd, BinaryOp(Equal, e2, Number(0, loc), loc), symbolicState.pathCondition.expr, loc), symbolicState)) match {
-              case Status.SATISFIABLE => throw errorPossibleDivByZero(loc)
+              case Status.SATISFIABLE =>
+                throw errorPossibleDivByZero(loc)
               case Status.UNSATISFIABLE => SymbolicExpr(BinaryOp(Divide, e1, e2, loc), loc)
               case Status.UNKNOWN => throw new Exception("IMPLEMENT")
             }
@@ -300,6 +411,20 @@ class SymbolicExecutor(program: ProgramCfg, subsumption: Option[PathSubsumption]
       case (PointerVal(address1), PointerVal(address2)) => if (address1 == address2) Number(1, loc) else Number(0, loc)
       case (PointerVal(_), NullRef) => Number(0, loc)
       case (NullRef, PointerVal(_)) => Number(0, loc)
+      case (IteVal(trueState, falseState, expr, loc), other) =>
+        IteVal(
+          compareValues(operator, trueState, other, symbolicState, loc),
+          compareValues(operator, falseState, other, symbolicState, loc),
+          expr,
+          loc
+        )
+      case (other, IteVal(trueState, falseState, expr, loc)) =>
+        IteVal(
+          compareValues(operator, trueState, other, symbolicState, loc),
+          compareValues(operator, falseState, other, symbolicState, loc),
+          expr,
+          loc
+        )
       case _ =>
         throw errorNonIntArithmetics(loc)
     }
@@ -340,10 +465,16 @@ class SymbolicExecutor(program: ProgramCfg, subsumption: Option[PathSubsumption]
       case Alloc(expr, _) =>
         symbolicState.addedAlloc(evaluate(expr, symbolicState))
       case Deref(pointer, loc) =>
+        val d = evaluate(pointer, symbolicState)
         evaluate(pointer, symbolicState) match {
-          case PointerVal(address) => symbolicState.getVal(PointerVal(address)).get
-          case NullRef => throw errorNullDereference(loc)
-          case e => throw errorNonPointerDereference(loc, e.toString)
+          case PointerVal(address) =>
+            symbolicState.getVal(PointerVal(address)).get
+          case NullRef =>
+            throw errorNullDereference(loc)
+          case IteVal(trueState: PointerVal, falseState: PointerVal, expr, loc) =>
+            IteVal(symbolicState.getVal(trueState).get, symbolicState.getVal(falseState).get, expr, loc)
+          case e =>
+            throw errorNonPointerDereference(loc, e.toString)
         }
       case ArrayNode(elems, _) =>
         var prev: Val = null
@@ -402,7 +533,8 @@ class SymbolicExecutor(program: ProgramCfg, subsumption: Option[PathSubsumption]
           case Some(PointerVal(address)) => PointerVal(address)
           case _ if functionDeclarations.contains(name) =>
             throw errorNonPointerDereference(loc, functionDeclarations(name).toString)
-          case _ => throw errorUninitializedReference(loc)
+          case _ =>
+            throw errorUninitializedReference(loc)
         }
       case Deref(pointer, loc) =>
         val i = symbolicState.getVal(getTarget(pointer, symbolicState))

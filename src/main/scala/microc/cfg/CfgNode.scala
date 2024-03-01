@@ -4,7 +4,7 @@ import microc.ast._
 
 import scala.collection.mutable
 
-abstract class CfgNode(val id: Int, val ast: AstNode) extends Ordered[CfgNode] {
+abstract class CfgNode(val id: Int, var ast: AstNode) extends Ordered[CfgNode] {
   val pred: mutable.Set[CfgNode] = mutable.Set()
 
   val succ: mutable.Set[CfgNode] = mutable.Set()

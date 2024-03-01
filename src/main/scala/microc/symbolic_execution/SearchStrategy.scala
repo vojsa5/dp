@@ -42,18 +42,17 @@ class RandomAccessSet[T] {
 }
 
 
-trait SearchStreategy {
+trait SearchStrategy {
 
   def addState(symbolicState: SymbolicState): Unit
 
   def getState(): SymbolicState
 
   def statesCount(): Int
-
 }
 
 
-class BFSSearchStrategy extends SearchStreategy {
+class BFSSearchStrategy extends SearchStrategy {
 
   var queue = Queue[SymbolicState]()
 
@@ -71,7 +70,7 @@ class BFSSearchStrategy extends SearchStreategy {
 }
 
 
-class DFSSearchStrategy extends SearchStreategy {
+class DFSSearchStrategy extends SearchStrategy {
 
   var front = new util.LinkedList[SymbolicState]
 
@@ -87,7 +86,7 @@ class DFSSearchStrategy extends SearchStreategy {
 }
 
 
-class RandomSearchStrategy extends SearchStreategy {
+class RandomSearchStrategy extends SearchStrategy {
 
   var set = new RandomAccessSet[SymbolicState]
 

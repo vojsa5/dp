@@ -1,10 +1,11 @@
 package microc.symbolic_execution
 
 import com.microsoft.z3.{ArithExpr, ArithSort, BoolExpr, Context, IntExpr, IntNum, Status}
-import microc.ast.{AndAnd, BinaryOp, Divide, Equal, Expr, GreaterEqual, GreaterThan, Identifier, LowerEqual, LowerThan, Minus, Not, NotEqual, Null, Number, OrOr, Plus, Times}
-import microc.symbolic_execution.Value.{IteVal, Symbolic, SymbolicExpr, SymbolicVal, Val}
+import microc.ast.{AndAnd, BinaryOp, CodeLoc, Divide, Equal, Expr, GreaterEqual, GreaterThan, Identifier, LowerEqual, LowerThan, Minus, Not, NotEqual, Null, Number, OrOr, Plus, Times}
+import microc.symbolic_execution.Value.{IteVal, Symbolic, SymbolicExpr, SymbolicVal, UninitializedRef, Val}
 
 import scala.collection.mutable
+import scala.util.Random
 
 class ConstraintSolver(val ctx: Context) {
 
@@ -108,76 +109,91 @@ class ConstraintSolver(val ctx: Context) {
           valToExpr(val1, state),
           valToExpr(val2, state)
         )
-      case _ => throw new Exception("IMPLEMENT")
+      case UninitializedRef => //TODO merge with symbolic val generation
+        ctx.mkIntConst(Utility.generateRandomString())
+      case _ =>
+        throw new Exception("IMPLEMENT")
     }
   }
 
 
-  def createConstraintWithState(expr: Expr, state: SymbolicState): com.microsoft.z3.Expr[_] = {
+  def createConstraintWithState(expr: Expr, state: SymbolicState, allowNonInitializedVals: Boolean = false): com.microsoft.z3.Expr[_] = {
     expr match {
       case Not(expr, _) =>
-          ctx.mkNot(getCondition(createConstraintWithState(expr, state)))
+          ctx.mkNot(getCondition(createConstraintWithState(expr, state, allowNonInitializedVals)))
       case BinaryOp(operator, left, right, _) =>
         operator match {
           case Plus => ctx.mkAdd(
-            createConstraintWithState(left, state).asInstanceOf[ArithExpr[ArithSort]],
-            createConstraintWithState(right, state).asInstanceOf[ArithExpr[ArithSort]]
+            createConstraintWithState(left, state, allowNonInitializedVals).asInstanceOf[ArithExpr[ArithSort]],
+            createConstraintWithState(right, state, allowNonInitializedVals).asInstanceOf[ArithExpr[ArithSort]]
           )
           case Minus => ctx.mkSub(
-            createConstraintWithState(left, state).asInstanceOf[ArithExpr[ArithSort]],
-            createConstraintWithState(right, state).asInstanceOf[ArithExpr[ArithSort]]
+            createConstraintWithState(left, state, allowNonInitializedVals).asInstanceOf[ArithExpr[ArithSort]],
+            createConstraintWithState(right, state, allowNonInitializedVals).asInstanceOf[ArithExpr[ArithSort]]
           )
           case Times => ctx.mkMul(
-            createConstraintWithState(left, state).asInstanceOf[ArithExpr[ArithSort]],
-            createConstraintWithState(right, state).asInstanceOf[ArithExpr[ArithSort]]
+            createConstraintWithState(left, state, allowNonInitializedVals).asInstanceOf[ArithExpr[ArithSort]],
+            createConstraintWithState(right, state, allowNonInitializedVals).asInstanceOf[ArithExpr[ArithSort]]
           )
           case Divide => ctx.mkDiv(
-            createConstraintWithState(left, state).asInstanceOf[ArithExpr[ArithSort]],
-            createConstraintWithState(right, state).asInstanceOf[ArithExpr[ArithSort]]
+            createConstraintWithState(left, state, allowNonInitializedVals).asInstanceOf[ArithExpr[ArithSort]],
+            createConstraintWithState(right, state, allowNonInitializedVals).asInstanceOf[ArithExpr[ArithSort]]
           )
           case Equal =>
             ctx.mkEq(
-              createConstraintWithState(left, state).asInstanceOf[ArithExpr[ArithSort]],
-              createConstraintWithState(right, state).asInstanceOf[ArithExpr[ArithSort]]
+              createConstraintWithState(left, state, allowNonInitializedVals).asInstanceOf[ArithExpr[ArithSort]],
+              createConstraintWithState(right, state, allowNonInitializedVals).asInstanceOf[ArithExpr[ArithSort]]
             )
           case NotEqual =>
             ctx.mkNot(
               ctx.mkEq(
-                createConstraintWithState(left, state).asInstanceOf[ArithExpr[ArithSort]],
-                createConstraintWithState(right, state).asInstanceOf[ArithExpr[ArithSort]]
+                createConstraintWithState(left, state, allowNonInitializedVals).asInstanceOf[ArithExpr[ArithSort]],
+                createConstraintWithState(right, state, allowNonInitializedVals).asInstanceOf[ArithExpr[ArithSort]]
               )
             )
           case GreaterThan =>
             ctx.mkGt(
-              createConstraintWithState(left, state).asInstanceOf[ArithExpr[ArithSort]],
-              createConstraintWithState(right, state).asInstanceOf[ArithExpr[ArithSort]]
+              createConstraintWithState(left, state, allowNonInitializedVals).asInstanceOf[ArithExpr[ArithSort]],
+              createConstraintWithState(right, state, allowNonInitializedVals).asInstanceOf[ArithExpr[ArithSort]]
             )
           case LowerThan =>
             ctx.mkLt(
-              createConstraintWithState(left, state).asInstanceOf[ArithExpr[ArithSort]],
-              createConstraintWithState(right, state).asInstanceOf[ArithExpr[ArithSort]]
+              createConstraintWithState(left, state, allowNonInitializedVals).asInstanceOf[ArithExpr[ArithSort]],
+              createConstraintWithState(right, state, allowNonInitializedVals).asInstanceOf[ArithExpr[ArithSort]]
             )
           case GreaterEqual =>
             ctx.mkGe(
-              createConstraintWithState(left, state).asInstanceOf[ArithExpr[ArithSort]],
-              createConstraintWithState(right, state).asInstanceOf[ArithExpr[ArithSort]]
+              createConstraintWithState(left, state, allowNonInitializedVals).asInstanceOf[ArithExpr[ArithSort]],
+              createConstraintWithState(right, state, allowNonInitializedVals).asInstanceOf[ArithExpr[ArithSort]]
             )
           case LowerEqual =>
             ctx.mkLe(
-              createConstraintWithState(left, state).asInstanceOf[ArithExpr[ArithSort]],
-              createConstraintWithState(right, state).asInstanceOf[ArithExpr[ArithSort]]
+              createConstraintWithState(left, state, allowNonInitializedVals).asInstanceOf[ArithExpr[ArithSort]],
+              createConstraintWithState(right, state, allowNonInitializedVals).asInstanceOf[ArithExpr[ArithSort]]
             )
           case AndAnd =>
-            ctx.mkAnd(getCondition(createConstraintWithState(left, state)), getCondition(createConstraintWithState(right, state)))
+            ctx.mkAnd(
+              getCondition(createConstraintWithState(left, state, allowNonInitializedVals)),
+              getCondition(createConstraintWithState(right, state, allowNonInitializedVals))
+            )
           case OrOr =>
-            ctx.mkOr(getCondition(createConstraintWithState(left, state)), getCondition(createConstraintWithState(right, state)))
+            ctx.mkOr(
+              getCondition(createConstraintWithState(left, state, allowNonInitializedVals)),
+              getCondition(createConstraintWithState(right, state, allowNonInitializedVals))
+            )
         }
       case Identifier(name, loc) =>
-        valToExpr(state.getSymbolicVal(name, loc), state)
+        valToExpr(state.getSymbolicVal(name, loc, allowNonInitializedVals), state)
       case Number(value, _) => ctx.mkInt(value)
       case v@SymbolicVal(_) => ctx.mkIntConst(v.name)
-      case SymbolicExpr(expr, _) => createConstraintWithState(expr, state)
+      case SymbolicExpr(expr, _) => createConstraintWithState(expr, state, allowNonInitializedVals)
       case Null(_) => ctx.mkInt(0)
+      case IteVal(trueState, falseState, expr, _) =>
+        ctx.mkITE(
+          getCondition(createConstraintWithState(expr, state, allowNonInitializedVals)),
+          valToExpr(trueState, state),
+          valToExpr(falseState, state)
+        )
     }
   }
 
@@ -199,43 +215,47 @@ class ConstraintSolver(val ctx: Context) {
   }
 
 
-  def applyTheState(expr: Expr, state: SymbolicState): Expr = {
-    expr match {
+  def applyTheState(expr: Expr, state: SymbolicState, allowReturnNonInitialized: Boolean = false): Expr = {
+    var res = expr match {
       case Not(expr, loc) =>
         Not(applyTheState(expr, state), loc)
       case BinaryOp(operator, left, right, loc) => BinaryOp(operator, applyTheState(left, state), applyTheState(right, state), loc)
-      case Identifier(name, loc) => applyVal(state.getSymbolicVal(name, loc), state)
+      case Identifier(name, loc) => applyVal(state.getSymbolicVal(name, loc, allowReturnNonInitialized), state)
       case n@Number(_, _) => n
       case v@SymbolicVal(_) => v
       case SymbolicExpr(expr, _) => applyTheState(expr, state)
     }
+    if (res != expr) {
+      res = applyTheState(res, state)
+    }
+    res
   }
 
-  def applyTheState2(expr: Expr, symbolicState: SymbolicState, changes: mutable.HashMap[String, Expr => Expr]): Expr = {
-    expr match {
+  def applyTheStateWithChangesAsFunctions(expr: Expr, symbolicState: SymbolicState, changes: mutable.HashMap[String, Expr => Expr]): Expr = {
+    var res = expr match {
       case Not(expr, loc) =>
-        Not(applyTheState2(expr, symbolicState, changes), loc)
-      case BinaryOp(operator, left, right, loc) => BinaryOp(operator, applyTheState2(left, symbolicState, changes), applyTheState2(right, symbolicState, changes), loc)
+        Not(applyTheStateWithChangesAsFunctions(expr, symbolicState, changes), loc)
+      case BinaryOp(operator, left, right, loc) => BinaryOp(operator, applyTheStateWithChangesAsFunctions(left, symbolicState, changes), applyTheStateWithChangesAsFunctions(right, symbolicState, changes), loc)
       case id@Identifier(name, loc) =>
-        if (changes.contains(name)) {
-          symbolicState.getSymbolicVal(name, loc) match {
-            case SymbolicExpr(expr, _) =>
-              changes(name).apply(expr) match {
-                case n@Number(_, _) => n
-                case v@SymbolicVal(_) => v
-                case SymbolicExpr(expr, loc) => SymbolicExpr(expr, loc)
-              }
+        if (changes.contains(name) && Utility.varIsFromOriginalProgram(name)) {
+          symbolicState.getSymbolicVal(name, loc, true) match {
+            case SymbolicExpr(expr, _) => changes(name).apply(expr)
+            case UninitializedRef => SymbolicVal(CodeLoc(0, 0))
             case _ =>
               id
           }
         }
         else {
-          id
+          applyVal(symbolicState.getSymbolicVal(name, loc), symbolicState)
         }
       case n@Number(_, _) => n
       case v@SymbolicVal(_) => v
-      case SymbolicExpr(expr, _) => applyTheState2(expr, symbolicState, changes)
+      case SymbolicExpr(expr, _) => applyTheStateWithChangesAsFunctions(expr, symbolicState, changes)
     }
+    if (res != expr) {
+      res = applyTheStateWithChangesAsFunctions(res, symbolicState, changes)
+    }
+    res
   }
 
   def getCondition(expr: com.microsoft.z3.Expr[_]): BoolExpr = {

@@ -1,9 +1,8 @@
 package microc.symbolic_execution
 
-import microc.ast.{AndAnd, BinaryOp, CodeLoc, Equal, Expr, Identifier, IfStmt, Loc, NestedBlockStmt, Not, Null, Number, OrOr, WhileStmt}
+import microc.ast.{AndAnd, BinaryOp, CodeLoc, Equal, Expr, Identifier, IdentifierDecl, IfStmt, Loc, NestedBlockStmt, Not, Null, Number, OrOr, WhileStmt}
 import microc.cfg.CfgNode
-import microc.interpreter.Value.FunVal
-import microc.symbolic_execution.Value.{NullRef, PointerVal, RefVal, Symbolic, SymbolicExpr, SymbolicVal, Val}
+import microc.symbolic_execution.Value.{NullRef, PointerVal, RefVal, Symbolic, SymbolicExpr, SymbolicVal, UninitializedRef, Val}
 
 import scala.collection.mutable
 
@@ -11,24 +10,35 @@ import scala.collection.mutable
 
 
 
-class SymbolicState(var nextStatement: CfgNode, var pathCondition: PathCondition, val symbolicStore: SymbolicStore, var callStack: List[CfgNode] = List.empty) {
+class SymbolicState(
+                     var nextStatement: CfgNode,
+                     var pathCondition: PathCondition,
+                     var symbolicStore: SymbolicStore,
+                     var callStack: List[(CfgNode, List[IdentifierDecl])] = List.empty,
+                     var variableDecls: List[IdentifierDecl] = List.empty
+                   ) {
 
   var returnValue: Val = Number(0, CodeLoc(0, 0))
 
-  def updatedVar(variable: PointerVal, value: Val): SymbolicState = {
-    symbolicStore.updateRef(variable, value)
-    new SymbolicState(nextStatement, pathCondition, symbolicStore, callStack)
+  def deepCopy(): SymbolicState = {
+    new SymbolicState(this.nextStatement, this.pathCondition, this.symbolicStore.deepCopy(), this.callStack, this.variableDecls)
   }
 
-  def addedNewVar(variable: String): SymbolicState = {
-    symbolicStore.addNewVar(variable)
-    new SymbolicState(nextStatement, pathCondition, symbolicStore, callStack)
+  def updatedVar(variable: PointerVal, value: Val): SymbolicState = {
+    symbolicStore.updateRef(variable, value)
+    new SymbolicState(nextStatement, pathCondition, symbolicStore, callStack, variableDecls)
+  }
+
+  def addedNewVar(variable: IdentifierDecl): SymbolicState = {
+    symbolicStore.addNewVar(variable.name)
+    variableDecls = variableDecls.appended(variable)
+    new SymbolicState(nextStatement, pathCondition, symbolicStore, callStack, variableDecls)
   }
 
   def addedVar(variable: String, v: Val): SymbolicState = {
     val ptr = symbolicStore.addNewVar(variable)
     symbolicStore.storage.addVal(ptr, v)
-    new SymbolicState(nextStatement, pathCondition, symbolicStore, callStack)
+    new SymbolicState(nextStatement, pathCondition, symbolicStore, callStack, variableDecls)
   }
 
   def addedAlloc(v: Val): PointerVal = {
@@ -38,15 +48,15 @@ class SymbolicState(var nextStatement: CfgNode, var pathCondition: PathCondition
   }
 
   def nextStates(): Array[SymbolicState] = {
-    nextStatement.succ.map { node => new SymbolicState(node, pathCondition, symbolicStore, callStack)}.toArray
+    nextStatement.succ.map { node => new SymbolicState(node, pathCondition, symbolicStore, callStack, variableDecls)}.toArray
   }
 
   def nextState(): SymbolicState = {
-    new SymbolicState(nextStatement.succ.head, pathCondition, symbolicStore, callStack)
+    new SymbolicState(nextStatement.succ.head, pathCondition, symbolicStore, callStack, variableDecls)
   }
 
-  def goTo(nextStatement: CfgNode): SymbolicState = {
-    new SymbolicState(nextStatement, pathCondition, symbolicStore, callStack)
+  def goTo(nextStatement: CfgNode, variableDecls: List[IdentifierDecl]): SymbolicState = {
+    new SymbolicState(nextStatement, pathCondition, symbolicStore, callStack, variableDecls)
   }
 
   def getSymbolicValOpt(name: String): Option[RefVal] = {
@@ -57,8 +67,26 @@ class SymbolicState(var nextStatement: CfgNode, var pathCondition: PathCondition
     symbolicStore.getValOfPtr(ptr)
   }
 
-  def getSymbolicVal(name: String, loc: Loc): Val = {
-    symbolicStore.getVal(name, loc)
+  def getSymbolicVal(name: String, loc: Loc, allowReturnNonInitialized: Boolean = false): Val = {
+    symbolicStore.getVal(name, loc, allowReturnNonInitialized)
+  }
+
+  def addedLoopTrace(trace: (Expr, mutable.HashMap[String, Expr => Expr])): SymbolicState = {
+    val newState = new SymbolicState(nextStatement.succ.maxBy(node => node.id), new PathCondition(None, BinaryOp(AndAnd, pathCondition.expr, trace._1, CodeLoc(0, 0))), symbolicStore, callStack, variableDecls)
+    for (change <- trace._2) {
+      if (Utility.varIsFromOriginalProgram(change._1)) {
+        val ptr = newState.getSymbolicValOpt(change._1).get.asInstanceOf[PointerVal]
+        val ptrVal = symbolicStore.getValOfPtr(ptr, true) match {
+          case Some(UninitializedRef) =>
+            Some(SymbolicVal(CodeLoc(0, 0)))
+          case o =>
+            o
+
+        }
+        updatedVar(ptr, SymbolicExpr(trace._2(change._1).apply(ptrVal.get.asInstanceOf[Symbolic]), CodeLoc(0, 0)))
+      }
+    }
+    newState
   }
 
   def loadVariablesToExpr(expr: Expr): Expr = {
@@ -77,15 +105,15 @@ class SymbolicState(var nextStatement: CfgNode, var pathCondition: PathCondition
 
   def addToPathCondition(expr: Expr): PathCondition = {
     val pathConditionNewExpr = loadVariablesToExpr(expr)
-    pathConditionNewExpr match {
-      case Number(value, _) if value == 1 =>
-        this.pathCondition
-      case BinaryOp(Equal, Number(value1, _), Number(value2, _), _) if value1 == 1 && value2 == 1 =>
-        this.pathCondition
-      case _ =>
-        new PathCondition(pathCondition.prev, BinaryOp(AndAnd, pathCondition.expr, pathConditionNewExpr, expr.loc))
+//    pathConditionNewExpr match {
+//      case Number(value, _) if value == 1 =>
+//        this.pathCondition
+//      case BinaryOp(Equal, Number(value1, _), Number(value2, _), _) if value1 == 1 && value2 == 1 =>
+//        this.pathCondition
+//      case _ =>
+        new PathCondition(Some(pathCondition), BinaryOp(AndAnd, pathCondition.expr, pathConditionNewExpr, expr.loc))
 
-    }
+    //}
   }
 
   def getIfTrueState(): SymbolicState = {
@@ -95,14 +123,14 @@ class SymbolicState(var nextStatement: CfgNode, var pathCondition: PathCondition
         ast match {
           case IfStmt(guard, thenBranch, _, _) =>
             if (thenBranch.asInstanceOf[NestedBlockStmt].body.isEmpty) {//no statements - go to a statement after else
-                return new SymbolicState(nextStatement.succ.maxBy(node => node.id), addToPathCondition(guard), symbolicStore.deepCopy(), callStack.map(identity))
+                return new SymbolicState(nextStatement.succ.maxBy(node => node.id), addToPathCondition(guard), symbolicStore.deepCopy(), callStack.map(identity), variableDecls)
             }
             if (thenBranch.asInstanceOf[NestedBlockStmt].body.head == node.ast) {
-              return new SymbolicState(node, addToPathCondition(guard), symbolicStore.deepCopy(), callStack.map(identity))
+              return new SymbolicState(node, addToPathCondition(guard), symbolicStore.deepCopy(), callStack.map(identity), variableDecls)
             }
           case WhileStmt(guard, block, _) =>
             if (block.asInstanceOf[NestedBlockStmt].body.head == node.ast) {
-              return new SymbolicState(node, addToPathCondition(guard), symbolicStore.deepCopy(), callStack.map(identity))
+              return new SymbolicState(node, addToPathCondition(guard), symbolicStore.deepCopy(), callStack.map(identity), variableDecls)
             }
           //return new SymbolicState(node, pathCondition, symbolicStore.deepCopy(), callStack.map(identity))//TODO not sure if this is correct
           case _ =>
@@ -114,18 +142,24 @@ class SymbolicState(var nextStatement: CfgNode, var pathCondition: PathCondition
 
   def getIfFalseState(): SymbolicState = {
     val ast = nextStatement.ast;
-    nextStatement.succ.foreach(
-      node => {
-        ast match {
-          case IfStmt(guard, _, Some(NestedBlockStmt(elseBranch, loc)), _) =>
-            if (elseBranch.head == node.ast) {
-              return new SymbolicState(node, addToPathCondition(Not(guard, loc)), symbolicStore.deepCopy(), callStack.map(identity))
+    ast match {
+      case WhileStmt(guard, _, loc) =>
+        return new SymbolicState(nextStatement.succ.maxBy(node => node.id), addToPathCondition(Not(guard, loc)), symbolicStore.deepCopy(), callStack.map(identity), variableDecls)//TODO add to path condition
+      case IfStmt(guard, _, None, loc) =>
+        return new SymbolicState(nextStatement.succ.maxBy(node => node.id), addToPathCondition(Not(guard, loc)), symbolicStore.deepCopy(), callStack.map(identity), variableDecls)
+      case IfStmt(guard, _, Some(NestedBlockStmt(elseBranch, loc)), _) =>
+        nextStatement.succ.foreach(
+          node => {
+            if (elseBranch.isEmpty) {//TODO this should maybe be andled by the parser
+              return new SymbolicState(nextStatement.succ.maxBy(node => node.id), addToPathCondition(Not(guard, loc)), symbolicStore.deepCopy(), callStack.map(identity), variableDecls)
             }
-          case _ =>
-        }
-      }
-    )
-    new SymbolicState(nextStatement.succ.maxBy(node => node.id), pathCondition, symbolicStore.deepCopy(), callStack.map(identity))//TODO add to path condition
+            if (elseBranch.head == node.ast) {
+              return new SymbolicState(node, addToPathCondition(Not(guard, loc)), symbolicStore.deepCopy(), callStack.map(identity), variableDecls)
+            }
+          }
+        )
+    }
+    throw new Exception("This should not happen")
   }
 
   def applyChange(changes: mutable.HashMap[String, Expr => Val]): SymbolicState = {
@@ -149,7 +183,9 @@ class SymbolicState(var nextStatement: CfgNode, var pathCondition: PathCondition
     new SymbolicState(
       nextStatement,
       new PathCondition(None, BinaryOp(OrOr, this.pathCondition.expr, other.pathCondition.expr, CodeLoc(0, 0))),
-      symbolicStore = symbolicStore.mergeStores(other.symbolicStore, pathCondition).get
+      symbolicStore = symbolicStore.mergeStores(other.symbolicStore, pathCondition).get,
+      callStack = this.callStack,
+      variableDecls = this.variableDecls
     )
   }
 

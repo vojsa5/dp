@@ -5,7 +5,6 @@ import microc.ast.{AndAnd, BinaryOp, CodeLoc, Divide, Equal, Expr, GreaterEqual,
 import microc.symbolic_execution.Value.{IteVal, Symbolic, SymbolicExpr, SymbolicVal, UninitializedRef, Val}
 
 import scala.collection.mutable
-import scala.util.Random
 
 class ConstraintSolver(val ctx: Context) {
 
@@ -198,19 +197,20 @@ class ConstraintSolver(val ctx: Context) {
   }
 
 
-  def applyVal(v: Val, state: SymbolicState): Expr = {
+  def applyVal(v: Val, state: SymbolicState, allowReturnNonInitialized: Boolean = false): Expr = {
     v match {
       case n@Number(_, _) => n
       case v@SymbolicVal(_) => v
-      case SymbolicExpr(expr, _) => applyTheState(expr, state)
+      case SymbolicExpr(expr, _) => applyTheState(expr, state, allowReturnNonInitialized)
       case IteVal(val1, val2, cond, loc) =>
         (applyVal(val1, state), applyVal(val2, state)) match {
-          case (a: Symbolic, b: Symbolic) => IteVal(a, b, applyTheState(cond, state), loc)
-          case (a: Symbolic, b) => IteVal(a, SymbolicExpr(b, loc), applyTheState(cond, state), loc)
-          case (a, b: Symbolic) => IteVal(SymbolicExpr(a, loc), b, applyTheState(cond, state), loc)
-          case (a, b) => IteVal(SymbolicExpr(a, loc), SymbolicExpr(b, loc), applyTheState(cond, state), loc)
+          case (a: Symbolic, b: Symbolic) => IteVal(a, b, applyTheState(cond, state, allowReturnNonInitialized), loc)
+          case (a: Symbolic, b) => IteVal(a, SymbolicExpr(b, loc), applyTheState(cond, state, allowReturnNonInitialized), loc)
+          case (a, b: Symbolic) => IteVal(SymbolicExpr(a, loc), b, applyTheState(cond, state, allowReturnNonInitialized), loc)
+          case (a, b) => IteVal(SymbolicExpr(a, loc), SymbolicExpr(b, loc), applyTheState(cond, state, allowReturnNonInitialized), loc)
         }
-      case _ => throw new Exception("IMPLEMENT")
+      case _ =>
+        throw new Exception("IMPLEMENT")
     }
   }
 
@@ -218,17 +218,36 @@ class ConstraintSolver(val ctx: Context) {
   def applyTheState(expr: Expr, state: SymbolicState, allowReturnNonInitialized: Boolean = false): Expr = {
     var res = expr match {
       case Not(expr, loc) =>
-        Not(applyTheState(expr, state), loc)
-      case BinaryOp(operator, left, right, loc) => BinaryOp(operator, applyTheState(left, state), applyTheState(right, state), loc)
-      case Identifier(name, loc) => applyVal(state.getSymbolicVal(name, loc, allowReturnNonInitialized), state)
+        Not(applyTheState(expr, state, allowReturnNonInitialized), loc)
+      case BinaryOp(operator, left, right, loc) => BinaryOp(operator, applyTheState(left, state, allowReturnNonInitialized), applyTheState(right, state, allowReturnNonInitialized), loc)
+      case Identifier(name, loc) => applyVal(state.getSymbolicVal(name, loc, allowReturnNonInitialized), state, allowReturnNonInitialized)
       case n@Number(_, _) => n
       case v@SymbolicVal(_) => v
-      case SymbolicExpr(expr, _) => applyTheState(expr, state)
+      case SymbolicExpr(expr, _) => applyTheState(expr, state, allowReturnNonInitialized)
     }
     if (res != expr) {
-      res = applyTheState(res, state)
+      res = applyTheState(res, state, allowReturnNonInitialized)
     }
     res
+  }
+
+  def applyTheStateOnce(expr: Expr, state: SymbolicState, allowReturnNonInitialized: Boolean = false): Expr = {
+    expr match {
+      case Not(expr, loc) =>
+        Not(applyTheStateOnce(expr, state, allowReturnNonInitialized), loc)
+      case BinaryOp(operator, left, right, loc) => BinaryOp(operator, applyTheStateOnce(left, state, allowReturnNonInitialized), applyTheStateOnce(right, state, allowReturnNonInitialized), loc)
+      case Identifier(name, loc) =>
+        val i = state.getSymbolicVal(name, loc, allowReturnNonInitialized)
+        state.getSymbolicVal(name, loc, allowReturnNonInitialized) match {
+          case n: Number => n
+          case s: SymbolicVal => s
+          case e: SymbolicExpr => e.value
+          case _ => throw new Exception("IMPLEMENT")
+        }
+      case n@Number(_, _) => n
+      case v@SymbolicVal(_) => v
+      case SymbolicExpr(expr, _) => applyTheStateOnce(expr, state, allowReturnNonInitialized)
+    }
   }
 
   def applyTheStateWithChangesAsFunctions(expr: Expr, symbolicState: SymbolicState, changes: mutable.HashMap[String, Expr => Expr]): Expr = {

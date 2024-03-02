@@ -2,7 +2,7 @@ package microc.symbolic_execution
 
 import com.microsoft.z3.Status
 import microc.ast.{AndAnd, BinaryOp, BinaryOperator, CodeLoc, Expr, GreaterEqual, Identifier, IdentifierDecl, Not, Number, OrOr, Plus, Program, WhileStmt}
-import microc.symbolic_execution.Value.{SymbolicExpr, SymbolicVal}
+import microc.symbolic_execution.Value.{Symbolic, SymbolicExpr, SymbolicVal}
 
 import scala.collection.mutable
 
@@ -21,9 +21,14 @@ case class PDA(loopSummary: LoopSummary, vertices: List[Vertex], variables: List
 
   def initialize(): Unit = {
     for (vertex <- vertices) {
-      val a = BinaryOp(AndAnd, vertex.condition, symbolicState.pathCondition.expr, CodeLoc(0, 0))
-      val b = solver.createConstraintWithState(BinaryOp(AndAnd, vertex.condition, symbolicState.pathCondition.expr, CodeLoc(0, 0)), symbolicState, true)
-      solver.solveConstraint(solver.createConstraintWithState(BinaryOp(AndAnd, vertex.condition, symbolicState.pathCondition.expr, CodeLoc(0, 0)), symbolicState, true)) match {
+      var newState = symbolicState.deepCopy()
+      for (change <- vertex.change) {
+        if (!Utility.varIsFromOriginalProgram(change._1) && !newState.containsVar(change._1)) {
+          val b = SymbolicExpr(change._2.apply(Number(1, CodeLoc(0, 0))).apply(Number(1, CodeLoc(0, 0))), CodeLoc(0, 0))
+          newState = newState.addedVar(change._1, SymbolicExpr(change._2.apply(Number(1, CodeLoc(0, 0))).apply(Number(1, CodeLoc(0, 0))), CodeLoc(0, 0)))
+        }
+      }
+      solver.solveConstraint(solver.createConstraintWithState(BinaryOp(AndAnd, vertex.condition, newState.pathCondition.expr, CodeLoc(0, 0)), newState, true)) match {
         case Status.SATISFIABLE =>
           entryStates.add(vertex)
         case _ =>
@@ -142,14 +147,9 @@ case class Trace() {
     if (cycleTrace2.nonEmpty) {
       val newRes = new mutable.HashSet[(Expr, mutable.HashMap[String, Expr => Expr])]()
       for (changes <- res) {
-
-        val x1 = changes._2("x").apply(Number(0, CodeLoc(0, 0)))
-
         val changesWithCycles = new mutable.HashMap[String, Expr => Expr]
         for (change <- changes._2) {
           val changes2 = cycleTrace2.get._2
-          val x2 = changes2("x").apply(Number(0, CodeLoc(0, 0)))
-          val z2 = changes2("z").apply(Number(0, CodeLoc(0, 0)))
           if (changes2.contains(change._1)) {
             changesWithCycles.put(change._1, variable => change._2.apply(changes2(change._1).apply(variable)))
           }
@@ -162,15 +162,9 @@ case class Trace() {
             changesWithCycles.put(cycleChange._1, cycleChange._2)
           }
         }
-        val x3 = changesWithCycles("x").apply(Number(0, CodeLoc(0, 0)))
-        val z3 = changesWithCycles("z").apply(Number(0, CodeLoc(0, 0)))
-        if (changes._2.contains("z")) {
-          val z1 = changes._2("z").apply(Number(0, CodeLoc(0, 0)))
-          null
-        }
         newRes.add((BinaryOp(AndAnd, changes._1, cycleTrace2.get._1, CodeLoc(0, 0)), changesWithCycles))
       }
-      res = newRes
+      res.addAll(newRes)
     }
   }
 
@@ -203,10 +197,13 @@ case class Trace() {
     else {
       var res: (Expr, mutable.HashMap[String, Expr => Expr]) = (Number(1, CodeLoc(0, 0)), new mutable.HashMap[String, Expr => Expr]())
       for (edge <- pda.edges(currPath.path)) {
+        val k = pda.solver.applyTheState(edge.condition, symbolicState)
+        var newState = symbolicState.deepCopy()
         val condition = LoopSummary.simplifyArithExpr(BinaryOp(AndAnd, traceCondition, pda.solver.applyTheState(edge.condition, symbolicState), edge.condition.loc))
+        //val condition = pda.solver.applyTheState(edge.condition, symbolicState)
         pda.solver.solveConstraint(pda.solver.createConstraintWithState(condition, symbolicState, true)) match {
           case Status.SATISFIABLE =>
-            val ncond = pda.solver.applyTheStateWithChangesAsFunctions(condition, symbolicState, edge.change)
+            val ncond = condition//pda.solver.applyTheState(pda.solver.applyTheStateWithChangesAsFunctions(condition, symbolicState, edge.change), symbolicState)
             val nrec = new mutable.LinkedHashMap[Vertex, (Expr, mutable.HashMap[String, Expr => Expr])]()
             for (i <- rec) {
               nrec.put(i._1, i._2)
@@ -221,10 +218,11 @@ case class Trace() {
               }
               else {
                 newUpdatedVariables.put(update._1, update._2)
+                newState = newState.addedVar(update._1, SymbolicExpr(update._2.apply(symbolicState.getSymbolicVal(update._1, CodeLoc(0, 0), true).asInstanceOf[Symbolic]), CodeLoc(0, 0)))
               }
             }
             nrec.put(currPath, (ncond, edge.change))
-            summarizeTrace(pda, symbolicState, edge.destination, ncond, newUpdatedVariables, nrec)
+            summarizeTrace(pda, newState, edge.destination, ncond, newUpdatedVariables, nrec)
           case _ =>
         }
       }

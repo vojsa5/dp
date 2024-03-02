@@ -494,11 +494,20 @@ class SymbolicExecutor(program: ProgramCfg,
             evaluate(index, symbolicState) match {
               case Number(value, _) =>
                 if (value >= elems.length || value < 0) {
-                  throw errorArrayOutOfBounds(loc, value, elems.length)
+                  throw errorArrayOutOfBounds(loc, elems.length, value)
                 }
                 symbolicState.getVal(elems(value)) match {
                   case Some(v) => v
                   case None => throw errorUninitializedReference(loc)
+                }
+              case s: Symbolic =>
+                solver.solveConstraint(
+                  solver.createConstraintWithState(BinaryOp(AndAnd, BinaryOp(LowerThan, s, Number(0, loc), loc), symbolicState.pathCondition.expr, loc), symbolicState)) match {
+                  case Status.SATISFIABLE =>
+                    throw errorArrayOutOfBounds(loc, elems.length, 0)//TODO
+                  case Status.UNSATISFIABLE =>
+                    throw new Exception("IMPLEMENT")
+                  case Status.UNKNOWN => throw new Exception("IMPLEMENT")
                 }
               case _ => throw errorNonIntArithmetics(loc)
             }

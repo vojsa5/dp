@@ -99,6 +99,22 @@ class SymbolicStore(functionDeclarations: Map[String, FunVal]) {
     None
   }
 
+  def contains(name: String): Boolean = {
+    for (frame <- frames.reverse) {
+      if (frame.contains(name)) {
+        storage.getVal(frame(name).asInstanceOf[PointerVal]) match {
+          case Some(UninitializedRef) =>
+            return false
+          case Some(_) =>
+            return true
+          case _ =>
+            return false
+        }
+      }
+    }
+    false
+  }
+
   def getValOfPtr(ptr: PointerVal, allowReturnNonInitialized: Boolean = false): Option[Val] = {
     storage.getVal(ptr, allowReturnNonInitialized)
   }

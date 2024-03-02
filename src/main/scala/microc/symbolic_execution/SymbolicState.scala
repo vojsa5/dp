@@ -63,30 +63,27 @@ class SymbolicState(
     symbolicStore.findVar(name)
   }
 
+  def containsVar(name: String): Boolean = {
+    symbolicStore.contains(name)
+  }
+
   def getVal(ptr: PointerVal): Option[Val] = {
     symbolicStore.getValOfPtr(ptr)
   }
 
   def getSymbolicVal(name: String, loc: Loc, allowReturnNonInitialized: Boolean = false): Val = {
-    symbolicStore.getVal(name, loc, allowReturnNonInitialized)
+    val res = symbolicStore.getVal(name, loc, allowReturnNonInitialized)
+    if (allowReturnNonInitialized) {
+      res match {
+        case UninitializedRef => return SymbolicVal(CodeLoc(0, 0))
+        case _ =>
+      }
+    }
+    res
   }
 
   def addedLoopTrace(trace: (Expr, mutable.HashMap[String, Expr => Expr])): SymbolicState = {
-    val newState = new SymbolicState(nextStatement.succ.maxBy(node => node.id), new PathCondition(None, BinaryOp(AndAnd, pathCondition.expr, trace._1, CodeLoc(0, 0))), symbolicStore, callStack, variableDecls)
-    for (change <- trace._2) {
-      if (Utility.varIsFromOriginalProgram(change._1)) {
-        val ptr = newState.getSymbolicValOpt(change._1).get.asInstanceOf[PointerVal]
-        val ptrVal = symbolicStore.getValOfPtr(ptr, true) match {
-          case Some(UninitializedRef) =>
-            Some(SymbolicVal(CodeLoc(0, 0)))
-          case o =>
-            o
-
-        }
-        updatedVar(ptr, SymbolicExpr(trace._2(change._1).apply(ptrVal.get.asInstanceOf[Symbolic]), CodeLoc(0, 0)))
-      }
-    }
-    newState
+    new SymbolicState(nextStatement.succ.maxBy(node => node.id), new PathCondition(None, BinaryOp(AndAnd, pathCondition.expr, trace._1, CodeLoc(0, 0))), symbolicStore, callStack, variableDecls)
   }
 
   def loadVariablesToExpr(expr: Expr): Expr = {

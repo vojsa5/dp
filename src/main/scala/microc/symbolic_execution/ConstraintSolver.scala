@@ -1,8 +1,8 @@
 package microc.symbolic_execution
 
 import com.microsoft.z3.{ArithExpr, ArithSort, BoolExpr, Context, IntExpr, IntNum, Status}
-import microc.ast.{AndAnd, BinaryOp, CodeLoc, Divide, Equal, Expr, GreaterEqual, GreaterThan, Identifier, LowerEqual, LowerThan, Minus, Not, NotEqual, Null, Number, OrOr, Plus, Times}
-import microc.symbolic_execution.Value.{IteVal, Symbolic, SymbolicExpr, SymbolicVal, UninitializedRef, Val}
+import microc.ast.{AndAnd, BinaryOp, CodeLoc, Divide, Equal, Expr, FieldAccess, GreaterEqual, GreaterThan, Identifier, Input, LowerEqual, LowerThan, Minus, Not, NotEqual, Null, Number, OrOr, Plus, Times}
+import microc.symbolic_execution.Value.{IteVal, PointerVal, Symbolic, SymbolicExpr, SymbolicVal, UninitializedRef, Val}
 
 import scala.collection.mutable
 
@@ -29,7 +29,10 @@ class ConstraintSolver(val ctx: Context) {
   def createConstraint(expr: Expr): com.microsoft.z3.Expr[_] = {
     expr match {
       case Not(expr, _) =>
-        ctx.mkNot(getCondition(createConstraint(expr)))
+        val numExpr = createConstraint(expr).asInstanceOf[ArithExpr[ArithSort]]
+        val zero = ctx.mkInt(0)
+        val one = ctx.mkInt(1)
+        ctx.mkITE(ctx.mkEq(numExpr, zero), one, zero)
       case BinaryOp(operator, left, right, _) =>
         operator match {
           case Plus => ctx.mkAdd(
@@ -94,22 +97,23 @@ class ConstraintSolver(val ctx: Context) {
   }
 
 
-  def valToExpr(v: Val, state: SymbolicState): com.microsoft.z3.Expr[_] = {
+  def valToExpr(v: Val, state: SymbolicState, allowNonInitializedVals: Boolean = false): com.microsoft.z3.Expr[_] = {
     v match {
       case Number(value, _) =>
         ctx.mkInt(value)
       case v@SymbolicVal(_) =>
         ctx.mkIntConst(v.name)
       case SymbolicExpr(expr, _) =>
-        createConstraintWithState(expr, state)
+        createConstraintWithState(expr, state, allowNonInitializedVals)
       case IteVal(val1, val2, cond, _) =>
         ctx.mkITE(
-          getCondition(createConstraintWithState(cond, state)),
-          valToExpr(val1, state),
-          valToExpr(val2, state)
+          getCondition(createConstraintWithState(cond, state, allowNonInitializedVals)),
+          valToExpr(val1, state, allowNonInitializedVals),
+          valToExpr(val2, state, allowNonInitializedVals)
         )
       case UninitializedRef => //TODO merge with symbolic val generation
         ctx.mkIntConst(Utility.generateRandomString())
+      case PointerVal(address) => ctx.mkInt(address)
       case _ =>
         throw new Exception("IMPLEMENT")
     }
@@ -119,7 +123,15 @@ class ConstraintSolver(val ctx: Context) {
   def createConstraintWithState(expr: Expr, state: SymbolicState, allowNonInitializedVals: Boolean = false): com.microsoft.z3.Expr[_] = {
     expr match {
       case Not(expr, _) =>
-          ctx.mkNot(getCondition(createConstraintWithState(expr, state, allowNonInitializedVals)))
+        val zero = ctx.mkInt(0)
+        val one = ctx.mkInt(1)
+
+        val innerResult = createConstraintWithState(expr, state, allowNonInitializedVals)
+        val cond = innerResult match {
+          case boolExpr: BoolExpr => boolExpr
+          case numExpr: ArithExpr[_] => ctx.mkEq (numExpr, zero)
+        }
+        ctx.mkITE(cond, one, zero)
       case BinaryOp(operator, left, right, _) =>
         operator match {
           case Plus => ctx.mkAdd(
@@ -140,14 +152,14 @@ class ConstraintSolver(val ctx: Context) {
           )
           case Equal =>
             ctx.mkEq(
-              createConstraintWithState(left, state, allowNonInitializedVals).asInstanceOf[ArithExpr[ArithSort]],
-              createConstraintWithState(right, state, allowNonInitializedVals).asInstanceOf[ArithExpr[ArithSort]]
+              createConstraintWithState(left, state, allowNonInitializedVals),
+              createConstraintWithState(right, state, allowNonInitializedVals)
             )
           case NotEqual =>
             ctx.mkNot(
               ctx.mkEq(
-                createConstraintWithState(left, state, allowNonInitializedVals).asInstanceOf[ArithExpr[ArithSort]],
-                createConstraintWithState(right, state, allowNonInitializedVals).asInstanceOf[ArithExpr[ArithSort]]
+                createConstraintWithState(left, state, allowNonInitializedVals),
+                createConstraintWithState(right, state, allowNonInitializedVals)
               )
             )
           case GreaterThan =>
@@ -182,7 +194,7 @@ class ConstraintSolver(val ctx: Context) {
             )
         }
       case Identifier(name, loc) =>
-        valToExpr(state.getSymbolicVal(name, loc, allowNonInitializedVals), state)
+        valToExpr(state.getSymbolicVal(name, loc, allowNonInitializedVals), state, allowNonInitializedVals)
       case Number(value, _) => ctx.mkInt(value)
       case v@SymbolicVal(_) => ctx.mkIntConst(v.name)
       case SymbolicExpr(expr, _) => createConstraintWithState(expr, state, allowNonInitializedVals)
@@ -190,9 +202,13 @@ class ConstraintSolver(val ctx: Context) {
       case IteVal(trueState, falseState, expr, _) =>
         ctx.mkITE(
           getCondition(createConstraintWithState(expr, state, allowNonInitializedVals)),
-          valToExpr(trueState, state),
-          valToExpr(falseState, state)
+          valToExpr(trueState, state, allowNonInitializedVals),
+          valToExpr(falseState, state, allowNonInitializedVals)
         )
+      case Input(_) =>
+        ctx.mkIntConst(SymbolicVal(CodeLoc(0, 0)).name)
+      case _ =>
+        throw new Exception("IMPLEMENT")
     }
   }
 

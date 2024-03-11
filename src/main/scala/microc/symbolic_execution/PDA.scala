@@ -239,8 +239,9 @@ case class Trace() {
     for (r <- rec) {
       initialConstraint = BinaryOp(AndAnd, initialConstraint, r._2._1, initialConstraint.loc)
       for (update <- r._2._2) {
-        if (newUpdatedVariables.contains(update._1)) {
-          newUpdatedVariables.put(update._1, variable => update._2.apply(newUpdatedVariables(update._1).apply(variable)))
+        if (newUpdatedVariables.contains(update._1) && Utility.varIsFromOriginalProgram(update._1)) {
+          val prev = newUpdatedVariables(update._1)
+          newUpdatedVariables.put(update._1, variable => BinaryOp(OrOr, update._2.apply(variable), prev.apply(variable), CodeLoc(0, 0)))
         }
         else {
           newUpdatedVariables.put(update._1, update._2)
@@ -252,7 +253,12 @@ case class Trace() {
     for (update <- newUpdatedVariables) {
       val tmp: Expr => Expr = variable => {
         val expr = update._2.apply(variable)
-        pda.applyIterationsCount(expr, LoopSummary.getSymbolicValsFromExpr(expr).head, iterations)
+        if (LoopSummary.getSymbolicValsFromExpr(expr).nonEmpty) {
+          pda.applyIterationsCount(expr, LoopSummary.getSymbolicValsFromExpr(expr).head, iterations)
+        }
+        else {
+          expr
+        }
       }
       newUpdatedVariables2.put(update._1, tmp)
     }
@@ -260,7 +266,7 @@ case class Trace() {
     cycleTrace2 = Some(initialConstraint, newUpdatedVariables2)
 
   }
-
+/*
   def constructCycleState(pda: PDA, symbolicState: SymbolicState, rec: mutable.LinkedHashMap[Vertex, (Expr, mutable.HashMap[String, Expr => Expr])], updated_variables: mutable.HashMap[String, Expr => Expr], traceCondition: Expr) = {
     val interestingVars = new mutable.HashMap[String, Expr]()
     for (v <- pda.variables) {
@@ -402,5 +408,5 @@ case class Trace() {
     //cycleTrace.get.summarizeTrace(newPDA, pda.symbolicState, cycle(0), traceCondition, newChanges, mutable.LinkedHashMap[Vertex, (Expr, mutable.HashMap[String, Expr => Expr])]())
 
     null
-  }
+  }*/
 }

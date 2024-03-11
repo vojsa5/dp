@@ -559,7 +559,7 @@ class SymbolicStoreTest extends FunSuite with MicrocSupport with Examples {
     assert(store1.storeEquals(mergedStore))
     assert(store2.storeEquals(mergedStore))
 
-    assert(mergedStore.getVal("y", CodeLoc(0, 0)).equals(mergedStore.getVal("z", CodeLoc(0, 0))))
-    assert(mergedStore.getVal("z", CodeLoc(0, 0)).equals(mergedStore.getVal("y", CodeLoc(0, 0))))
+    assert(mergedStore.getVal("y", CodeLoc(0, 0)).equalsVal(mergedStore.getVal("z", CodeLoc(0, 0))))
+    assert(mergedStore.getVal("z", CodeLoc(0, 0)).equalsVal(mergedStore.getVal("y", CodeLoc(0, 0))))
   }
 }

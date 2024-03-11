@@ -23,14 +23,14 @@ class MergedSymbolicState(
         ast match {
           case IfStmt(guard, thenBranch, _, _) =>
             if (thenBranch.asInstanceOf[NestedBlockStmt].body.isEmpty) {//no statements - go to a statement after else
-              return new SymbolicState(nextStatement.succ.maxBy(node => node.id), addToPathCondition(guard), symbolicStore.deepCopy(), callStack.map(identity))
+              return new MergedSymbolicState(nextStatement.succ.maxBy(node => node.id), addToPathCondition(guard), symbolicStore.deepCopy(), callStack.map(identity), subStates)
             }
             if (thenBranch.asInstanceOf[NestedBlockStmt].body.head == node.ast) {
-              return new SymbolicState(node, addToPathCondition(guard), symbolicStore.deepCopy(), callStack.map(identity))
+              return new MergedSymbolicState(node, addToPathCondition(guard), symbolicStore.deepCopy(), callStack.map(identity), subStates)
             }
           case WhileStmt(guard, block, _) =>
             if (block.asInstanceOf[NestedBlockStmt].body.head == node.ast) {
-              return new SymbolicState(node, addToPathCondition(guard), symbolicStore.deepCopy(), callStack.map(identity))
+              return new MergedSymbolicState(node, addToPathCondition(guard), symbolicStore.deepCopy(), callStack.map(identity), subStates)
             }
           //return new SymbolicState(node, pathCondition, symbolicStore.deepCopy(), callStack.map(identity))//TODO not sure if this is correct
           case _ =>
@@ -44,17 +44,17 @@ class MergedSymbolicState(
     val ast = nextStatement.ast;
     ast match {
       case WhileStmt(guard, _, loc) =>
-        return new SymbolicState(nextStatement.succ.maxBy(node => node.id), addToPathCondition(Not(guard, loc)), symbolicStore.deepCopy(), callStack.map(identity))//TODO add to path condition
+        return new MergedSymbolicState(nextStatement.succ.maxBy(node => node.id), addToPathCondition(Not(guard, loc)), symbolicStore.deepCopy(), callStack.map(identity), subStates)//TODO add to path condition
       case IfStmt(guard, _, None, loc) =>
-        return new SymbolicState(nextStatement.succ.maxBy(node => node.id), addToPathCondition(Not(guard, loc)), symbolicStore.deepCopy(), callStack.map(identity))
+        return new MergedSymbolicState(nextStatement.succ.maxBy(node => node.id), addToPathCondition(Not(guard, loc)), symbolicStore.deepCopy(), callStack.map(identity), subStates)
       case IfStmt(guard, _, Some(NestedBlockStmt(elseBranch, loc)), _) =>
         nextStatement.succ.foreach(
           node => {
             if (elseBranch.isEmpty) {//TODO this should maybe be andled by the parser
-              return new SymbolicState(nextStatement.succ.maxBy(node => node.id), addToPathCondition(Not(guard, loc)), symbolicStore.deepCopy(), callStack.map(identity))
+              return new MergedSymbolicState(nextStatement.succ.maxBy(node => node.id), addToPathCondition(Not(guard, loc)), symbolicStore.deepCopy(), callStack.map(identity), subStates)
             }
             if (elseBranch.head == node.ast) {
-              return new SymbolicState(node, addToPathCondition(Not(guard, loc)), symbolicStore.deepCopy(), callStack.map(identity))
+              return new MergedSymbolicState(node, addToPathCondition(Not(guard, loc)), symbolicStore.deepCopy(), callStack.map(identity), subStates)
             }
           }
         )

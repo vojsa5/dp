@@ -115,8 +115,7 @@ trait CfgFactory {
 
 
   def fromProgram(p: Program): ProgramCfg = {
-    val normalized = new AstNormalizer().normalize(p)
-    for (f <- normalized.funs) {
+    for (f <- p.funs) {
       val fce = new CfgFunEntryNode(id, f)
       programCfg.addFce(fce)
       addCell(fce)

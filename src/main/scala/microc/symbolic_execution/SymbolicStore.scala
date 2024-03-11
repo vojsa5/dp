@@ -31,6 +31,16 @@ class SymbolicStore(functionDeclarations: Map[String, FunVal]) {
       res
     }
 
+    private def iteContainsUninitialized(iteVal: IteVal): Boolean = {
+      iteVal match {
+        case IteVal(trueState, falseState, _, _) if falseState == UninitializedRef || trueState == UninitializedRef => true
+        case IteVal(trueState: IteVal, falseState: IteVal, _, _) => iteContainsUninitialized(trueState) || iteContainsUninitialized(falseState)
+        case IteVal(trueState: IteVal, _, _, _) => iteContainsUninitialized(trueState)
+        case IteVal(_, falseState: IteVal, _, _) => iteContainsUninitialized(falseState)
+        case _ => false
+      }
+    }
+
     def getVal(ptr: PointerVal, allowReturnNonInitialized: Boolean = false): Option[Val] = {
       if (memory.size <= ptr.address) {
         return None
@@ -38,6 +48,19 @@ class SymbolicStore(functionDeclarations: Map[String, FunVal]) {
       memory(ptr.address) match {
         case UninitializedRef if allowReturnNonInitialized => Some(UninitializedRef)
         case UninitializedRef => None
+        case ite@IteVal(_, _, _, _)  => {
+          if (iteContainsUninitialized(ite)) {
+            if (allowReturnNonInitialized) {
+              Some(ite)
+            }
+            else {
+              None
+            }
+          }
+          else {
+            Some(ite)
+          }
+        }
         case v => Some(v)
       }
     }
@@ -167,9 +190,42 @@ class SymbolicStore(functionDeclarations: Map[String, FunVal]) {
           case (None, None) => true
         }
       case (v1, v2) =>
-        v1.equals(v2)
+        v1.equalsVal(v2)
     }
   }
+
+
+  def getDifferentVariables(symbolicStore: SymbolicStore): mutable.HashSet[String] = {
+    val resMap: mutable.HashSet[String] = new mutable.HashSet[String]
+    if (this.frames.size == symbolicStore.frames.size) {
+      for (i <- 0 until this.frames.size) {
+        val thisFrame = this.frames(i)
+        val otherFrame = symbolicStore.frames(i)
+        if (thisFrame.size == otherFrame.size) {
+          val thisVars = thisFrame.keys
+          val otherVars = otherFrame.keys
+          if (thisVars == otherVars) {
+            for (variable <- thisVars) {
+              (thisFrame(variable), otherFrame(variable)) match {
+                case (v1: PointerVal, v2: PointerVal) =>
+                  val res = storeValues(v1, v2, this, symbolicStore)
+                  if (!res) {
+                    resMap.add(variable)
+                  }
+                case (NullRef, _) =>
+                  resMap.add(variable)
+                case (_, NullRef) =>
+                  resMap.add(variable)
+                case _ =>
+              }
+            }
+          }
+        }
+      }
+    }
+    mutable.HashSet.empty
+  }
+
 
 
   def storeEquals(symbolicStore: SymbolicStore): Boolean = {
@@ -182,8 +238,6 @@ class SymbolicStore(functionDeclarations: Map[String, FunVal]) {
           val otherVars = otherFrame.keys
           if (thisVars == otherVars) {
             for (variable <- thisVars) {
-              val a = thisFrame(variable)
-              val b = otherFrame(variable)
               (thisFrame(variable), otherFrame(variable)) match {
                 case (v1: PointerVal, v2: PointerVal) =>
                   val res = storeValues(v1, v2, this, symbolicStore)
@@ -317,12 +371,8 @@ class SymbolicStore(functionDeclarations: Map[String, FunVal]) {
       val otherFrame = other.frames(i)
       for (variable <- thisFrame.keys) {
         if (otherFrame.contains(variable)) {
-          val p1 = thisFrame(variable)
-          val p2 = otherFrame(variable)
           (thisFrame(variable), otherFrame(variable)) match {
             case (PointerVal(ptr1), PointerVal(ptr2)) => {
-              val p = storage.getVal(PointerVal(ptr1))
-              val o = other.storage.getVal(PointerVal(ptr2))
               val (addr1, addr2) = getPtrs(res, this, other, PointerVal(ptr1), PointerVal(ptr2), thisPointerMapping, otherPointerMapping)
               if (addr1.address == addr2.address) {
                 res.addVar(variable, addr1)
@@ -330,8 +380,14 @@ class SymbolicStore(functionDeclarations: Map[String, FunVal]) {
               else {
                 val addr = res.storage.getAddress
                 res.addVar(variable, addr)
-                val v1 = res.storage.getVal(addr1).get
-                val v2 = res.storage.getVal(addr2).get
+                val v1 = res.storage.getVal(addr1, true).get
+                res.storage.getVal(addr2, true).get match {
+                  case UninitializedRef =>
+                    System.out.println("dafdsfddf")
+                  case _ =>
+                }
+
+                val v2 = res.storage.getVal(addr2, true).get
                 res.updateRef(addr, IteVal(v1, v2, pathCondition.expr, CodeLoc(0, 0)))
               }
 //              (storage.getVal(PointerVal(ptr1)), other.storage.getVal(PointerVal(ptr2))) match {

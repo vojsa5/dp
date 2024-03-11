@@ -1,11 +1,12 @@
 package microc.symbolic_execution
 
 import com.microsoft.z3.{ArithExpr, ArithSort, BoolSort, Context, Solver, Status}
-import microc.ast.{AndAnd, AssignStmt, AstNode, BinaryOp, CodeLoc, Expr, Identifier, Not, Null, Number, Stmt}
+import microc.ast.{AndAnd, AssignStmt, AstNode, BinaryOp, CodeLoc, Expr, Identifier, IfStmt, Input, NestedBlockStmt, Not, Null, Number, Stmt}
 import microc.cfg.CfgNode
 import microc.symbolic_execution.PathSubsumption.tmp
 import microc.symbolic_execution.Value.{SymbolicExpr, SymbolicVal}
 
+import scala.annotation.Annotation
 import scala.collection.mutable
 
 
@@ -24,18 +25,22 @@ object PathSubsumption {
       case v@SymbolicVal(_) => v
       case SymbolicExpr(expr, _) => applyIdentifier(expr, identifier, identifierValue)
       case Null(loc) => Null(loc)
+      case Input(loc) => SymbolicVal(CodeLoc(0, 0))
     }
   }
 
 
-  def tmp(stmt: AstNode, annotation: Expr): Expr = {
-    stmt match {
+
+  def tmp(stmt: CfgNode, annotation: Expr, child: CfgNode): Expr = {
+    stmt.ast match {
+      case IfStmt(guard, thenBranch, _, loc) if thenBranch.asInstanceOf[NestedBlockStmt].body.nonEmpty && stmt.succ.minBy(node => node.id) == child =>
+        BinaryOp(AndAnd, guard, annotation, loc)
+      case IfStmt(guard, thenBranch, _, loc) if thenBranch.asInstanceOf[NestedBlockStmt].body.isEmpty && stmt.succ.maxBy(node => node.id) == child =>
+        BinaryOp(AndAnd, guard, annotation, loc)
+      case IfStmt(guard, _, _, loc) =>
+        BinaryOp(AndAnd, Not(guard, loc), annotation, loc)
       case AssignStmt(Identifier(name, loc), right, _) =>
         applyIdentifier(annotation, Identifier(name, loc), right)
-//        tmp2(annotation, name) match {
-//          case Some(expr) => expr
-//          case None => Number(1, loc)
-//        }
       case _ => annotation
     }
   }
@@ -83,9 +88,10 @@ class PathSubsumption(constraintSolver: ConstraintSolver, ctx: Context) {
 
 
   def computeAnnotation(node: CfgNode): Unit = {
-    null
     for (succ <- node.succ) {
-      annotations(node) = annotations.getOrElseUpdate(succ, Set()).map(annotation => tmp(node.ast, annotation))//TODO merge
+      if (annotations.contains(succ)) {
+        annotations(node) = annotations.getOrElseUpdate(succ, Set()).map(annotation => tmp(node, annotation, succ))
+      }
     }
   }
 
@@ -102,12 +108,12 @@ class PathSubsumption(constraintSolver: ConstraintSolver, ctx: Context) {
         )
         solver.add(constraint)
         solver.check() match {
-          case Status.UNSATISFIABLE =>
-            return false
+          case Status.SATISFIABLE =>
+            return true
           case _ =>
         }
       }
     }
-    true
+    false
   }
 }

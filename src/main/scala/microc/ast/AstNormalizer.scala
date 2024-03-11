@@ -113,6 +113,8 @@ class AstNormalizer {
     assigned match {
       case BinaryOp(operator, leftExpr, rightExpr, loc) =>
         BinaryOp(operator, normalizeExpr(leftExpr, stmts, vars, declaredVars), normalizeExpr(rightExpr, stmts, vars, declaredVars), loc)
+      case Not(expr, loc) =>
+        Not(normalizeExpr(expr, stmts, vars, declaredVars), loc)
       case CallFuncExpr(targetFun, args, loc) =>
         val targetNormalized = normalizeExpr(targetFun, stmts, vars, declaredVars)
         val argsNormalized = args.map(arg => normalizeExpr(arg, stmts, vars, declaredVars))
@@ -137,6 +139,10 @@ class AstNormalizer {
         val rightNormalized = normalizeExpr(right, stmts, vars, declaredVars)
         rightSide = createVar(vars, declaredVars, loc)
         stmts.append(AssignStmt(rightSide, BinaryOp(operator, leftNormalized, rightNormalized, loc), loc))
+      case Not(expr, loc) =>
+        val normalized = normalizeExpr(expr, stmts, vars, declaredVars)
+        rightSide = createVar(vars, declaredVars, loc)
+        stmts.append(AssignStmt(rightSide, Not(normalized, loc), loc))
       case CallFuncExpr(targetFun, args, loc) =>
         val targetNormalized = normalizeExpr(targetFun, stmts, vars, declaredVars)
         val argsNormalized = args.map(arg => normalizeExpr(arg, stmts, vars, declaredVars))
@@ -153,6 +159,15 @@ class AstNormalizer {
       case Input(loc) =>
         rightSide = createVar(vars, declaredVars, loc)
         stmts.append(AssignStmt(rightSide, Input(loc), loc))
+      case ArrayAccess(array, index, loc) =>
+        val arr = normalizeExpr(array, stmts, vars, declaredVars)
+        val i = normalizeExpr(index, stmts, vars, declaredVars)
+        rightSide = createVar(vars, declaredVars, loc)
+        stmts.append(AssignStmt(rightSide, ArrayAccess(arr, i, loc), loc))
+      case FieldAccess(record, field, loc) =>
+        val rec = normalizeExpr(record, stmts, vars, declaredVars)
+        rightSide = createVar(vars, declaredVars, loc)
+        stmts.append(AssignStmt(rightSide, FieldAccess(rec, field, loc), loc))
       case _ =>
     }
     rightSide

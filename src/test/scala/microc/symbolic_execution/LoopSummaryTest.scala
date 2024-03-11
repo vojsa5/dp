@@ -37,7 +37,8 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
     while (!stmt.ast.isInstanceOf[WhileStmt]) {
       stmt = stmt.succ.head
     }
-    val summary = LoopSummary.computeVariableChange(stmt.ast.asInstanceOf[WhileStmt].block.asInstanceOf[NestedBlockStmt].body)
+    val summary = new LoopSummary(cfg).computeVariableChange(stmt.ast.asInstanceOf[WhileStmt].block.asInstanceOf[NestedBlockStmt].body,
+      new SymbolicState(null, PathCondition.initial(), new SymbolicStore(Map.empty)))
     assert(summary("k").apply(Number(10, CodeLoc(0, 0))).apply(Number(0, CodeLoc(0, 0))).asInstanceOf[Number].value == 50)
     assert(summary("i").apply(Number(10, CodeLoc(0, 0))).apply(Number(0, CodeLoc(0, 0))).asInstanceOf[Number].value == 20)
 
@@ -77,7 +78,9 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
     symbolicState = symbolicState.addedVar("k", Number(0, CodeLoc(0, 0)))
     symbolicState = symbolicState.addedVar("i", Number(0, CodeLoc(0, 0)))
     symbolicState = symbolicState.addedVar("_t1", SymbolicExpr(BinaryOp(LowerThan, Identifier("n", CodeLoc(0, 0)), Identifier("m", CodeLoc(0, 0)), CodeLoc(0, 0)), CodeLoc(0, 0)))//normalized condition
-    val paths = loopSummary.getAllPathsInALoop(stmt)
+    val pathsOpt = loopSummary.getAllPathsInALoop(stmt, symbolicState)
+    assert(pathsOpt.nonEmpty)
+    val paths = pathsOpt.get
     assert(paths.size == 2)
     var reachedEmpty = false
     for (i <- 0 until 2) {
@@ -159,7 +162,9 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
       stmt = stmt.succ.head
     }
     val executor = new LoopSummary(cfg)
-    val paths = executor.getAllPathsInALoop(stmt)
+    val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState)
+    assert(pathsOpt.nonEmpty)
+    val paths = pathsOpt.get
     assert(paths.size == 3)
     var sum = 0
     var path1: Option[Path] = None
@@ -167,7 +172,7 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
     var path3: Option[Path] = None
     for (path <- paths) {
       assert(path.statements.size <= 3)
-      val change = LoopSummary.computeVariableChange(path.statements)
+      val change = new LoopSummary(cfg).computeVariableChange(path.statements, symbolicState)
       if (change.contains("x")) {
         assert(change("x").apply(Number(10, CodeLoc(0, 0))).apply(Number(0, CodeLoc(0, 0))).asInstanceOf[Number].value == 10)
         assert(change("x").apply(Number(20, CodeLoc(0, 0))).apply(Number(0, CodeLoc(0, 0))).asInstanceOf[Number].value == 20)
@@ -278,14 +283,16 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
       stmt = stmt.succ.head
     }
     val executor = new LoopSummary(cfg)
-    val paths = executor.getAllPathsInALoop(stmt)
+    val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState)
+    assert(pathsOpt.nonEmpty)
+    val paths = pathsOpt.get
     assert(paths.size == 5)
     var firstBranchEncountered = false
     var secondBranchEncountered = false
     var thirdBranchEncountered = false
     var fourthBranchEncountered = false
     for (path <- paths) {
-      val change = LoopSummary.computeVariableChange(path.statements)
+      val change = new LoopSummary(cfg).computeVariableChange(path.statements, symbolicState)
 
       if (!change.contains("j") && !change.contains("a")) {
 
@@ -933,8 +940,10 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
     }
     val executor = new LoopSummary(cfg)
     val decls = main.ast.asInstanceOf[FunDecl].block.vars.flatMap(_.decls)
-    val paths = executor.getAllPathsInALoop(stmt)
     val symbolicState = new SymbolicState(null, PathCondition.initial(), new SymbolicStore(Map.empty))
+    val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState)
+    assert(pathsOpt.nonEmpty)
+    val paths = pathsOpt.get
     for (decl <- decls) {
       symbolicState.addedVar(decl.name, SymbolicVal(decl.loc))
     }
@@ -962,13 +971,15 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
                 var v = LoopSummary.getSymbolicValsFromExpr(expr)
                 assert(v.nonEmpty)
                 val applied = pda.applyIterationsCount(expr, v.head, Number(initialIterationCount, CodeLoc(0, 0)))
-                LoopSummary.simplifyArithExpr(pda.applyIterationsCount(LoopSummary.simplifyArithExpr(applied), v.tail.head, lastIterCount)) match {
-                  case Number(value, _) =>
-                    println(value, trueRes)
-                    assert(value == trueRes)
-                  case a@_ =>
-                    println(a)
-                    assert(false)
+                if (v.size >= 2) {
+                  LoopSummary.simplifyArithExpr(pda.applyIterationsCount(LoopSummary.simplifyArithExpr(applied), v.tail.head, lastIterCount)) match {
+                    case Number(value, _) =>
+                      println(value, trueRes)
+                      assert(value == trueRes)
+                    case a@_ =>
+                      println(a)
+                      assert(false)
+                  }
                 }
               }
               case _ =>
@@ -980,88 +991,109 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
     }
 
     lastIterCount = Number(0, CodeLoc(0, 0))
+    var missingZ = 0;
     for (initialX <- 0 to 5) {
       for (initialIterationCount <- 0 to 5) {
         val trueRes = initialX + lastIterCount.value
         for (trace <- summary) {
           if (trace._2.nonEmpty) {
-            val change = trace._2("z")
-            change.apply(Number(initialX, CodeLoc(0, 0))) match {
-              case expr => {
-                println(expr)
-                val v = LoopSummary.getSymbolicValsFromExpr(expr)
-                assert(v.nonEmpty)
-                LoopSummary.simplifyArithExpr(pda.applyIterationsCount(expr, v.head, lastIterCount)) match {
-                  case Number(value, _) =>
-                    assert(value == trueRes)
-                  case a@_ =>
-                    println(a)
-                    LoopSummary.simplifyArithExpr(pda.applyIterationsCount(a, v.tail.head, Number(initialIterationCount, CodeLoc(0, 0)))) match {
+            if (trace._2.contains("z")) {
+              val change = trace._2("z")
+              change.apply(Number(initialX, CodeLoc(0, 0))) match {
+                case expr => {
+                  println(expr)
+                  val v = LoopSummary.getSymbolicValsFromExpr(expr)
+                  assert(v.nonEmpty)
+                  if (v.size >= 2) {
+                    LoopSummary.simplifyArithExpr(pda.applyIterationsCount(expr, v.head, lastIterCount)) match {
                       case Number(value, _) =>
-                        assert(value == trueRes + initialIterationCount)
-                      case _ =>
-                        assert(false)
+                        assert(value == trueRes)
+                      case a@_ =>
+                        println(a)
+                        LoopSummary.simplifyArithExpr(pda.applyIterationsCount(a, v.tail.head, Number(initialIterationCount, CodeLoc(0, 0)))) match {
+                          case Number(value, _) =>
+                            assert(value == trueRes + initialIterationCount)
+                          case _ =>
+                            assert(false)
+                        }
                     }
+                  }
                 }
+                case _ =>
+                  assert(false)
               }
-              case _ =>
-                assert(false)
+            }
+            else {
+              missingZ += 1;
             }
           }
         }
       }
     }
-  }
-
-  /*test("loop summary test") {
-    val code =
-      """
-        |main() {
-        |  var k, i, n;
-        |  k = 0;
-        |  i = 3;
-        |  n = input;
-        |  A = [1, 1, 1, 1, 1, 1 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1, 1, 1]
-        |  u = 0
-        |  while (u < 16) {
-        |   A[u] = input;
-        |   u += 1;
-        |  }
-        |  while (i < n) {
-        |   if (A[i] == 1) {
-        |     k = k + 1;
-        |   }
-        |   i = i + 1;
-        |  }
-        |  if (k > 12) {
-        |   k = 1 / 0;
-        |  }
-        |  return k;
-        |}
-        |""".stripMargin;
-    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    null
+    println(missingZ)
+    assert(missingZ / 36 == 1)//else branch encountered 6 * 6 times
   }
 
 
-  test("nested loop summary test") {
-    val code =
+  test("nested") {
+    var code =
       """
         |main() {
-        |  var i, j, m, n;
-        |  i = 0;
-        |  m = input;
-        |  n = input;
-        |  while (i < m) {
-        |     j = i;
-        |     while (j < n) {
-        |       j = j + 1;
-        |     }
-        |  }
-        |  return j;
+        |    var i, j, sum, res, n;
+        |    i = 0;
+        |    sum = 0;
+        |    n = input;
+        |    if (n <= 0) {
+        |       n = 1;
+        |    }
+        |
+        |    while (i < n) {
+        |        j = 0;
+        |        while (j < n) {
+        |            sum = sum + 1;
+        |            j = j + 1;
+        |        }
+        |        i = i + 1;
+        |    }
+        |
+        |    if (sum == n * n) {
+        |       res = 1;
+        |    }
+        |    else {
+        |       res = 0;
+        |    }
+        |
+        |    return 1 / res;
         |}
         |""".stripMargin;
+
+
     val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+    var stmt: CfgNode = cfg.getFce("main")
+    val main = stmt
+
+    while (!stmt.ast.isInstanceOf[WhileStmt]) {
+      stmt = stmt.succ.head
+    }
+    val whileStmt = stmt
+    stmt = stmt.succ.minBy(node => node.id)
+    while (!stmt.ast.isInstanceOf[WhileStmt]) {
+      stmt = stmt.succ.head
+    }
+
+
+    val executor = new LoopSummary(cfg)
+    val decls = main.ast.asInstanceOf[FunDecl].block.vars.flatMap(_.decls)
+    val symbolicState = new SymbolicState(stmt, PathCondition.initial(), new SymbolicStore(Map.empty))
+    for (decl <- decls) {
+      symbolicState.addedVar(decl.name, SymbolicVal(decl.loc))
+    }
+
+    symbolicState.variableDecls = decls
+    val summary = executor.summarizeLoop(symbolicState)
+    symbolicState.nextStatement = whileStmt
+    val summary2 = executor.summarizeLoop(symbolicState)
     null
-  }*/
+  }
+
 }

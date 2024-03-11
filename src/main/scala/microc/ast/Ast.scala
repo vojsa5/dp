@@ -152,7 +152,7 @@ case class Null(loc: Loc) extends Expr with Symbolic {
       case _ => false
     }
 
-  override def equals(other: Value.Val): Boolean =
+  override def equalsVal(other: Value.Val): Boolean =
     other match {
       case Null(_) => true
       case _ => false
@@ -166,7 +166,7 @@ case class Number(value: Int, loc: Loc) extends Expr with Symbolic {
       case _ => false
     }
 
-  override def equals(other: Value.Val): Boolean =
+  override def equalsVal(other: Value.Val): Boolean =
     other match {
       case Number(val2, _) => val2 == value
       case _ => false

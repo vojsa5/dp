@@ -23,15 +23,25 @@ class AstNormalizer {
 
   def getTarget(expr: Expr, newStmts: ListBuffer[StmtInNestedBlock], newVars: ListBuffer[IdentifierDecl], declaredVars: List[VarStmt]): Expr = {
     expr match {
-      case Deref(FieldAccess(record, field, _), loc) =>
-        val rightSide = createVar(newVars, declaredVars, loc)
-        newStmts.append(AssignStmt(rightSide, FieldAccess(record, field, loc), loc))
-        Deref(rightSide, loc)
+//      case Deref(FieldAccess(record, field, _), loc) =>
+//        val rightSide = createVar(newVars, declaredVars, loc)
+//        newStmts.append(AssignStmt(rightSide, FieldAccess(record, field, loc), loc))
+//        Deref(rightSide, loc)
       case Deref(pointer, loc) =>
         val pointerNormalized = getTarget(pointer, newStmts, newVars, declaredVars)
         val rightSide = createVar(newVars, declaredVars, loc)
         newStmts.append(AssignStmt(rightSide, Deref(pointerNormalized, loc), loc))
         rightSide
+      case ArrayAccess(array, index, loc) =>
+        val indexNormalized = getTarget(index, newStmts, newVars, declaredVars)
+        val rightSide = createVar(newVars, declaredVars, loc)
+        newStmts.append(AssignStmt(rightSide, ArrayAccess(array, indexNormalized, loc), loc))
+        rightSide
+//      case FieldAccess(record, field, loc) =>
+//        val pointerNormalized = getTarget(index, newStmts, newVars, declaredVars)
+//        val rightSide = createVar(newVars, declaredVars, loc)
+//        newStmts.append(AssignStmt(rightSide, Deref(pointerNormalized, loc), loc))
+//        rightSide
       case _ =>
         expr
     }
@@ -60,13 +70,16 @@ class AstNormalizer {
   def normalizeStatement(stmt: StmtInNestedBlock, stmts: ListBuffer[StmtInNestedBlock], vars: ListBuffer[IdentifierDecl], declaredVars: List[VarStmt]): Unit = {
       stmt match {
         case AssignStmt(left, right, loc) =>
-          val newLeft: Expr = left match {
-            case Deref(pointer, loc) => Deref(getTarget(pointer, stmts, vars, declaredVars), loc)
-            case FieldAccess(record, field, loc) =>
-              FieldAccess(getTarget(record, stmts, vars, declaredVars), field, loc)
-            case left => left
-          }
-          normalizeAssign(newLeft, right, stmts, vars, declaredVars, loc)
+//          val newLeft: Expr = left match {
+//            case Deref(pointer, loc) => Deref(getTarget(pointer, stmts, vars, declaredVars), loc)
+//            case ArrayAccess(array, index, loc) =>
+//              ArrayAccess(getTarget(array, stmts, vars, declaredVars), index, loc)
+//            case FieldAccess(record, field, loc) =>
+//              FieldAccess(getTarget(record, stmts, vars, declaredVars), field, loc)
+//            case left => left
+//          }
+//          normalizeAssign(getTarget(left, stmts, vars, declaredVars), right, stmts, vars, declaredVars, loc)
+          normalizeAssign(left, right, stmts, vars, declaredVars, loc)
         case OutputStmt(expr, loc) =>
           stmts.append(OutputStmt(normalizeExpr(expr, stmts, vars, declaredVars), loc))
         case IfStmt(guard, thenBranch, elseBranch, loc) =>
@@ -123,8 +136,15 @@ class AstNormalizer {
         Deref(normalizeExpr(pointer, stmts, vars, declaredVars), loc)
       case Alloc(expr, loc) =>
         Alloc(normalizeExpr(expr, stmts, vars, declaredVars), loc)
+      case ArrayNode(elems, loc) =>
+        val elemsNormalized = elems.map(elem => normalizeExpr(elem, stmts, vars, declaredVars))
+        ArrayNode(elemsNormalized, loc)
       case Record(fields, loc) =>
         Record(fields.map(field => RecordField(field.name, normalizeAssigned(field.expr, stmts, vars, declaredVars), field.loc)), loc)
+      case ArrayAccess(array, index, loc) =>
+        ArrayAccess(normalizeExpr(array, stmts, vars, declaredVars), normalizeExpr(index, stmts, vars, declaredVars), loc)
+      case FieldAccess(record, field, loc) =>
+        FieldAccess(normalizeExpr(record, stmts, vars, declaredVars), field, loc)
       case _ =>
         assigned
     }

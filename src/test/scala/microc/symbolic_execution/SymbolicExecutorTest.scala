@@ -817,6 +817,33 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
     executor.run()
   }
 
+  test("bf if instead of while coverage search") {
+    val code = bfCodeNoWhile
+    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+    val covered = Some(mutable.HashSet[CfgNode]())
+    val executor = new SymbolicExecutor(cfg, searchStrategy = new CoverageSearchStrategy(covered.get), covered = covered)
+    executor.run()
+  }
+
+  test("bf if instead of while random path search") {
+    val code = bfCodeNoWhile
+    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+    val covered = Some(mutable.HashSet[CfgNode]())
+    val stateHistory = new StateHistory()
+    val executor = new SymbolicExecutor(cfg, stateHistory = Some(stateHistory), searchStrategy = new RandomPathSelectionStrategy(stateHistory), covered = covered)
+    executor.run()
+  }
+
+
+  test("bf if instead of while klee search") {
+    val code = bfCodeNoWhile
+    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+    val covered = Some(mutable.HashSet[CfgNode]())
+    val stateHistory = new StateHistory()
+    val executor = new SymbolicExecutor(cfg, stateHistory = Some(stateHistory), searchStrategy = new KleeSearchStrategy(stateHistory, covered.get), covered = covered)
+    executor.run()
+  }
+
   test("bf if instead of while subsumption") {
     val code = bfCodeNoWhile
     val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
@@ -837,15 +864,43 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
     val program = parseUnsafe(code)
     val cfg = new IntraproceduralCfgFactory().fromProgram(program);
     val analysesResult = new QueryCountAnalyses(cfg)(new SemanticAnalysis().analyze(program)).analyze()
-    val variableCosts = new mutable.HashMap[CfgNode, mutable.HashMap[Decl, Double]]
+    val variableCosts = new mutable.HashMap[CfgNode, mutable.HashMap[String, Double]]
     for (node <- analysesResult) {
-      val nodeCosts = new mutable.HashMap[Decl, Double]
+      val nodeCosts = new mutable.HashMap[String, Double]
       for (cost <- node._2) {
-        nodeCosts.put(cost._1, cost._2)
+        nodeCosts.put(cost._1.name, cost._2)
       }
       variableCosts.put(node._1, nodeCosts)
     }
     val executor = new SymbolicExecutor(cfg, None, searchStrategy = new HeuristicBasedStateMerging(new BFSSearchStrategy, variableCosts, 3))
+    executor.run()
+  }
+
+
+  test("bf if instead of while dynamic smart merging") {
+    val code = bfCodeNoWhile
+    val program = parseUnsafe(code)
+    val cfg = new IntraproceduralCfgFactory().fromProgram(program);
+    val analysesResult = new QueryCountAnalyses(cfg)(new SemanticAnalysis().analyze(program)).analyze()
+    val variableCosts = new mutable.HashMap[CfgNode, mutable.HashMap[String, Double]]
+    for (node <- analysesResult) {
+      val nodeCosts = new mutable.HashMap[String, Double]
+      for (cost <- node._2) {
+        nodeCosts.put(cost._1.name, cost._2)
+      }
+      variableCosts.put(node._1, nodeCosts)
+    }
+    val limitCost = 3.0
+    val depth = 3
+    val stateHistory = new StateHistory()
+    val dynamicStateMerging = new DynamicStateMerging(
+      new HeuristicBasedStateMerging(new BFSSearchStrategy, variableCosts, limitCost),
+      stateHistory,
+      variableCosts,
+      limitCost,
+      depth
+    )
+    val executor = new SymbolicExecutor(cfg, None, searchStrategy = dynamicStateMerging)
     executor.run()
   }
 
@@ -876,6 +931,32 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
 //    executor.run()
 //  }
 
+  test("bf coverage search") {
+    val code = bfCode
+    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+    val covered = Some(mutable.HashSet[CfgNode]())
+    val executor = new SymbolicExecutor(cfg, searchStrategy = new CoverageSearchStrategy(covered.get), covered = covered)
+    executor.run()
+  }
+
+  test("bf random path search") {
+    val code = bfCode
+    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+    val covered = Some(mutable.HashSet[CfgNode]())
+    val stateHistory = new StateHistory()
+    val executor = new SymbolicExecutor(cfg, stateHistory = Some(stateHistory), searchStrategy = new RandomPathSelectionStrategy(stateHistory), covered = covered)
+    executor.run()
+  }
+
+  test("bf klee search") {
+    val code = bfCode
+    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+    val covered = Some(mutable.HashSet[CfgNode]())
+    val stateHistory = new StateHistory()
+    val executor = new SymbolicExecutor(cfg, searchStrategy = new KleeSearchStrategy(stateHistory, covered.get), covered = covered)
+    executor.run()
+  }
+
   test("bf with subsumption") {
     val code = bfCode
     val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
@@ -884,23 +965,23 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
     executor.run()
   }
 
-//  test("bf with merging") {
-//    val code = bfCode
-//    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-//    val executor = new SymbolicExecutor(cfg, None, searchStrategy = new AgressiveStateMerging(new BFSSearchStrategy))
-//    executor.run()
-//  }
+  test("bf with merging") {
+    val code = bfCode
+    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+    val executor = new SymbolicExecutor(cfg, None, searchStrategy = new AgressiveStateMerging(new BFSSearchStrategy))
+    executor.run()
+  }
 
   test("bf with smart merging") {
     val code = bfCode
     val program = parseUnsafe(code)
     val cfg = new IntraproceduralCfgFactory().fromProgram(program);
     val analysesResult = new QueryCountAnalyses(cfg)(new SemanticAnalysis().analyze(program)).analyze()
-    val variableCosts = new mutable.HashMap[CfgNode, mutable.HashMap[Decl, Double]]
+    val variableCosts = new mutable.HashMap[CfgNode, mutable.HashMap[String, Double]]
     for (node <- analysesResult) {
-      val nodeCosts = new mutable.HashMap[Decl, Double]
+      val nodeCosts = new mutable.HashMap[String, Double]
       for (cost <- node._2) {
-        nodeCosts.put(cost._1, cost._2)
+        nodeCosts.put(cost._1.name, cost._2)
       }
       variableCosts.put(node._1, nodeCosts)
     }
@@ -915,6 +996,33 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
     val tmp = new TMP()(new SemanticAnalysis().analyze(program))
     tmp.tmp2(cfg)
     val executor = new SymbolicExecutor(cfg, None, searchStrategy = new HeuristicBasedStateMerging(new BFSSearchStrategy, tmp.mapping, 3))
+    executor.run()
+  }
+
+  test("bf dynamic smart merging") {
+    val code = bfCode
+    val program = parseUnsafe(code)
+    val cfg = new IntraproceduralCfgFactory().fromProgram(program);
+    val analysesResult = new QueryCountAnalyses(cfg)(new SemanticAnalysis().analyze(program)).analyze()
+    val variableCosts = new mutable.HashMap[CfgNode, mutable.HashMap[String, Double]]
+    for (node <- analysesResult) {
+      val nodeCosts = new mutable.HashMap[String, Double]
+      for (cost <- node._2) {
+        nodeCosts.put(cost._1.name, cost._2)
+      }
+      variableCosts.put(node._1, nodeCosts)
+    }
+    val limitCost = 3.0
+    val depth = 3
+    val stateHistory = new StateHistory()
+    val dynamicStateMerging = new DynamicStateMerging(
+      new HeuristicBasedStateMerging(new BFSSearchStrategy, variableCosts, limitCost),
+      stateHistory,
+      variableCosts,
+      limitCost,
+      depth
+    )
+    val executor = new SymbolicExecutor(cfg, None, searchStrategy = dynamicStateMerging)
     executor.run()
   }
 
@@ -1759,6 +1867,29 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
       case _: ExecutionException =>
       case other: Throwable => fail("Expected a ExecutionException, but caught different exception: " + other)
     }
+  }
+
+  test("normalization work well") {
+    var code =
+      """
+        |main() {
+        |  var x, y, z, i, tmp;
+        |
+        |  tmp = input;
+        |  y = &tmp;
+        |  i = 0;
+        |  z = [input, input];
+        |  x = *y + z[i + 1];
+        |
+        |  return 0;
+        |}
+        |
+        |""".stripMargin;
+
+    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code))
+    val executor = new LoopSummary(cfg)
+    executor.run()
+
   }
 
 

@@ -246,4 +246,26 @@ class SpecialCasesTest extends FunSuite with MicrocSupport with Examples {
     executor.run()
   }
 
+
+  test("multiple possible indexes 3") {
+    val code =
+      """
+        |main() {
+        |  var arr, i, res;
+        |  arr = [0, 1, 2];
+        |  i = input;
+        |  res = 0;
+        |  if (i < 2 && i >= 0) {
+        |     res = arr[i + 1];
+        |     arr[arr[i]] = i;
+        |  }
+        |  return res;
+        |}
+        |""".stripMargin;
+
+    var cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+    var executor = new SymbolicExecutor(cfg);
+    executor.run()
+  }
+
 }

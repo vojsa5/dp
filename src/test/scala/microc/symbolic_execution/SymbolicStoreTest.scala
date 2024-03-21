@@ -511,9 +511,9 @@ class SymbolicStoreTest extends FunSuite with MicrocSupport with Examples {
     store2.updateRef(ptr, PointerVal(2))
 
     val merged = store1.mergeStores(store2, new PathCondition(None, Number(1, CodeLoc(0, 0))))
-    assert(!merged.get.getVal("x", CodeLoc(0, 0)).isInstanceOf[IteVal])
-    assert(merged.get.getVal("y", CodeLoc(0, 0)).isInstanceOf[IteVal])
-    assert(merged.get.getVal("z", CodeLoc(0, 0)).isInstanceOf[IteVal])
+    assert(!merged.get.getVal("x", CodeLoc(0, 0), new SymbolicState(null, null, null)).isInstanceOf[IteVal])
+    assert(merged.get.getVal("y", CodeLoc(0, 0), new SymbolicState(null, null, null)).isInstanceOf[IteVal])
+    assert(merged.get.getVal("z", CodeLoc(0, 0), new SymbolicState(null, null, null)).isInstanceOf[IteVal])
     null
   }
 
@@ -559,7 +559,7 @@ class SymbolicStoreTest extends FunSuite with MicrocSupport with Examples {
     assert(store1.storeEquals(mergedStore))
     assert(store2.storeEquals(mergedStore))
 
-    assert(mergedStore.getVal("y", CodeLoc(0, 0)).equalsVal(mergedStore.getVal("z", CodeLoc(0, 0))))
-    assert(mergedStore.getVal("z", CodeLoc(0, 0)).equalsVal(mergedStore.getVal("y", CodeLoc(0, 0))))
+    assert(mergedStore.getVal("y", CodeLoc(0, 0), new SymbolicState(null, null, null)).equalsVal(mergedStore.getVal("z", CodeLoc(0, 0), new SymbolicState(null, null, null))))
+    assert(mergedStore.getVal("z", CodeLoc(0, 0), new SymbolicState(null, null, null)).equalsVal(mergedStore.getVal("y", CodeLoc(0, 0), new SymbolicState(null, null, null))))
   }
 }

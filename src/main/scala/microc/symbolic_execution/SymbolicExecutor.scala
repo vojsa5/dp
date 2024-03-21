@@ -10,75 +10,71 @@ import microc.symbolic_execution.Value.{ArrVal, FunVal, IteVal, NullRef, Pointer
 import com.microsoft.z3._
 
 import scala.collection.mutable
-import scala.util.control.Breaks.break
 
-case class ExecutionException(message: String, loc: Loc) extends ProgramException(message) {
-  override def format(reporter: Reporter): String = reporter.formatError("execution", message, loc)
+case class ExecutionException(message: String, loc: Loc, symbolicState: SymbolicState) extends ProgramException(message + "\nloc: " + symbolicState.nextStatement.ast) {
+  override def format(reporter: Reporter): String = reporter.formatError("execution", message + " loc: " + symbolicState.nextStatement.ast, loc)
 }
 
 object ExecutionException {
-  def errorMissingMainFunction(program: Program): ExecutionException =
-    ExecutionException(s"Missing main function, declared functions are ${program.funs.map(_.name)}", program.loc)
+  def errorMissingMainFunction(program: Program, symbolicState: SymbolicState): ExecutionException =
+    ExecutionException(s"Missing main function, declared functions are ${program.funs.map(_.name)}", program.loc, symbolicState)
 
-  def errorIO(loc: Loc, cause: Throwable): ExecutionException =
-    ExecutionException(s"I/O error ${cause.getMessage}", loc)
+  def errorNonRecordFieldAccess(loc: Loc, value: String, symbolicState: SymbolicState): ExecutionException =
+    ExecutionException(s"Non-record ($value) field access", loc, symbolicState)
 
-  def errorNonRecordFieldAccess(loc: Loc, value: String): ExecutionException =
-    ExecutionException(s"Non-record ($value) field access", loc)
+  def errorNonExistingFieldAccess(loc: Loc, rec: String, field: String, symbolicState: SymbolicState): ExecutionException =
+    ExecutionException(s"Non-existing field ($field) access in $rec", loc, symbolicState)
 
-  def errorNonExistingFieldAccess(loc: Loc, rec: String, field: String): ExecutionException =
-    ExecutionException(s"Non-existing field ($field) access in $rec", loc)
+  def errorNullDereference(loc: Loc, symbolicState: SymbolicState): ExecutionException =
+    ExecutionException(s"Null-pointer pointer dereference", loc, symbolicState)
 
-  def errorNullDereference(loc: Loc): ExecutionException =
-    ExecutionException(s"Null-pointer pointer dereference", loc)
+  def errorNonPointerDereference(loc: Loc, value: String, symbolicState: SymbolicState): ExecutionException =
+    ExecutionException(s"Non-pointer ($value) pointer dereference", loc, symbolicState)
 
-  def errorNonPointerDereference(loc: Loc, value: String): ExecutionException =
-    ExecutionException(s"Non-pointer ($value) pointer dereference", loc)
+  def errorNonIntCondition(loc: Loc, value: String, symbolicState: SymbolicState): ExecutionException =
+    ExecutionException(s"Non-integer ($value) condition guard", loc, symbolicState)
 
-  def errorNonIntCondition(loc: Loc, value: String): ExecutionException =
-    ExecutionException(s"Non-integer ($value) condition guard", loc)
+  def errorNonIntReturn(fun: FunDecl, symbolicState: SymbolicState): ExecutionException =
+    ExecutionException(s"Non-integer return from function ${fun.name}", fun.block.ret.expr.loc, symbolicState)
 
-  def errorNonIntReturn(fun: FunDecl): ExecutionException =
-    ExecutionException(s"Non-integer return from function ${fun.name}", fun.block.ret.expr.loc)
+  def errorNonIntOutput(loc: Loc, value: String, symbolicState: SymbolicState): ExecutionException =
+    ExecutionException(s"Non-integer ($value) output", loc, symbolicState)
 
-  def errorNonIntOutput(loc: Loc, value: String): ExecutionException =
-    ExecutionException(s"Non-integer ($value) output", loc)
+  def errorNonIntInput(loc: Loc, value: String, symbolicState: SymbolicState): ExecutionException =
+    ExecutionException(s"Non-integer ($value) input", loc, symbolicState)
 
-  def errorNonIntInput(loc: Loc, value: String): ExecutionException =
-    ExecutionException(s"Non-integer ($value) input", loc)
+  def errorNonIntArithmetics(loc: Loc, symbolicState: SymbolicState): ExecutionException =
+    ExecutionException(s"Non-integer arithmetic operation", loc, symbolicState)
 
-  def errorNonIntArithmetics(loc: Loc): ExecutionException =
-    ExecutionException(s"Non-integer arithmetic operation", loc)
+  def errorUninitializedReference(loc: Loc, symbolicState: SymbolicState): ExecutionException =
+    ExecutionException(s"Uninitialized variable", loc, symbolicState)
 
-  def errorUninitializedReference(loc: Loc): ExecutionException =
-    ExecutionException(s"Uninitialized variable", loc)
+  def errorNonFunctionApplication(loc: Loc, value: String, symbolicState: SymbolicState): ExecutionException =
+    ExecutionException(s"Non-function ($value) application", loc, symbolicState)
 
-  def errorNonFunctionApplication(loc: Loc, value: String): ExecutionException =
-    ExecutionException(s"Non-function ($value) application", loc)
+  def errorRecordNestedFields(loc: Loc, symbolicState: SymbolicState): ExecutionException =
+    ExecutionException("Nested records are not supported, use pointers", loc, symbolicState)
 
-  def errorRecordNestedFields(loc: Loc): ExecutionException =
-    ExecutionException("Nested records are not supported, use pointers", loc)
+  def errorNotAssignableExpression(expr: Expr, symbolicState: SymbolicState): ExecutionException =
+    ExecutionException(s"Expression is not assignable ($expr)", expr.loc, symbolicState)
 
-  def errorNotAssignableExpression(expr: Expr): ExecutionException =
-    ExecutionException(s"Expression is not assignable ($expr)", expr.loc)
+  def errorInvalidArgumentList(loc: Loc, fun: FunDecl, actual: Int, symbolicState: SymbolicState): ExecutionException =
+    ExecutionException(s"Invalid argument list: expected ${fun.params.size}, got: $actual", loc, symbolicState)
 
-  def errorInvalidArgumentList(loc: Loc, fun: FunDecl, actual: Int): ExecutionException =
-    ExecutionException(s"Invalid argument list: expected ${fun.params.size}, got: $actual", loc)
+  def errorDivByZero(loc: Loc, symbolicState: SymbolicState): ExecutionException =
+    ExecutionException(s"Division by zero", loc, symbolicState)
 
-  def errorDivByZero(loc: Loc): ExecutionException =
-    ExecutionException(s"Division by zero", loc)
+  def errorIncompatibleTypes(loc: Loc, left: String, right: String, symbolicState: SymbolicState): ExecutionException =
+    ExecutionException(s"Incompatible types, cannot assign $right into $left", loc, symbolicState)
 
-  def errorIncompatibleTypes(loc: Loc, left: String, right: String): ExecutionException =
-    ExecutionException(s"Incompatible types, cannot assign $right into $left", loc)
+  def errorArrayOutOfBounds(loc: Loc, length: Int, index: Int, symbolicState: SymbolicState): ExecutionException =
+    ExecutionException(s"Array out of bounds (length: $length, index: $index)", loc, symbolicState)
 
-  def errorArrayOutOfBounds(loc: Loc, length: Int, index: Int): ExecutionException =
-    ExecutionException(s"Array out of bounds (length: $length, index: $index)", loc)
+  def errorArrayOutOfBounds(loc: Loc, length: Int, symbolicState: SymbolicState): ExecutionException =
+    ExecutionException(s"Array out of bounds (length: $length, index symbolic)", loc, symbolicState)
 
-  def errorArrayOutOfBounds(loc: Loc, length: Int): ExecutionException =
-    ExecutionException(s"Array out of bounds (length: $length, index symbolic)", loc)
-
-  def errorNonArrayAccess(loc: Loc, value: String): ExecutionException =
-    ExecutionException(s"Non-array ($value) element access", loc)
+  def errorNonArrayAccess(loc: Loc, value: String, symbolicState: SymbolicState): ExecutionException =
+    ExecutionException(s"Non-array ($value) element access", loc, symbolicState)
 
 
 }
@@ -87,18 +83,19 @@ object ExecutionException {
 class SymbolicExecutor(program: ProgramCfg,
                        subsumption: Option[PathSubsumption] = None,
                        ctx: Context = new Context(),
-                       searchStrategy: SearchStrategy = new BFSSearchStrategy
+                       searchStrategy: SearchStrategy = new BFSSearchStrategy,
+                       stateHistory: Option[StateHistory] = None,
+                       covered: Option[mutable.HashSet[CfgNode]] = None
                       ) {
 
   val solver = new ConstraintSolver(ctx)
   var statistics = new Statistics()
   var currentPathStopped = false
-  var finalBacktracking = false
   var backTrackingPath: Option[SymbolicState] = None
-  var pathsToNodesToAddAnotations: mutable.HashMap[SymbolicState, mutable.Queue[CfgNode]] = mutable.HashMap.empty
   private var functionDeclarations: Map[String, FunVal] = Map.empty
   var loops: mutable.HashMap[CfgNode, Identifier] = mutable.HashMap.empty
   var subsumptionLoopVar = 1
+  var inSubsumptionIteration = false
 
   def createSubsumptionLoopVar(): Identifier = {
     val rightSide = Identifier("_l" + subsumptionLoopVar.toString, CodeLoc(0, 0))
@@ -117,17 +114,19 @@ class SymbolicExecutor(program: ProgramCfg,
 
 
   def run(): Int = {
-    searchStrategy.addState(new SymbolicState(program.getFce("main"), PathCondition.initial(), new SymbolicStore(functionDeclarations)))
+    val initialState = new SymbolicState(program.getFce("main"), PathCondition.initial(), new SymbolicStore(functionDeclarations))
+    stateHistory match {
+      case Some(history) =>
+        history.initial = initialState
+      case None =>
+    }
+    searchStrategy.addState(initialState)
     var res: Option[Val] = None
     while (searchStrategy.statesCount() != 0) {
       statistics.printStats()
       var path = searchStrategy.getState()
       currentPathStopped = false
       step(path)
-//      if (subsumption.nonEmpty) {
-//        subsumption.get.addAnnotation(path.nextStatement, solver.createConstraintWithState(path.pathCondition.expr, path))
-//      }
-//      path.pathCondition = path.pathCondition.prev.get
       while (path.callStack.nonEmpty && !currentPathStopped) {
         val lastFceCall = path.callStack.last
         path.symbolicStore.popFrame()
@@ -148,11 +147,6 @@ class SymbolicExecutor(program: ProgramCfg,
         path = path.goTo(lastFceCall._1.succ.head, lastFceCall._2)
         step(path)
       }
-      for (node <- pathsToNodesToAddAnotations.getOrElse(path, mutable.Queue.empty)) {
-        if (subsumption.nonEmpty) {
-          subsumption.get.computeAnnotation(node)
-        }
-      }
 
       statistics.numPaths += 1
       if (path.returnValue.nonEmpty) {
@@ -172,7 +166,7 @@ class SymbolicExecutor(program: ProgramCfg,
       case e: SymbolicVal =>
         0
       case _ =>
-        throw errorNonIntReturn(program.getFce("main").ast.asInstanceOf[FunDecl])
+        throw errorNonIntReturn(program.getFce("main").ast.asInstanceOf[FunDecl], initialState)
     }
   }
 
@@ -180,6 +174,7 @@ class SymbolicExecutor(program: ProgramCfg,
     val fce = program.getFce(name)
     symbolicState.callStack = symbolicState.callStack.appended((symbolicState.nextStatement, fce.ast.asInstanceOf[FunDecl].params))
     symbolicState.symbolicStore.pushFrame()
+    val tmpNextStatement = symbolicState.nextStatement
     for ((arg, param) <- args.zip(fce.ast.asInstanceOf[FunDecl].params)) {
       symbolicState.addedVar(param.name, evaluate(arg, symbolicState))
     }
@@ -189,18 +184,8 @@ class SymbolicExecutor(program: ProgramCfg,
     symbolicState.symbolicStore = fceState.symbolicStore
     symbolicState.symbolicStore.popFrame()
     symbolicState.callStack = symbolicState.callStack.dropRight(1)
+    symbolicState.nextStatement = tmpNextStatement
     symbolicState.returnValue
-
-//    fceState.symbolicStore.popFrame()
-//    fceState.callStack = fceState.callStack.dropRight(1)
-//    fceState.returnValue
-  }
-
-  def addAnotations(node: CfgNode, minId: Int, maxId: Int, annotation: Expr): Unit = {
-    if (node.id < maxId && node.id > minId) {
-      subsumption.get.addAnnotation(node, annotation)
-      node.succ.foreach(s => addAnotations(s, minId, maxId, annotation))
-    }
   }
 
   def stepOnAssign(assignStmt: AssignStmt, symbolicState: SymbolicState): Unit = {
@@ -208,21 +193,19 @@ class SymbolicExecutor(program: ProgramCfg,
       case AssignStmt(FieldAccess(record, field, loc), right, _) =>
         val assigned = evaluate(right, symbolicState)
         evaluate(record, symbolicState) match {
-          case RecVal(fields) if fields.contains(field) => fields.update(field, assigned)
+          case RecVal(fields) if fields.contains(field) => symbolicState.updatedVar(fields(field), assigned)
           case RecVal(fields) =>
-            throw errorNonExistingFieldAccess(loc, RecVal(fields).toString, field)
-          case IteVal(RecVal(fields1), RecVal(fields2), _, _)
-            if fields1.contains(field) && fields2.contains(field) => {
-            fields1.update(field, assigned)
-            fields2.update(field, assigned)
+            throw errorNonExistingFieldAccess(loc, RecVal(fields).toString, field, symbolicState)
+          case IteVal(RecVal(fields1), RecVal(fields2), _, _) if fields1.contains(field) && fields2.contains(field) => {
+            symbolicState.updatedVar(fields1(field), assigned)
+            symbolicState.updatedVar(fields2(field), assigned)
           }
           case _ =>
-            throw errorNotAssignableExpression(record)
+            throw errorNotAssignableExpression(record, symbolicState: SymbolicState)
         }
       case AssignStmt(lhs, rhs, _) =>
         getTarget(lhs, symbolicState) match {
           case None =>
-            finalBacktracking = true
             currentPathStopped = true
           case Some(inner) =>
             symbolicState.updatedVar(inner, evaluate(rhs, symbolicState))
@@ -235,14 +218,15 @@ class SymbolicExecutor(program: ProgramCfg,
     val loopAst = loop.ast.asInstanceOf[WhileStmt]
     if (subsumption.nonEmpty) {
       if (!loops.contains(loop)) {
+        var goOutOfSubsumptionIteration = false
+        if (!inSubsumptionIteration) {
+          inSubsumptionIteration = true
+          goOutOfSubsumptionIteration = true
+        }
         val loopIter = createSubsumptionLoopVar()
         val loopIterCond = BinaryOp(GreaterEqual, loopIter, Number(0, CodeLoc(0, 0)), CodeLoc(0, 0))
-        val succs = loop.succ
-        val maxSucc = succs.maxBy(node => node.id).id
-        for (s <- succs) {
-          addAnotations(s, loop.id, maxSucc, loopIterCond)
-        }
-        subsumption.get.addAnnotation(loop, loopIterCond)
+        subsumption.get.addAnnotationsToALoop(loop, loopIterCond)
+        //subsumption.get.addAnnotation(loop, loopIterCond)
         val decreaseLoopIter = AssignStmt(loopIter, BinaryOp(Minus, loopIter, Number(1, CodeLoc(0, 0)), CodeLoc(0, 0)), CodeLoc(0, 0))
         val lastBody = loopAst.block.asInstanceOf[NestedBlockStmt].body
         val body = lastBody.appended(decreaseLoopIter)
@@ -250,7 +234,7 @@ class SymbolicExecutor(program: ProgramCfg,
         loops.put(loop, loopIter)
 
         val lastLoopStmt = loop.pred.maxBy(node => node.id)
-        val newStmt = new CfgStmtNode(-(subsumptionLoopVar - 1), decreaseLoopIter)
+        val newStmt = new CfgStmtNode(lastLoopStmt.id + 0.5, decreaseLoopIter)
         lastLoopStmt.succ.foreach(s => {
           s.pred.remove(lastLoopStmt)
           s.pred.add(newStmt)
@@ -259,21 +243,42 @@ class SymbolicExecutor(program: ProgramCfg,
         lastLoopStmt.succ.clear()
         lastLoopStmt.succ.add(newStmt)
         newStmt.pred.add(lastLoopStmt)
-        null
+
+
+        symbolicState.addedVar(loops(loop).name, Number(0, CodeLoc(0, 0)))
+
+        solver.solveCondition(symbolicState.pathCondition.expr, loopAst.guard, symbolicState) match {
+          case Status.SATISFIABLE | Status.UNKNOWN =>
+            val nextState = symbolicState.getIfTrueState()
+            step(nextState)
+//            if (stateHistory.nonEmpty) {
+//              stateHistory.get.addState(symbolicState, nextState)
+//            }
+            backTrackingPath = Some(nextState)
+
+            symbolicState.pathCondition = nextState.pathCondition.prev.get
+            symbolicState.returnValue = nextState.returnValue
+            symbolicState.symbolicStore = nextState.symbolicStore
+
+
+          case Status.UNSATISFIABLE =>
+            subsumption.get.computeAnnotation(symbolicState.nextStatement)
+        }
+        loop.ast = loopAst
+        if (goOutOfSubsumptionIteration) {
+          inSubsumptionIteration = false
+        }
       }
-      symbolicState.addedVar(loops(loop).name, Number(0, CodeLoc(0, 0)))
     }
     var whileLeavingState: Option[SymbolicState] = None
     solver.solveCondition(symbolicState.pathCondition.expr, Not(loopAst.guard, loopAst.guard.loc), symbolicState) match {
       case Status.SATISFIABLE | Status.UNKNOWN =>
         val nextState = symbolicState.getIfFalseState()
-        searchStrategy.addState(nextState)
-        //step(nextState)
-//        if (subsumption.nonEmpty) {
-//          subsumption.get.addAnnotation(symbolicState.nextStatement, Not(loopAst.guard, loopAst.guard.loc))
-//        }
-        finalBacktracking = false
-        pathsToNodesToAddAnotations.put(nextState, mutable.Queue.empty)
+        //searchStrategy.addState(nextState)
+        if (stateHistory.nonEmpty) {
+          stateHistory.get.addNode(symbolicState, nextState)
+        }
+        step(nextState)
         backTrackingPath = Some(nextState)
         symbolicState.pathCondition = nextState.pathCondition.prev.get
         symbolicState.returnValue = nextState.returnValue
@@ -284,30 +289,22 @@ class SymbolicExecutor(program: ProgramCfg,
     solver.solveCondition(symbolicState.pathCondition.expr, loopAst.guard, symbolicState) match {
       case Status.SATISFIABLE | Status.UNKNOWN =>
         val nextState = symbolicState.getIfTrueState()
-        searchStrategy.addState(nextState)
-
-        //        symbolicState.pathCondition = nextState.pathCondition.prev.get
-        //        symbolicState.returnValue = nextState.returnValue
-        //        if (subsumption.nonEmpty) {
-        //          subsumption.get.addAnnotation(symbolicState.nextStatement, Not(loopAst.guard, loopAst.guard.loc))
-        //        }
-        finalBacktracking = false
-        pathsToNodesToAddAnotations.put(nextState, mutable.Queue.empty)
-        pathsToNodesToAddAnotations(nextState).enqueue(symbolicState.nextStatement)
-        backTrackingPath = Some(nextState)
-
-      case Status.UNSATISFIABLE =>
-        if (subsumption.nonEmpty) {
-          if (finalBacktracking) {
-            if (!currentPathStopped) {
-              subsumption.get.computeAnnotation(symbolicState.nextStatement)
-            }
-          }
-          else {
-            pathsToNodesToAddAnotations(backTrackingPath.get).enqueue(symbolicState.nextStatement)
-          }
+        if (inSubsumptionIteration) {
+          statistics.numPaths += 1
+          step(nextState)
+        }
+        else {
+          searchStrategy.addState(nextState)
+        }
+        if (stateHistory.nonEmpty) {
+          stateHistory.get.addState(symbolicState, nextState)
+          backTrackingPath = Some(nextState)
         }
 
+      case Status.UNSATISFIABLE =>
+    }
+    if (subsumption.nonEmpty) {
+      subsumption.get.computeAnnotation(symbolicState.nextStatement)
     }
     if (whileLeavingState.nonEmpty) {
       symbolicState.pathCondition = whileLeavingState.get.pathCondition.prev.get
@@ -317,11 +314,14 @@ class SymbolicExecutor(program: ProgramCfg,
   }
 
   def step(symbolicState: SymbolicState): Unit = {
+    if (covered.nonEmpty) {
+      covered.get.add(symbolicState.nextStatement)
+    }
+    val statement = symbolicState.nextStatement
     val ast = symbolicState.nextStatement.ast
     if (subsumption.nonEmpty) {
       if (subsumption.get.checkSubsumption(symbolicState.nextStatement, symbolicState.pathCondition.expr, symbolicState)) {
         statistics.stoppedWithSubsumption += 1
-        finalBacktracking = true
         currentPathStopped = true
         return
       }
@@ -337,14 +337,11 @@ class SymbolicExecutor(program: ProgramCfg,
     }
     val nextState = newState.nextState()
     step(nextState)
-    if (subsumption.nonEmpty && !Utility.statementCanCauseError(symbolicState.nextStatement.ast.asInstanceOf[AssignStmt])) {
-      if (finalBacktracking) {
-        if (!currentPathStopped) {
-          subsumption.get.computeAnnotation(symbolicState.nextStatement)
-        }
-      }
-      else {
-          pathsToNodesToAddAnotations(backTrackingPath.get).enqueue(symbolicState.nextStatement)
+    if (subsumption.nonEmpty) {
+      ast match {
+        case stmt: AssignStmt if Utility.statementCanCauseError(stmt) =>
+        case _ =>
+          subsumption.get.computeAnnotation(statement)
       }
     }
     symbolicState.returnValue = nextState.returnValue
@@ -368,41 +365,34 @@ class SymbolicExecutor(program: ProgramCfg,
         solver.solveCondition(symbolicState.pathCondition.expr, guard, symbolicState) match {
           case Status.SATISFIABLE | Status.UNKNOWN =>
             val nextState = symbolicState.getIfTrueState()
+            if (stateHistory.nonEmpty) {
+              stateHistory.get.addNode(symbolicState, nextState)
+            }
             step(nextState)
-//            if (subsumption.nonEmpty && finalBacktracking) {
-//              subsumption.get.addAnnotation(symbolicState.nextStatement, guard)
-//            }
             ifState = Some(nextState)
           case Status.UNSATISFIABLE =>
             currentPathStopped = true
         }
 
-        //        if (subsumption.nonEmpty) {
-        //          val annotation = solver.createConstraintWithState(BinaryOp(AndAnd, symbolicState.pathCondition.expr, guard, guard.loc), symbolicState)
-        //          subsumption.get.addAnnotation(symbolicState.nextStatement, annotation)
-        //        }
-
         solver.solveCondition(symbolicState.pathCondition.expr, Not(guard, guard.loc), symbolicState) match {
           case Status.SATISFIABLE | Status.UNKNOWN =>
             val path = symbolicState.getIfFalseState()
-            searchStrategy.addState(path)
-//            if (subsumption.nonEmpty) {
-//              subsumption.get.addAnnotation(symbolicState.nextStatement, Not(guard, guard.loc))
-//            }
-            finalBacktracking = false
-            pathsToNodesToAddAnotations.put(path, mutable.Queue.empty)
-            pathsToNodesToAddAnotations(path).enqueue(symbolicState.nextStatement)
-            backTrackingPath = Some(path)
+            if (stateHistory.nonEmpty) {
+              stateHistory.get.addState(symbolicState, path)
+            }
+            if (subsumption.nonEmpty) {
+              currentPathStopped = false
+              step(path)
+              subsumption.get.computeAnnotation(symbolicState.nextStatement)
+              statistics.numPaths += 1
+            }
+            else {
+              searchStrategy.addState(path)
+              backTrackingPath = Some(path)
+            }
           case Status.UNSATISFIABLE =>
             if (subsumption.nonEmpty) {
-              if (finalBacktracking) {
-                if (!currentPathStopped) {
-                  subsumption.get.computeAnnotation(symbolicState.nextStatement)
-                }
-              }
-              else {
-                pathsToNodesToAddAnotations(backTrackingPath.get).enqueue(symbolicState.nextStatement)
-              }
+              subsumption.get.computeAnnotation(symbolicState.nextStatement)
             }
         }
         if (ifState.nonEmpty) {
@@ -410,20 +400,14 @@ class SymbolicExecutor(program: ProgramCfg,
           symbolicState.returnValue = ifState.get.returnValue
           symbolicState.symbolicStore = ifState.get.symbolicStore
         }
-
-        //        if (subsumption.nonEmpty) {
-        //          val annotation = solver.createConstraintWithState(BinaryOp(AndAnd, symbolicState.pathCondition.expr, Not(guard, guard.loc), guard.loc), symbolicState)
-        //          subsumption.get.addAnnotation(symbolicState.nextStatement, annotation)
-        //        }
         return None
       case loop@WhileStmt(_, _, _) =>
         stepOnLoop(symbolicState)
         return None
       case ReturnStmt(expr, _) =>
-        finalBacktracking = true
         symbolicState.returnValue = Some(evaluate(expr, symbolicState))
-        if (subsumption.nonEmpty && finalBacktracking) {
-          subsumption.get.addAnnotation(symbolicState.nextStatement, Number(0, CodeLoc(0, 0)))
+        if (subsumption.nonEmpty) {
+          subsumption.get.addAnnotation(symbolicState.nextStatement, Number(1, CodeLoc(0, 0)))
         }
         return None
       case OutputStmt(expr, _) =>
@@ -443,7 +427,7 @@ class SymbolicExecutor(program: ProgramCfg,
           case Divide =>
             if (r == 0) {
               println(operator, val1, val2)
-              throw errorDivByZero(loc)
+              throw errorDivByZero(loc, symbolicState)
             }
             Number(l / r, loc)
           case Equal => Number(if (l == r) 1 else 0, loc)
@@ -465,14 +449,14 @@ class SymbolicExecutor(program: ProgramCfg,
             e2 match {
               case Number(v, _) =>
                 if (v == 0) {
-                  throw errorDivByZero(loc)
+                  throw errorDivByZero(loc, symbolicState)
                 }
                 SymbolicExpr(BinaryOp(Divide, e1, e2, loc), loc)
               case _ =>
                 solver.solveConstraint(
                   solver.createConstraintWithState(BinaryOp(AndAnd, BinaryOp(Equal, e2, Number(0, loc), loc), symbolicState.pathCondition.expr, loc), symbolicState)) match {
                   case Status.SATISFIABLE =>
-                    throw errorDivByZero(loc)
+                    throw errorDivByZero(loc, symbolicState)
                   case Status.UNSATISFIABLE => SymbolicExpr(BinaryOp(Divide, e1, e2, loc), loc)
                   case Status.UNKNOWN => throw new Exception("IMPLEMENT")
                 }
@@ -508,7 +492,7 @@ class SymbolicExecutor(program: ProgramCfg,
           loc
         )
       case _ =>
-        throw errorNonIntArithmetics(loc)
+        throw errorNonIntArithmetics(loc, symbolicState)
     }
   }
 
@@ -527,7 +511,7 @@ class SymbolicExecutor(program: ProgramCfg,
           case Number(value, _) => Number(if (value == 0) 1 else 0, loc)
           case v@SymbolicVal(_) => SymbolicExpr(Not(v, loc), loc)
           case SymbolicExpr(value, _) => SymbolicExpr(Not(value, loc), loc)
-          case _ => throw errorNonIntArithmetics(loc)
+          case _ => throw errorNonIntArithmetics(loc, symbolicState)
         }
       case Number(value, loc) => Number(value, loc)
       case id@Identifier(_, _) =>
@@ -545,7 +529,7 @@ class SymbolicExecutor(program: ProgramCfg,
               }
             }
           }
-          case _ => throw errorNonFunctionApplication(loc, targetFun.toString)
+          case _ => throw errorNonFunctionApplication(loc, targetFun.toString, symbolicState)
         }
       case VarRef(id, _) =>
         symbolicState.getSymbolicValOpt(id.name).get
@@ -557,20 +541,20 @@ class SymbolicExecutor(program: ProgramCfg,
           case PointerVal(address) =>
             symbolicState.getVal(PointerVal(address)).get
           case NullRef =>
-            throw errorNullDereference(loc)
+            throw errorNullDereference(loc, symbolicState)
           case IteVal(trueState: PointerVal, falseState: PointerVal, expr, loc) =>
             IteVal(symbolicState.getVal(trueState).get, symbolicState.getVal(falseState).get, expr, loc)
           case IteVal(trueState, falseState, expr, loc) if falseState == NullRef || trueState == NullRef =>
-            throw errorNullDereference(loc)
+            throw errorNullDereference(loc, symbolicState)
           case e =>
-            throw errorNonPointerDereference(loc, e.toString)
+            throw errorNonPointerDereference(loc, e.toString, symbolicState)
         }
       case ArrayNode(elems, _) =>
         var prev: Val = null
         val vals = elems.map { e =>
           val v = evaluate(e, symbolicState)
           if (prev != null && !prev.getClass.isAssignableFrom(v.getClass)) {
-            throw errorIncompatibleTypes(e.loc, prev.toString, v.toString)
+            throw errorIncompatibleTypes(e.loc, prev.toString, v.toString, symbolicState)
           }
           else {
             prev = v
@@ -584,11 +568,11 @@ class SymbolicExecutor(program: ProgramCfg,
             evaluate(index, symbolicState) match {
               case Number(value, _) =>
                 if (value >= elems.length || value < 0) {
-                  throw errorArrayOutOfBounds(loc, elems.length, value)
+                  throw errorArrayOutOfBounds(loc, elems.length, value, symbolicState)
                 }
                 symbolicState.getVal(elems(value)) match {
                   case Some(v) => v
-                  case None => throw errorUninitializedReference(loc)
+                  case None => throw errorUninitializedReference(loc, symbolicState)
                 }
               case s: Symbolic =>
                 solver.solveConstraint(
@@ -600,7 +584,7 @@ class SymbolicExecutor(program: ProgramCfg,
                       loc)
                     , symbolicState)) match {
                   case Status.SATISFIABLE =>
-                    throw errorArrayOutOfBounds(loc, elems.length)
+                    throw errorArrayOutOfBounds(loc, elems.length, symbolicState)
                   case Status.UNSATISFIABLE | Status.UNKNOWN =>
                     for (i <- elems.indices) {
                       solver.solveConstraint(
@@ -613,26 +597,36 @@ class SymbolicExecutor(program: ProgramCfg,
                               case None =>
                                 throw new Exception("this should never happen.")
                             }
-                            searchStrategy.addState(newState)
+                            if (subsumption.nonEmpty) {
+                              step(newState)
+                            }
+                            else {
+                              searchStrategy.addState(newState)
+                            }
+                            if (stateHistory.nonEmpty) {
+                              stateHistory.get.addState(symbolicState, newState)
+                            }
                           case _ =>
                       }
                     }
-                    finalBacktracking = true
                     currentPathStopped = true
                     symbolicState.returnValue = None
                     Number(0, CodeLoc(0, 0))
                 }
-              case _ => throw errorNonIntArithmetics(loc)
+              case _ => throw errorNonIntArithmetics(loc, symbolicState)
             }
           }
-          case _ => throw errorNonArrayAccess(loc, evaluate(array, symbolicState).toString)
+          case _ =>
+            throw errorNonArrayAccess(loc, evaluate(array, symbolicState).toString, symbolicState)
         }
       case Record(fields, loc) =>
-        val fieldsMap: mutable.HashMap[String, Val] = mutable.HashMap.empty
+        val fieldsMap: mutable.HashMap[String, PointerVal] = mutable.HashMap.empty
         fields.foreach(field =>
           evaluate(field.expr, symbolicState) match {
-            case RecVal(_) => throw errorRecordNestedFields(field.expr.loc)
-            case res => fieldsMap.update(field.name, res)
+            case RecVal(_) => throw errorRecordNestedFields(field.expr.loc, symbolicState)
+            case res =>
+              symbolicState.addedVar(field.name, res)
+              fieldsMap.update(field.name, symbolicState.getSymbolicValOpt(field.name).get)
           }
         )
         RecVal(fieldsMap)
@@ -640,13 +634,15 @@ class SymbolicExecutor(program: ProgramCfg,
         evaluate(record, symbolicState) match {
           case RecVal(fields) =>
             fields.get(field) match {
-              case Some(res) => res
-              case None => throw errorNonExistingFieldAccess(loc, RecVal(fields).toString, field)
+              case Some(PointerVal(res)) =>
+                symbolicState.getVal(PointerVal(res)).get
+              case None => throw errorNonExistingFieldAccess(loc, RecVal(fields).toString, field, symbolicState)
             }
-          case v => throw errorNonRecordFieldAccess(loc, v.toString)
+          case v => throw errorNonRecordFieldAccess(loc, v.toString, symbolicState)
         }
     }
   }
+
 
   private def getTarget(expr: Expr, symbolicState: SymbolicState): Option[PointerVal] = {
     expr match {
@@ -654,9 +650,9 @@ class SymbolicExecutor(program: ProgramCfg,
         symbolicState.getSymbolicValOpt(name) match {
           case Some(PointerVal(address)) => Some(PointerVal(address))
           case _ if functionDeclarations.contains(name) =>
-            throw errorNonPointerDereference(loc, functionDeclarations(name).toString)
+            throw errorNonPointerDereference(loc, functionDeclarations(name).toString, symbolicState)
           case _ =>
-            throw errorUninitializedReference(loc)
+            throw errorUninitializedReference(loc, symbolicState)
         }
       case Deref(pointer, loc) =>
         val inner = getTarget(pointer, symbolicState)
@@ -666,9 +662,9 @@ class SymbolicExecutor(program: ProgramCfg,
         }
         symbolicState.getVal(inner.get) match {
           case Some(PointerVal(address)) => Some(PointerVal(address))
-          case Some(NullRef) => throw errorNullDereference(loc)
-          case Some(v) => throw errorNonPointerDereference(pointer.loc, v.toString)
-          case None => throw errorUninitializedReference(pointer.loc)
+          case Some(NullRef) => throw errorNullDereference(loc, symbolicState)
+          case Some(v) => throw errorNonPointerDereference(pointer.loc, v.toString, symbolicState)
+          case None => throw errorUninitializedReference(pointer.loc, symbolicState)
         }
       case ArrayAccess(array, index, loc) =>
         evaluate(array, symbolicState) match {
@@ -676,14 +672,11 @@ class SymbolicExecutor(program: ProgramCfg,
             evaluate(index, symbolicState) match {
               case Number(value, _) =>
                 if (value >= elems.length || value < 0) {
-                  throw errorArrayOutOfBounds(loc, elems.length, value)
+                  throw errorArrayOutOfBounds(loc, elems.length, value, symbolicState)
                 }
                 symbolicState.getVal(elems(value)) match {
-                  case Some(PointerVal(address)) => Some(PointerVal(address))
-                  case Some(n@Number(_, _)) => Some(elems(value))
-                  case None => throw errorUninitializedReference(loc)
-                  case _ =>
-                    throw new Exception("IMPLEMENT")
+                  case Some(_) => Some(elems(value))
+                  case None => throw errorUninitializedReference(loc, symbolicState)
                 }
               case s: Symbolic =>
                 solver.solveConstraint(
@@ -695,32 +688,36 @@ class SymbolicExecutor(program: ProgramCfg,
                       loc),
                     symbolicState)) match {
                   case Status.SATISFIABLE =>
-                    throw errorArrayOutOfBounds(loc, elems.length)
+                    throw errorArrayOutOfBounds(loc, elems.length, symbolicState)
                   case Status.UNSATISFIABLE | Status.UNKNOWN =>
                     for (i <- elems.indices) {
                       solver.solveConstraint(solver.createConstraintWithState(BinaryOp(Equal, s, Number(i, CodeLoc(0, 0)), loc), symbolicState)) match {
                         case Status.SATISFIABLE =>
                           val newState = symbolicState.deepCopy()
-        /*                  newState.updatedVar(elems(i), Number(i, CodeLoc(0, 0)))
-                          evaluate(index, newState)
-        */                  getTarget(index, newState) match {
+                          getTarget(index, newState) match {
                             case Some(ptr) =>
                               newState.updatedVar(ptr, Number(i, CodeLoc(0, 0)))
                             case None =>
                               throw new Exception("this should never happen.")
                           }
-                          searchStrategy.addState(newState)
+                          if (subsumption.nonEmpty) {
+                            step(newState)
+                          }
+                          else {
+                            searchStrategy.addState(newState)
+                          }
                         case _ =>
                       }
                     }
                     symbolicState.returnValue = None
                     None
                 }
-              case _ => throw errorNonIntArithmetics(loc)
+              case _ => throw errorNonIntArithmetics(loc, symbolicState)
             }
-          case _ => throw errorNonArrayAccess(loc, evaluate(array, symbolicState).toString)
+          case _ => throw errorNonArrayAccess(loc, evaluate(array, symbolicState).toString, symbolicState)
         }
-      case e => throw errorNotAssignableExpression(e)
+      case e =>
+        throw errorNotAssignableExpression(e, symbolicState)
     }
   }
 

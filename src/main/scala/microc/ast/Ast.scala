@@ -217,13 +217,21 @@ case class CallFuncExpr(targetFun: Expr, args: List[Expr], loc: Loc) extends Exp
   *   The source code location.
   */
 case class Input(loc: Loc) extends Expr {
-  override def equals(other: Expr): Boolean = ???//TODO this should not inherit this method
+  override def equals(other: Expr): Boolean =
+    other match {
+      case Input(_) => true
+      case _ => false
+    }
 }
 
 case class Alloc(expr: Expr, loc: Loc) extends Expr {
   override def children: Iterable[AstNode] = List(expr)
 
-  override def equals(other: Expr): Boolean = ???//TODO this should not inherit this method
+  override def equals(other: Expr): Boolean =
+    other match {
+      case Alloc(expr2, _) => expr.equals(expr2)
+      case _ => false
+    }
 }
 
 /** Variable reference.
@@ -238,7 +246,11 @@ case class Alloc(expr: Expr, loc: Loc) extends Expr {
 case class VarRef(id: Identifier, loc: Loc) extends Expr {
   override def children: Iterable[AstNode] = List(id)
 
-  override def equals(other: Expr): Boolean = ???//TODO this should not inherit this method
+  override def equals(other: Expr): Boolean =
+    other match {
+      case VarRef(id2, _) => id.equals(id2)
+      case _ => false
+    }
 }
 
 /** Pointer dereference
@@ -264,13 +276,33 @@ case class Not(expr: Expr, loc: Loc) extends Expr {
 case class Deref(pointer: Expr, loc: Loc) extends Expr {
   override def children: Iterable[AstNode] = List(pointer)
 
-  override def equals(other: Expr): Boolean = ???//TODO this should not inherit this method
+  override def equals(other: Expr): Boolean =
+    other match {
+      case Deref(pointer2, _) => pointer.equals(pointer2)
+      case _ => false
+    }
 }
 
 case class Record(fields: List[RecordField], loc: Loc) extends Expr {
   override def children: Iterable[AstNode] = fields
 
-  override def equals(other: Expr): Boolean = ???//TODO this should not inherit this method
+  override def equals(other: Expr): Boolean =
+    other match {
+      case Record(fields2, _) => {
+        if (fields.size == fields2.size) {
+          for (i <- fields.indices) {
+            val f1 = fields(i)
+            val f2 = fields2(i)
+            if (!f1.expr.equals(f2.expr) || f1.name != f2.name) {
+              return false
+            }
+          }
+          return true
+        }
+        false
+      }
+      case _ => false
+    }
 }
 
 case class RecordField(name: String, expr: Expr, loc: Loc) extends AstNode {
@@ -289,19 +321,42 @@ case class RecordField(name: String, expr: Expr, loc: Loc) extends AstNode {
 case class FieldAccess(record: Expr, field: String, loc: Loc) extends Expr {
   override def children: Iterable[AstNode] = List(record)
 
-  override def equals(other: Expr): Boolean = ???//TODO this should not inherit this method
+  override def equals(other: Expr): Boolean = {
+    other match {
+      case FieldAccess(record2, field2, _) => record.equals(record2) && field == field2
+      case _ => false
+    }
+  }
 }
 
 case class ArrayNode(elems: List[Expr], loc: Loc) extends Expr {
   override def children: Iterable[AstNode] = elems
 
-  override def equals(other: Expr): Boolean = ???//TODO this should not inherit this method
+  override def equals(other: Expr): Boolean =
+    other match {
+      case ArrayNode(elems2, _) => {
+        if (elems.size == elems2.size) {
+          for (i <- elems.indices) {
+            if (!elems(i).equals(elems2(i))) {
+              return false
+            }
+          }
+          return true
+        }
+        false
+      }
+      case _ => false
+    }
 }
 
 case class ArrayAccess(array: Expr, index: Expr, loc: Loc) extends Expr {
   override def children: Iterable[AstNode] = List(array, index)
 
-  override def equals(other: Expr): Boolean = ???//TODO this should not inherit this method
+  override def equals(other: Expr): Boolean =
+    other match {
+      case ArrayAccess(array2, index2, _) => array.equals(array2) && index.equals(index2)
+      case _ => false
+    }
 }
 
 // ----------------------------------------------------------------------------

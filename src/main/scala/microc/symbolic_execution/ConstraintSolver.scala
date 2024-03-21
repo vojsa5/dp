@@ -1,8 +1,8 @@
 package microc.symbolic_execution
 
 import com.microsoft.z3.{ArithExpr, ArithSort, BoolExpr, Context, IntExpr, IntNum, Status}
-import microc.ast.{AndAnd, BinaryOp, CodeLoc, Divide, Equal, Expr, FieldAccess, GreaterEqual, GreaterThan, Identifier, Input, LowerEqual, LowerThan, Minus, Not, NotEqual, Null, Number, OrOr, Plus, Times}
-import microc.symbolic_execution.Value.{IteVal, PointerVal, Symbolic, SymbolicExpr, SymbolicVal, UninitializedRef, Val}
+import microc.ast.{AndAnd, ArrayAccess, ArrayNode, BinaryOp, CodeLoc, Deref, Divide, Equal, Expr, FieldAccess, GreaterEqual, GreaterThan, Identifier, Input, LowerEqual, LowerThan, Minus, Not, NotEqual, Null, Number, OrOr, Plus, Times}
+import microc.symbolic_execution.Value.{ArrVal, IteVal, NullRef, PointerVal, RecVal, Symbolic, SymbolicExpr, SymbolicVal, UninitializedRef, Val}
 
 import scala.collection.mutable
 
@@ -114,6 +114,7 @@ class ConstraintSolver(val ctx: Context) {
       case UninitializedRef => //TODO merge with symbolic val generation
         ctx.mkIntConst(Utility.generateRandomString())
       case PointerVal(address) => ctx.mkInt(address)
+      case NullRef => ctx.mkInt(0)
       case _ =>
         throw new Exception("IMPLEMENT")
     }
@@ -129,9 +130,9 @@ class ConstraintSolver(val ctx: Context) {
         val innerResult = createConstraintWithState(expr, state, allowNonInitializedVals)
         val cond = innerResult match {
           case boolExpr: BoolExpr => boolExpr
-          case numExpr: ArithExpr[_] => ctx.mkEq (numExpr, zero)
+          case numExpr: ArithExpr[_] => ctx.mkEq (numExpr, one)
         }
-        ctx.mkITE(cond, one, zero)
+        ctx.mkITE(cond, zero, one)
       case BinaryOp(operator, left, right, _) =>
         operator match {
           case Plus => ctx.mkAdd(
@@ -207,6 +208,49 @@ class ConstraintSolver(val ctx: Context) {
         )
       case Input(_) =>
         ctx.mkIntConst(SymbolicVal(CodeLoc(0, 0)).name)
+      case NullRef =>
+        ctx.mkInt(0)
+      case RecVal(_) =>
+        ctx.mkInt(1)
+      case PointerVal(_) =>
+        ctx.mkInt(1)
+      case a@ArrayAccess(_, _, _) =>
+        valToExpr(state.getVal(getTarget(a, state)).get, state)
+      case d@Deref(_, _) =>
+        valToExpr(state.getVal(getTarget(d, state)).get, state)
+      case FieldAccess(record, field, loc) =>
+        val rec = getTarget(record, state)
+        state.getVal(rec).get match {
+          case RecVal(fields) =>
+            valToExpr(fields(field), state, allowNonInitializedVals)
+          case _ =>
+            throw new Exception("IMPLEMENT")
+        }
+      case _ =>
+        throw new Exception("IMPLEMENT")
+    }
+  }
+
+
+  private def getTarget(expr: Expr, symbolicState: SymbolicState): PointerVal = {
+    expr match {
+      case Identifier(name, _) =>
+        symbolicState.getSymbolicValOpt(name).get
+      case ArrayAccess(array, index, loc) =>
+        val ptr = getTarget(array, symbolicState)
+        symbolicState.getVal(ptr).get match {
+          case ArrVal(elems) =>
+            index match {
+              case Number(value, _) =>
+                elems(value)
+              case _ =>
+                throw new Exception("IMPLEMENT")
+            }
+          case _ =>
+            throw new Exception("IMPLEMENT")
+        }
+      case Deref(pointer, loc) =>
+        symbolicState.getVal(getTarget(pointer, symbolicState)).get.asInstanceOf[PointerVal]
       case _ =>
         throw new Exception("IMPLEMENT")
     }
@@ -217,6 +261,8 @@ class ConstraintSolver(val ctx: Context) {
     v match {
       case n@Number(_, _) => n
       case v@SymbolicVal(_) => v
+      case NullRef => NullRef
+      case PointerVal(addr) => PointerVal(addr)
       case SymbolicExpr(expr, _) => applyTheState(expr, state, allowReturnNonInitialized)
       case IteVal(val1, val2, cond, loc) =>
         (applyVal(val1, state), applyVal(val2, state)) match {
@@ -225,6 +271,10 @@ class ConstraintSolver(val ctx: Context) {
           case (a, b: Symbolic) => IteVal(SymbolicExpr(a, loc), b, applyTheState(cond, state, allowReturnNonInitialized), loc)
           case (a, b) => IteVal(SymbolicExpr(a, loc), SymbolicExpr(b, loc), applyTheState(cond, state, allowReturnNonInitialized), loc)
         }
+//      case RecVal(fields) =>
+//        RecVal(fields.map(field => (field._1, SymbolicExpr(applyVal(field._2, state, allowReturnNonInitialized), CodeLoc(0, 0)))))
+//      case ArrVal(elems) =>
+//        ArrVal(elems.map(elem => applyVal(state.getVal(elem).get, state, allowReturnNonInitialized)))
       case _ =>
         throw new Exception("IMPLEMENT")
     }
@@ -239,7 +289,11 @@ class ConstraintSolver(val ctx: Context) {
       case Identifier(name, loc) => applyVal(state.getSymbolicVal(name, loc, allowReturnNonInitialized), state, allowReturnNonInitialized)
       case n@Number(_, _) => n
       case v@SymbolicVal(_) => v
+      case NullRef => NullRef
+      case PointerVal(addr) => PointerVal(addr)
       case SymbolicExpr(expr, _) => applyTheState(expr, state, allowReturnNonInitialized)
+      case _ =>
+        throw new Exception("")
     }
     if (res != expr) {
       res = applyTheState(res, state, allowReturnNonInitialized)

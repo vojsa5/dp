@@ -1,5 +1,7 @@
 package microc.symbolic_execution
 
+import microc.cfg.CfgNode
+
 import java.util
 import scala.collection.immutable.Queue
 import scala.collection.mutable
@@ -99,4 +101,84 @@ class RandomSearchStrategy extends SearchStrategy {
   }
 
   override def statesCount(): Int = set.size
+}
+
+
+class RandomPathSelectionStrategy(stateHistory: StateHistory) extends SearchStrategy {
+
+  override def addState(symbolicState: SymbolicState): Unit = {}
+
+  override def getState(): SymbolicState = {
+    stateHistory.getState()
+  }
+
+  override def statesCount(): Int =
+    stateHistory.statesCount()
+}
+
+
+class CoverageSearchStrategy(covered: mutable.HashSet[CfgNode]) extends SearchStrategy {
+
+  var set = new mutable.HashSet[SymbolicState]
+
+  private def nextUncoveredDistanceInner(cfgNode: CfgNode): Int = {
+    if (!covered.contains(cfgNode)) {
+      0
+    }
+    else {
+      val nodesWithBiggerId = cfgNode.succ.filter(s => s.id >= cfgNode.id)
+      if (nodesWithBiggerId.isEmpty) {
+        return Int.MaxValue
+      }
+      cfgNode.succ.filter(s => s.id >= cfgNode.id).map(s => nextUncoveredDistanceInner(s)).min + 1
+    }
+  }
+
+  private def nextUncoveredDistance(symbolicState: SymbolicState): Int =
+    nextUncoveredDistanceInner(symbolicState.nextStatement)
+
+  override def addState(symbolicState: SymbolicState): Unit =
+    set.add(symbolicState)
+
+  override def getState(): SymbolicState = {
+    val res = set.maxBy(nextUncoveredDistance)
+    set.remove(res)
+    res
+  }
+
+  override def statesCount(): Int =
+    set.size
+}
+
+
+class KleeSearchStrategy(stateHistory: StateHistory, covered: mutable.HashSet[CfgNode]) extends SearchStrategy {
+  val coverageSearchStrategy = new CoverageSearchStrategy(covered)
+  val randomPathSearchStrategy = new RandomPathSelectionStrategy(stateHistory)
+
+  var isCoverageStage = false
+
+  override def addState(symbolicState: SymbolicState): Unit = {
+    coverageSearchStrategy.addState(symbolicState)
+    println("COUNTS AFTER ADD:", randomPathSearchStrategy.statesCount())
+  }
+
+  override def getState(): SymbolicState = {
+    println("COUNTS IN GET:", randomPathSearchStrategy.statesCount())
+    val res = if (isCoverageStage) {
+      isCoverageStage = false
+      val res = coverageSearchStrategy.getState()
+      stateHistory.removeState(res)
+      res
+    }
+    else {
+      isCoverageStage = true
+      val res = randomPathSearchStrategy.getState()
+      coverageSearchStrategy.set.remove(res)
+      res
+    }
+    println("COUNTS AFTER GET:", randomPathSearchStrategy.statesCount())
+    res
+  }
+
+  override def statesCount(): Int = randomPathSearchStrategy.statesCount()
 }

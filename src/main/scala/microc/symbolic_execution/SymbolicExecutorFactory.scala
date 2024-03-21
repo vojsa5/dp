@@ -36,11 +36,11 @@ class SymbolicExecutorFactory(useSummarizaiton: Boolean, useSubsumption: Boolean
         new AgressiveStateMerging(searchStrategy)
       case Some("query-count") => {
         val analysesResult = new QueryCountAnalyses(programCfg)(new SemanticAnalysis().analyze(program)).analyze()
-        val variableCosts = new mutable.HashMap[CfgNode, mutable.HashMap[Decl, Double]]
+        val variableCosts = new mutable.HashMap[CfgNode, mutable.HashMap[String, Double]]
         for (node <- analysesResult) {
-          val nodeCosts = new mutable.HashMap[Decl, Double]
+          val nodeCosts = new mutable.HashMap[String, Double]
           for (cost <- node._2) {
-            nodeCosts.put(cost._1, cost._2)
+            nodeCosts.put(cost._1.name, cost._2)
           }
           variableCosts.put(node._1, nodeCosts)
         }

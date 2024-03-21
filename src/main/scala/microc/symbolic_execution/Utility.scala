@@ -1,6 +1,6 @@
 package microc.symbolic_execution
 
-import microc.ast.{Alloc, ArrayAccess, ArrayNode, AssignStmt, BinaryOp, CallFuncExpr, Decl, Divide, Expr, Identifier, IfStmt, Input, Not, Null, Number, OutputStmt, ReturnStmt, Stmt, WhileStmt}
+import microc.ast.{Alloc, AndAnd, ArrayAccess, ArrayNode, AssignStmt, BinaryOp, CallFuncExpr, Decl, Divide, Equal, Expr, GreaterEqual, GreaterThan, Identifier, IfStmt, Input, LowerEqual, LowerThan, Minus, Not, NotEqual, Null, Number, OrOr, OutputStmt, Plus, ReturnStmt, Stmt, Times, WhileStmt}
 
 import scala.util.Random
 
@@ -48,7 +48,7 @@ object Utility {
       case Not(expr, _) => expressionCanCauseError(expr)
       case Alloc(expr, _) => expressionCanCauseError(expr)
       case Input(_) => false
-      case CallFuncExpr(targetFun, args, loc) => ???
+      case CallFuncExpr(targetFun, args, loc) => false//TODO
       case Identifier(_, _) => false
       case Number(_, _) => false
       case Null(_) => false
@@ -96,5 +96,48 @@ object Utility {
       case ArrayAccess(array, index, loc) => getAllIdentifierNames(array) ++ getAllIdentifierNames(index)
       case _ => Set.empty
     }
+  }
+
+  def simplifyArithExpr(expr: Expr): Expr = {//TODO if changed, repeat
+    var res = expr match {
+      case n@Number(_, _) => n
+      case BinaryOp(AndAnd, Number(1, _), expr, _) => simplifyArithExpr(expr)
+      case BinaryOp(OrOr, Number(0, _), expr, _) => simplifyArithExpr(expr)
+      case BinaryOp(AndAnd, expr, Number(1, _), _) => simplifyArithExpr(expr)
+      case BinaryOp(OrOr, expr, Number(0, _), _) => simplifyArithExpr(expr)
+      case BinaryOp(AndAnd, expr1, expr2, _) if expr1 == expr2 => simplifyArithExpr(expr1)
+      case BinaryOp(OrOr, expr1, expr2, _) if expr1 == expr2 => simplifyArithExpr(expr1)
+      case BinaryOp(Plus, expr, Number(0, _), _) => simplifyArithExpr(expr)
+      case BinaryOp(Times, expr, Number(1, _), _) => simplifyArithExpr(expr)
+      case BinaryOp(Plus, Number(0, _), expr, _) => simplifyArithExpr(expr)
+      case BinaryOp(Times, Number(1, _), expr, _) => simplifyArithExpr(expr)
+      case BinaryOp(OrOr, Not(expr1, _), expr2, loc) if expr1 == expr2 => Number(1, loc)
+      case BinaryOp(OrOr, expr1, Not(expr2, _), loc) if expr1 == expr2 => Number(1, loc)
+      case BinaryOp(operator, left, right, loc) =>
+        (simplifyArithExpr(left), simplifyArithExpr(right)) match {
+          case (Number(value, loc), Number(value2, _)) =>
+            operator match {
+              case Plus => Number(value + value2, loc)
+              case Minus => Number(value - value2, loc)
+              case Times => Number(value * value2, loc)
+              case Divide => Number(value / value2, loc)
+              case LowerThan => Number(if (value < value2) 1 else 0, loc)
+              case LowerEqual => Number(if (value <= value2) 1 else 0, loc)
+              case GreaterThan => Number(if (value > value2) 1 else 0, loc)
+              case GreaterEqual => Number(if (value >= value2) 1 else 0, loc)
+              case NotEqual => Number(if (value != value2) 1 else 0, loc)
+              case Equal => Number(if (value == value2) 1 else 0, loc)
+              case AndAnd => Number(if (value != 0 && value2 != 0) 1 else 0, loc)
+              case OrOr => Number(if (value != 0 || value2 != 0) 1 else 0, loc)
+            }
+          case (a, b) =>
+            BinaryOp(operator, a, b, loc)
+        }
+      case other => other
+    }
+    if (res != expr) {
+      res = simplifyArithExpr(res)
+    }
+    res
   }
 }

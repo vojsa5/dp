@@ -1,6 +1,6 @@
 package microc.symbolic_execution
 
-import microc.ast.{Alloc, AndAnd, ArrayAccess, ArrayNode, AssignStmt, AstPrinter, BinaryOp, BinaryOperator, CallFuncExpr, CodeLoc, Deref, Divide, Equal, Expr, FieldAccess, FunBlockStmt, FunDecl, GreaterEqual, GreaterThan, Identifier, IdentifierDecl, IfStmt, Input, Loc, LowerEqual, LowerThan, Minus, Not, NotEqual, Null, Number, OrOr, OutputStmt, Plus, Program, Record, RecordField, ReturnStmt, Stmt, StmtInNestedBlock, Times, VarRef, VarStmt, WhileStmt}
+import microc.ast.{Alloc, AndAnd, ArrayAccess, ArrayNode, AssignStmt, AstPrinter, BinaryOp, BinaryOperator, CallFuncExpr, CodeLoc, Deref, Divide, Equal, Expr, FieldAccess, FunBlockStmt, FunDecl, GreaterEqual, GreaterThan, Identifier, IdentifierDecl, IfStmt, Input, Loc, LowerEqual, LowerThan, Minus, NestedBlockStmt, Not, NotEqual, Null, Number, OrOr, OutputStmt, Plus, Program, Record, RecordField, ReturnStmt, Stmt, StmtInNestedBlock, Times, VarRef, VarStmt, WhileStmt}
 
 import scala.collection.mutable
 import scala.util.Random
@@ -50,13 +50,19 @@ object ProgramGenerator {
   var functionNames: List[String] = List.empty
 
   var recFields: mutable.HashMap[VarType, mutable.HashSet[(String, VarType)]] = mutable.HashMap()
+
+  var arraySizes: mutable.HashMap[String, Int] = mutable.HashMap()
+
+  var generatedAnArray = false
+
   def randomLoc(): CodeLoc = CodeLoc(random.nextInt(100), random.nextInt(100))
+
 
   def randomBinaryOperator(isPointer: Boolean = false): BinaryOperator = {
     if (isPointer) {
       if (random.nextBoolean()) Equal else NotEqual
     } else {
-      val operators = List(Plus, Minus, Times, Divide)
+      val operators = List(Plus, Minus, Times)
       operators(random.nextInt(operators.size))
     }
   }
@@ -91,7 +97,7 @@ object ProgramGenerator {
   }
 
   def randomExpr(expectedType: VarType, depth: Int = 0, declaredIdentifiers: Map[String, VarType]): Expr = {
-    if (depth > 3) {
+    if (depth > 5) {
       getRandomValueOfType(expectedType)
     }
     else {
@@ -105,11 +111,22 @@ object ProgramGenerator {
             case 3 => Not(randomExpr(expectedType, depth + 1, declaredIdentifiers), randomLoc())
             case 4 => Input(randomLoc())
             case 5 if existingTypes.contains(ArrayType(expectedType)) =>
-              ArrayAccess(
-                randomExpr(ArrayType(expectedType), depth + 1, declaredIdentifiers),
-                randomExpr(NumType(), depth + 1, declaredIdentifiers),
-                randomLoc()
-              )
+              val id = randomExpr(ArrayType(expectedType), depth + 1, declaredIdentifiers)
+              id match {
+                case Identifier(name, loc) =>
+                  ArrayAccess(
+                    id,
+                    Number(random.nextInt(arraySizes(name)), randomLoc()),
+                    randomLoc()
+                  )
+                case ArrayNode(elems, _) =>
+                  ArrayAccess(
+                    id,
+                    Number(random.nextInt(elems.size), randomLoc()),
+                    randomLoc()
+                  )
+              }
+
             case 6 if recFields.contains(expectedType) =>
               val field = recFields(expectedType).toList(random.nextInt(recFields(expectedType).size))
               FieldAccess(
@@ -138,29 +155,59 @@ object ProgramGenerator {
 
   def randomStmt(depth: Int = 0, declaredIdentifiers: Map[String, VarType]): StmtInNestedBlock = {
     if (depth > 3) {
-      OutputStmt(randomExpr(NumType(), declaredIdentifiers = declaredIdentifiers), randomLoc())
-    } else {
+      random.nextInt(2) match {
+        case 0 =>
+          OutputStmt (randomExpr (NumType (), declaredIdentifiers = declaredIdentifiers), randomLoc () )
+        case 1 =>
+          val identifier = randomIdentifier(declaredIdentifiers)
+          AssignStmt(identifier, randomExpr(declaredIdentifiers(identifier.name), depth + 1, declaredIdentifiers), randomLoc())
+      }
+    }
+    else {
       random.nextInt(5) match {
         case 0 => {
           val identifier = randomIdentifier(declaredIdentifiers)
           AssignStmt(identifier, randomExpr(declaredIdentifiers(identifier.name), depth + 1, declaredIdentifiers), randomLoc())
         }
-        case 1 => {
+        case 1 if generatedAnArray => {
           val identifier = randomArrayIdentifier(declaredIdentifiers)
           val innerType = declaredIdentifiers(identifier.name).getInner("")
           AssignStmt(
-            ArrayAccess(
-              identifier,
-              randomExpr(NumType(), depth + 1, declaredIdentifiers),
-              randomLoc()
-            ),
+            identifier match {
+              case Identifier(name, loc) =>
+                ArrayAccess(
+                  identifier,
+                  Number(random.nextInt(arraySizes(name)), randomLoc()),
+                  randomLoc()
+                )
+//              case ArrayNode(elems, _) =>
+//                ArrayAccess(
+//                  identifier,
+//                  Number(random.nextInt(elems.size), randomLoc()),
+//                  randomLoc()
+//                )
+            },
             randomExpr(innerType, depth + 1, declaredIdentifiers),
             randomLoc()
           )
         }
-        case 2 => IfStmt(randomExpr(NumType(), depth + 1, declaredIdentifiers), randomStmt(depth + 1, declaredIdentifiers), Some(randomStmt(depth + 1, declaredIdentifiers)), randomLoc())
-        case 3 => WhileStmt(randomExpr(NumType(), depth + 1, declaredIdentifiers), randomStmt(depth + 1, declaredIdentifiers), randomLoc())
-        case 4 => OutputStmt(randomExpr(NumType(), depth + 1, declaredIdentifiers), randomLoc())
+        case 1 => {
+          val identifier = randomIdentifier(declaredIdentifiers)
+          AssignStmt(identifier, randomExpr(declaredIdentifiers(identifier.name), depth + 1, declaredIdentifiers), randomLoc())
+        }
+        case 2 => IfStmt(
+          randomExpr(NumType(), depth + 1, declaredIdentifiers),
+          NestedBlockStmt((1 to random.nextInt(5) + 5).map(_ => randomStmt(depth + 1, declaredIdentifiers)).toList, randomLoc()),
+          Some(NestedBlockStmt((1 to random.nextInt(5) + 5).map(_ => randomStmt(depth + 1, declaredIdentifiers)).toList, randomLoc())),
+          randomLoc()
+        )
+        case 3 => WhileStmt(
+          randomExpr(NumType(), depth + 1, declaredIdentifiers),
+          NestedBlockStmt((1 to random.nextInt(5) + 5).map(_ => randomStmt(depth + 1, declaredIdentifiers)).toList, randomLoc()),
+          randomLoc()
+        )
+        case 4 =>
+          OutputStmt(randomExpr(NumType(), depth + 1, declaredIdentifiers), randomLoc())
       }
     }
   }
@@ -181,6 +228,7 @@ object ProgramGenerator {
         }
         else {
           if (random.nextInt(5) == 0) {
+            generatedAnArray = true
             ArrayType(inner)
           }
           else {
@@ -189,13 +237,13 @@ object ProgramGenerator {
         }
       }
       else {
-        val inner = getRandomTypeWithHardcodedProbabilitiesInner(true)
-        if (!existingTypes.contains(inner)) {
-          NumType()
-        }
         val fields = mutable.HashMap[String, VarType]()
         val res = RecType(fields)
         for (i <- 0 until random.nextInt(5) + 1){
+          val inner = getRandomTypeWithHardcodedProbabilitiesInner(true)
+          if (!existingTypes.contains(inner)) {
+            NumType()
+          }
           val name = Utility.generateRandomString()
           fields.put(name, inner)
           val tmp = recFields.getOrElse(inner, new mutable.HashSet[(String, VarType)]())
@@ -254,6 +302,10 @@ object ProgramGenerator {
 
   def generateInitAssignment(varName: String, varType: VarType): AssignStmt = {
     val expr = getRandomValueOfType(varType)
+    expr match {
+      case ArrayNode(elems, _) => arraySizes.put(varName, elems.size)
+      case _ =>
+    }
     AssignStmt(Identifier(varName, randomLoc()), expr, randomLoc())
   }
 

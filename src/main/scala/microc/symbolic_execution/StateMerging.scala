@@ -4,7 +4,6 @@ import microc.ast.Decl
 import microc.cfg.CfgNode
 
 import scala.collection.mutable
-import scala.util.control.Breaks.break
 
 
 
@@ -15,33 +14,22 @@ trait StateMerging extends SearchStrategy {
 }
 
 
-class HeuristicBasedStateMerging(strategy: SearchStrategy, variableSolvingCosts: mutable.HashMap[CfgNode, mutable.HashMap[Decl, Double]], limitCost: Double) extends StateMerging {
+class HeuristicBasedStateMerging(strategy: SearchStrategy, variableSolvingCosts: mutable.HashMap[CfgNode, mutable.HashMap[String, Double]], limitCost: Double) extends StateMerging {
   override def addState(state: SymbolicState): Unit = {
-    val i = state.symbolicStore.framesCnt()
     val newState = states.get((state.nextStatement, state.symbolicStore.framesCnt())) match {
       case Some(alreadyExisting) => {
-        var cost = 0.0
-        var lastState = state
         for (existingState <- alreadyExisting) {
-          val variablesThatDiffers = existingState.symbolicStore.getDifferentVariables(existingState.symbolicStore)
-          for (variable <- variablesThatDiffers) {
-            val asf = variableSolvingCosts.get(existingState.nextStatement).getOrElse(variable, 0.0)
-            //cost += variableSolvingCosts.get(state.nextStatement).getOrElse(variable, 0.0)
-            null
-          }
-          if (cost <= limitCost) {
+          if (state.isSimilarTo(existingState, limitCost, variableSolvingCosts(state.nextStatement))) {
             statesToRemove.add(alreadyExisting.last)
             val merged = alreadyExisting.last.mergeStates(existingState)
-
-            val i = states((state.nextStatement, state.symbolicStore.framesCnt()))
             states((state.nextStatement, state.symbolicStore.framesCnt())).remove(existingState)
-            lastState = new MergedSymbolicState(merged.nextStatement, merged.pathCondition, merged.symbolicStore, merged.callStack, (state, existingState))
+            val lastState = new MergedSymbolicState(merged.nextStatement, merged.pathCondition, merged.symbolicStore, merged.callStack, (state, existingState))
             states.getOrElseUpdate((state.nextStatement, state.symbolicStore.framesCnt()), new mutable.HashSet[SymbolicState]()).add(lastState)
             strategy.addState(lastState)
             return
           }
         }
-        lastState
+        state
       }
       case None =>
         state
@@ -99,3 +87,36 @@ class AgressiveStateMerging(strategy: SearchStrategy) extends StateMerging {
 
   override def statesCount(): Int = strategy.statesCount() - statesToRemove.size
 }
+
+
+class DynamicStateMerging(
+                           strategy: StateMerging,
+                           stateHistory: StateHistory,
+                           variableSolvingCosts: mutable.HashMap[CfgNode, mutable.HashMap[String, Double]],
+                           limitCost: Double,
+                           depth: Int
+                         ) extends StateMerging {
+
+  override def addState(state: SymbolicState): Unit = {
+    strategy.addState(state)
+  }
+
+  override def getState(): SymbolicState = {
+    for (cluster <- strategy.states) {
+      for (alreadyExisting <- cluster._2) {
+        for (alreadyExisting2 <- cluster._2) {
+          if (alreadyExisting != alreadyExisting2) {
+            if (stateHistory.stateSimilarToPredecessor(alreadyExisting, alreadyExisting2, depth, limitCost, variableSolvingCosts)) {
+              return alreadyExisting
+            }
+          }
+        }
+      }
+    }
+    strategy.getState()
+  }
+
+  override def statesCount(): Int = strategy.statesCount()
+}
+
+

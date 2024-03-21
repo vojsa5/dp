@@ -1,8 +1,8 @@
 package microc.symbolic_execution
 
-import microc.ast.{AndAnd, BinaryOp, CodeLoc, Equal, Expr, Identifier, IdentifierDecl, IfStmt, Loc, NestedBlockStmt, Not, Null, Number, OrOr, WhileStmt}
+import microc.ast.{AndAnd, BinaryOp, CodeLoc, Decl, Equal, Expr, Identifier, IdentifierDecl, IfStmt, Loc, NestedBlockStmt, Not, Null, Number, OrOr, WhileStmt}
 import microc.cfg.CfgNode
-import microc.symbolic_execution.Value.{NullRef, PointerVal, RefVal, Symbolic, SymbolicExpr, SymbolicVal, UninitializedRef, Val}
+import microc.symbolic_execution.Value.{NullRef, PointerVal, Symbolic, SymbolicExpr, SymbolicVal, UninitializedRef, Val}
 
 import scala.collection.mutable
 
@@ -26,19 +26,22 @@ class SymbolicState(
 
   def updatedVar(variable: PointerVal, value: Val): SymbolicState = {
     symbolicStore.updateRef(variable, value)
-    new SymbolicState(nextStatement, pathCondition, symbolicStore, callStack, variableDecls)
+    //new SymbolicState(nextStatement, pathCondition, symbolicStore, callStack, variableDecls)
+    this
   }
 
   def addedNewVar(variable: IdentifierDecl): SymbolicState = {
     symbolicStore.addNewVar(variable.name)
     variableDecls = variableDecls.appended(variable)
-    new SymbolicState(nextStatement, pathCondition, symbolicStore, callStack, variableDecls)
+    //new SymbolicState(nextStatement, pathCondition, symbolicStore, callStack, variableDecls)
+    this
   }
 
   def addedVar(variable: String, v: Val): SymbolicState = {
     val ptr = symbolicStore.addNewVar(variable)
     symbolicStore.storage.addVal(ptr, v)
-    new SymbolicState(nextStatement, pathCondition, symbolicStore, callStack, variableDecls)
+    //new SymbolicState(nextStatement, pathCondition, symbolicStore, callStack, variableDecls)
+    this
   }
 
   def addedAlloc(v: Val): PointerVal = {
@@ -52,14 +55,19 @@ class SymbolicState(
   }
 
   def nextState(): SymbolicState = {
-    new SymbolicState(nextStatement.succ.head, pathCondition, symbolicStore, callStack, variableDecls)
+    nextStatement = nextStatement.succ.head
+    this
+    //new SymbolicState(nextStatement.succ.head, pathCondition, symbolicStore, callStack, variableDecls)
   }
 
   def goTo(nextStatement: CfgNode, variableDecls: List[IdentifierDecl]): SymbolicState = {
-    new SymbolicState(nextStatement, pathCondition, symbolicStore, callStack, variableDecls)
+    this.nextStatement = nextStatement
+    this.variableDecls = variableDecls
+    this
+    //new SymbolicState(nextStatement, pathCondition, symbolicStore, callStack, variableDecls)
   }
 
-  def getSymbolicValOpt(name: String): Option[RefVal] = {
+  def getSymbolicValOpt(name: String): Option[PointerVal] = {
     symbolicStore.findVar(name)
   }
 
@@ -72,7 +80,7 @@ class SymbolicState(
   }
 
   def getSymbolicVal(name: String, loc: Loc, allowReturnNonInitialized: Boolean = false): Val = {
-    val res = symbolicStore.getVal(name, loc, allowReturnNonInitialized)
+    val res = symbolicStore.getVal(name, loc, this, allowReturnNonInitialized)
     if (allowReturnNonInitialized) {
       res match {
         case UninitializedRef => return SymbolicVal(CodeLoc(0, 0))
@@ -82,7 +90,7 @@ class SymbolicState(
     res
   }
 
-  def addedLoopTrace(trace: (Expr, mutable.HashMap[String, Expr => Expr])): SymbolicState = {
+  def addedLoopTrace(trace: (Expr, mutable.HashMap[Expr, Expr => Expr])): SymbolicState = {
     new SymbolicState(nextStatement.succ.maxBy(node => node.id), new PathCondition(None, BinaryOp(AndAnd, pathCondition.expr, trace._1, CodeLoc(0, 0))), symbolicStore, callStack, variableDecls)
   }
 
@@ -192,6 +200,15 @@ class SymbolicState(
       res = res.appended(fceCall)
     }
     res
+  }
+
+  def isSimilarTo(other: SymbolicState, limit: Double, variableSolvingCosts: mutable.HashMap[String, Double]): Boolean = {
+    val variablesThatDiffers = other.symbolicStore.getDifferentVariables(other.symbolicStore)
+    var cost: Double = 0.0
+    for (variable <- variablesThatDiffers) {
+      cost += variableSolvingCosts.getOrElse(variable, 0.0)
+    }
+    cost <= limit
   }
 
 }

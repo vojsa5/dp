@@ -129,7 +129,7 @@ object Value {
     override def loc: Loc = ???
   }
 
-  case class RecVal(fields: mutable.Map[String, Val]) extends Symbolic {
+  case class RecVal(fields: mutable.Map[String, PointerVal]) extends Symbolic {
     override def toString: String = fields.map { case (k, v) => s"$k:$v" }.mkString("{", ",", "}")
 
     override def equalsVal(other: Val): Boolean =

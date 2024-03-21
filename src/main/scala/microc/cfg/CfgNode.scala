@@ -4,7 +4,7 @@ import microc.ast._
 
 import scala.collection.mutable
 
-abstract class CfgNode(val id: Int, var ast: AstNode) extends Ordered[CfgNode] {
+abstract class CfgNode(val id: Double, var ast: AstNode) extends Ordered[CfgNode] {
   val pred: mutable.Set[CfgNode] = mutable.Set()
 
   val succ: mutable.Set[CfgNode] = mutable.Set()
@@ -15,12 +15,12 @@ abstract class CfgNode(val id: Int, var ast: AstNode) extends Ordered[CfgNode] {
       case _             => false
     }
 
-  override def hashCode(): Int = id
+  override def hashCode(): Int = id.toInt
 
-  override def compare(that: CfgNode): Int = this.id - that.id
+  override def compare(that: CfgNode): Int = (this.id - that.id).toInt
 }
 
-class CfgStmtNode(id: Int, ast: AstNode) extends CfgNode(id, ast) {
+class CfgStmtNode(id: Double, ast: AstNode) extends CfgNode(id, ast) {
   override def toString: String = s"$id: [$ast]"
 }
 
@@ -31,7 +31,7 @@ object CfgStmtNode {
   }
 }
 
-class CfgFunEntryNode(id: Int, val fun: FunDecl) extends CfgNode(id, fun) {
+class CfgFunEntryNode(id: Double, val fun: FunDecl) extends CfgNode(id, fun) {
   override def toString: String = s"$id: [fun entry: ${fun.name}]"
 }
 
@@ -42,7 +42,7 @@ object CfgFunEntryNode {
   }
 }
 
-class CfgFunExitNode(id: Int, val fun: FunDecl) extends CfgNode(id, fun) {
+class CfgFunExitNode(id: Double, val fun: FunDecl) extends CfgNode(id, fun) {
   override def toString: String = s"$id: [fun exit: ${fun.name}]"
 }
 

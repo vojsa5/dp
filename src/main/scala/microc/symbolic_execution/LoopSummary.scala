@@ -1,51 +1,14 @@
 package microc.symbolic_execution
 
 import com.microsoft.z3.{BoolExpr, Context, Status}
-import microc.ast.{AndAnd, AssignStmt, BinaryOp, CodeLoc, Divide, Equal, Expr, GreaterEqual, GreaterThan, Identifier, IdentifierDecl, IfStmt, LowerEqual, LowerThan, Minus, NestedBlockStmt, Not, NotEqual, Number, OrOr, Plus, Stmt, Times, WhileStmt}
+import microc.ast.{Alloc, AndAnd, ArrayAccess, ArrayNode, AssignStmt, BinaryOp, CodeLoc, Divide, Equal, Expr, FieldAccess, GreaterEqual, GreaterThan, Identifier, IdentifierDecl, IfStmt, Input, LowerEqual, LowerThan, Minus, NestedBlockStmt, Not, NotEqual, Number, OrOr, Plus, Stmt, Times, WhileStmt}
 import microc.cfg.{CfgNode, ProgramCfg}
-import microc.symbolic_execution.LoopSummary.{getAllTruePaths, simplifyArithExpr}
-import microc.symbolic_execution.Value.{PointerVal, Symbolic, SymbolicExpr, SymbolicVal, UninitializedRef, Val}
+import microc.symbolic_execution.LoopSummary.getAllTruePaths
+import microc.symbolic_execution.Value.{ArrVal, PointerVal, RecVal, Symbolic, SymbolicExpr, SymbolicVal, UninitializedRef, Val}
 
 import scala.collection.mutable
 
 object LoopSummary {
-
-  def simplifyArithExpr(expr: Expr): Expr = {//TODO if changed, repeat
-    expr match {
-      case n@Number(_, _) => n
-      case BinaryOp(AndAnd, Number(1, _), expr, _) => simplifyArithExpr(expr)
-      case BinaryOp(OrOr, Number(0, _), expr, _) => simplifyArithExpr(expr)
-      case BinaryOp(AndAnd, expr, Number(1, _), _) => simplifyArithExpr(expr)
-      case BinaryOp(OrOr, expr, Number(0, _), _) => simplifyArithExpr(expr)
-      case BinaryOp(AndAnd, expr1, expr2, _) if expr1 == expr2 => simplifyArithExpr(expr1)
-      case BinaryOp(OrOr, expr1, expr2, _) if expr1 == expr2 => simplifyArithExpr(expr1)
-      case BinaryOp(Plus, expr, Number(0, _), _) => simplifyArithExpr(expr)
-      case BinaryOp(Times, expr, Number(1, _), _) => simplifyArithExpr(expr)
-      case BinaryOp(Plus, Number(0, _), expr, _) => simplifyArithExpr(expr)
-      case BinaryOp(Times, Number(1, _), expr, _) => simplifyArithExpr(expr)
-      case BinaryOp(operator, left, right, loc) =>
-        (simplifyArithExpr(left), simplifyArithExpr(right)) match {
-          case (Number(value, loc), Number(value2, _)) =>
-            operator match {
-              case Plus => Number(value + value2, loc)
-              case Minus => Number(value - value2, loc)
-              case Times => Number(value * value2, loc)
-              case Divide => Number(value / value2, loc)
-              case LowerThan => Number(if (value < value2) 1 else 0, loc)
-              case LowerEqual => Number(if (value <= value2) 1 else 0, loc)
-              case GreaterThan => Number(if (value > value2) 1 else 0, loc)
-              case GreaterEqual => Number(if (value >= value2) 1 else 0, loc)
-              case NotEqual => Number(if (value != value2) 1 else 0, loc)
-              case Equal => Number(if (value == value2) 1 else 0, loc)
-              case AndAnd => Number(if (value != 0 && value2 != 0) 1 else 0, loc)
-              case OrOr => Number(if (value != 0 || value2 != 0) 1 else 0, loc)
-            }
-          case (a, b) =>
-            BinaryOp(operator, a, b, loc)
-        }
-      case other => other
-    }
-  }
 
 
   def getAllTruePaths(stmt: CfgNode, loopId: Int): List[Path] = {
@@ -111,8 +74,11 @@ class LoopSummary(program: ProgramCfg,
         tmpState = tmpState.addedLoopTrace(trace)
 
         for (change <- trace._2) {
-          if (Utility.varIsFromOriginalProgram(change._1)) {
-            val ptr = newState.getSymbolicValOpt(change._1).get.asInstanceOf[PointerVal]
+          val name = change._1 match {
+            case Identifier(name, _) => name
+          }
+          if (Utility.varIsFromOriginalProgram(name)) {
+            val ptr = newState.getSymbolicValOpt(name).get.asInstanceOf[PointerVal]
             val ptrVal = tmpState.symbolicStore.getValOfPtr(ptr, true) match {
               case Some(UninitializedRef) =>
                 Some(SymbolicVal(CodeLoc(0, 0)))
@@ -136,14 +102,14 @@ class LoopSummary(program: ProgramCfg,
   }
 
 //TODO remove
-  val pathToVertex: mutable.HashMap[Path, mutable.HashMap[String, Expr => Expr => Expr]] = mutable.HashMap[Path, mutable.HashMap[String, Expr => Expr => Expr]]()
+  val pathToVertex: mutable.HashMap[Path, mutable.HashMap[Expr, Expr => Expr => Expr]] = mutable.HashMap[Path, mutable.HashMap[Expr, Expr => Expr => Expr]]()
 
 
-  def summarizeLoop(symbolicState: SymbolicState): Option[(mutable.HashSet[(Expr, mutable.HashMap[String, Expr => Expr])], SymbolicState)] = {
+  def summarizeLoop(symbolicState: SymbolicState): Option[(mutable.HashSet[(Expr, mutable.HashMap[Expr, Expr => Expr])], SymbolicState)] = {
     summarizeLoopInner(symbolicState.nextStatement, symbolicState)
   }
 
-  private def summarizeLoopInner(loop: CfgNode, symbolicState: SymbolicState): Option[(mutable.HashSet[(Expr, mutable.HashMap[String, Expr => Expr])], SymbolicState)] = {
+  private def summarizeLoopInner(loop: CfgNode, symbolicState: SymbolicState): Option[(mutable.HashSet[(Expr, mutable.HashMap[Expr, Expr => Expr])], SymbolicState)] = {
 
     var vertices: List[Vertex] = List()
     var newState = new SymbolicState(null, PathCondition.initial(), new SymbolicStore(Map.empty))
@@ -174,31 +140,31 @@ class LoopSummary(program: ProgramCfg,
           expr match {
             case BinaryOp(Plus, Identifier(name2, loc1), n@Number(_, loc2), _) if name == name2 =>
               variableChange += (name -> (iterations => (x =>
-                simplifyArithExpr(BinaryOp(Plus, x, BinaryOp(Times, iterations, n, loc2), loc1)))))
+                Utility.simplifyArithExpr(BinaryOp(Plus, x, BinaryOp(Times, iterations, n, loc2), loc1)))))
             case BinaryOp(Minus, Identifier(name2, loc1), Number(value, loc2), _) if name == name2 =>
               variableChange += (name -> (iterations => (x =>
-                simplifyArithExpr(BinaryOp(Plus, x, BinaryOp(Times, iterations, Number(-value, loc2), loc2), loc1)))))
+                Utility.simplifyArithExpr(BinaryOp(Plus, x, BinaryOp(Times, iterations, Number(-value, loc2), loc2), loc1)))))
             case BinaryOp(Plus, Identifier(name2, loc1), id@Identifier(_, loc2), _) if name == name2 =>
               variableChange += (name -> (iterations => (x =>
-                simplifyArithExpr(BinaryOp(Plus, x, BinaryOp(Times, iterations, symbolicState.getSymbolicVal(id.name, id.loc).asInstanceOf[Symbolic], loc2), loc1)))))
+                Utility.simplifyArithExpr(BinaryOp(Plus, x, BinaryOp(Times, iterations, symbolicState.getSymbolicVal(id.name, id.loc).asInstanceOf[Symbolic], loc2), loc1)))))
             case BinaryOp(Minus, Identifier(name2, loc1), id@Identifier(_, loc2), _) if name == name2 =>
               variableChange += (name -> (iterations => (x =>
-                simplifyArithExpr(BinaryOp(Plus, x, BinaryOp(Times, iterations, Not(symbolicState.getSymbolicVal(id.name, id.loc).asInstanceOf[Symbolic], loc2), loc2), loc1)))))
+                Utility.simplifyArithExpr(BinaryOp(Plus, x, BinaryOp(Times, iterations, Not(symbolicState.getSymbolicVal(id.name, id.loc).asInstanceOf[Symbolic], loc2), loc2), loc1)))))
             case BinaryOp(Plus, n@Number(_, loc2), Identifier(name2, loc1),  _) if name == name2 =>
               variableChange += (name -> (iterations => (x =>
-                simplifyArithExpr(BinaryOp(Plus, x, BinaryOp(Times, iterations, n, loc2), loc1)))))
+                Utility.simplifyArithExpr(BinaryOp(Plus, x, BinaryOp(Times, iterations, n, loc2), loc1)))))
             case BinaryOp(Minus, Number(value, loc2), Identifier(name2, loc1), _) if name == name2 =>
               variableChange += (name -> (iterations => (x =>
-                simplifyArithExpr(BinaryOp(Plus, x, BinaryOp(Times, iterations, Number(-value, loc2), loc2), loc1)))))
+                Utility.simplifyArithExpr(BinaryOp(Plus, x, BinaryOp(Times, iterations, Number(-value, loc2), loc2), loc1)))))
             case BinaryOp(Plus, id@Identifier(_, loc2), Identifier(name2, loc1), _) if name == name2 =>
               variableChange += (name -> (iterations => (x =>
-                simplifyArithExpr(BinaryOp(Plus, x, BinaryOp(Times, iterations, symbolicState.getSymbolicVal(id.name, id.loc).asInstanceOf[Symbolic], loc2), loc1)))))
+                Utility.simplifyArithExpr(BinaryOp(Plus, x, BinaryOp(Times, iterations, symbolicState.getSymbolicVal(id.name, id.loc).asInstanceOf[Symbolic], loc2), loc1)))))
             case BinaryOp(Minus, id@Identifier(_, loc2), Identifier(name2, loc1), _) if name == name2 =>
               variableChange += (name -> (iterations => (x =>
-                simplifyArithExpr(BinaryOp(Plus, x, BinaryOp(Times, iterations, Not(symbolicState.getSymbolicVal(id.name, id.loc).asInstanceOf[Symbolic], loc2), loc2), loc1)))))
+                Utility.simplifyArithExpr(BinaryOp(Plus, x, BinaryOp(Times, iterations, Not(symbolicState.getSymbolicVal(id.name, id.loc).asInstanceOf[Symbolic], loc2), loc2), loc1)))))
 
             case expr if !Utility.varIsFromOriginalProgram(name) =>
-              variableChange += (name -> (iterations => (x => simplifyArithExpr(expr))))
+              variableChange += (name -> (iterations => (x => Utility.simplifyArithExpr(expr))))
             case _ =>
 
           }
@@ -209,7 +175,7 @@ class LoopSummary(program: ProgramCfg,
   }
 
 
-  def getAllTruePaths2(stmt: CfgNode, loopId: Int, symbolicState: SymbolicState, updatedVars: mutable.HashSet[String]): Option[List[Path]] = {
+  def getAllTruePaths2(stmt: CfgNode, loopId: Double, symbolicState: SymbolicState, updatedVars: mutable.HashMap[PointerVal, Expr => Expr => Expr]): Option[List[Path]] = {
     var paths = List[Path]()
     paths = paths.appended(new Path(List[Stmt](), Number(1, CodeLoc(0, 0)), mutable.HashMap()))
     var curr = stmt
@@ -248,15 +214,18 @@ class LoopSummary(program: ProgramCfg,
           for (trace <- summary._1) {
             paths = paths.map(path => path.addedCondition(trace._1))
             for (update <- trace._2) {
-              if (Utility.varIsFromOriginalProgram(update._1)) {
+              val name = update._1 match {
+                case Identifier(name, _) => name
+              }
+              if (Utility.varIsFromOriginalProgram(name)) {
                 val x = update._2.apply(Number(0, CodeLoc(0, 0)))
                 paths = paths.map(path =>
                   path.updatedChanges(update._1,
-                    iterations => x => simplifyArithExpr(BinaryOp(Plus, x, BinaryOp(Times, iterations, update._2.apply(x), CodeLoc(0, 0)), CodeLoc(0, 0)))
+                    iterations => x => Utility.simplifyArithExpr(BinaryOp(Plus, x, BinaryOp(Times, iterations, update._2.apply(x), CodeLoc(0, 0)), CodeLoc(0, 0)))
                   )
                 )
-                if (symbolicState.containsVar(update._1)) {
-                  symbolicState.applyChange(update._1, update._2)
+                if (symbolicState.containsVar(name)) {
+                  symbolicState.applyChange(name, update._2)
                 }
               }
             }
@@ -264,10 +233,15 @@ class LoopSummary(program: ProgramCfg,
           curr = curr.succ.filter(node => node.id != curr.id + 1).head
         case otherStmt: AssignStmt =>
           val changeOpt = computeVariableChange2(otherStmt, symbolicState, updatedVars)
-          stepOnAssign(otherStmt, symbolicState)
           if (changeOpt.nonEmpty) {
+            stepOnAssign(otherStmt, symbolicState)
             val change = changeOpt.get
-            paths = paths.map(path => path.appendedStatement(otherStmt).updatedChanges(change._1, change._2))
+            change._1 match {
+              case v@Identifier(name, loc) =>
+                paths = paths.map(path => path.appendedStatement(otherStmt).updatedChanges(v, change._2))
+              case a@ArrayAccess(array, index, _) =>
+                paths = paths.map(path => path.appendedStatement(otherStmt).updatedChanges(a, change._2))
+            }
           }
           else {
             return None
@@ -281,57 +255,190 @@ class LoopSummary(program: ProgramCfg,
   }
 
 
-  def computeVariableChange2(stmt: Stmt, symbolicState: SymbolicState, updatedVars: mutable.HashSet[String]): Option[(String, (Expr) => ((Expr) => Expr))] = {
+  private def sameSymbolicVal(state: SymbolicState, ptr1: PointerVal, ptr2: PointerVal): Boolean = state.getVal(ptr1) == state.getVal(ptr2)
+
+
+
+  def computeVariableChange2(stmt: Stmt, symbolicState: SymbolicState, updatedMemoryLocations: mutable.HashMap[PointerVal, (Expr) => ((Expr) => Expr)]): Option[(Expr, (Expr) => ((Expr) => Expr))] = {
     stmt match {
-      case AssignStmt(Identifier(name, loc), expr, _) =>
-        simplifyArithExpr(expr) match {
+      case AssignStmt(id@Identifier(name, loc), expr, _) =>
+        val rightSideMemoryLocation = symbolicState.getSymbolicValOpt(name).get
+        Utility.simplifyArithExpr(expr) match {
           case BinaryOp(_, SymbolicVal(_), _, _) =>
             None
           case BinaryOp(_, _, SymbolicVal(_), _) =>
             None
-          case BinaryOp(Plus, Identifier(name2, loc1), n@Number(_, loc2), _) if name == name2 =>
-            Some(name, (iterations => (x =>
-              simplifyArithExpr(BinaryOp(Plus, x, BinaryOp(Times, iterations, n, loc2), loc1)))))
-          case BinaryOp(Minus, Identifier(name2, loc1), Number(value, loc2), _) if name == name2 =>
-            Some(name, (iterations => (x =>
-              simplifyArithExpr(BinaryOp(Plus, x, BinaryOp(Times, iterations, Number(-value, loc2), loc2), loc1)))))
-          case BinaryOp(Plus, Identifier(name2, loc1), id@Identifier(name3, loc2), _) if name == name2 && updatedVars.contains(name3) =>
-            None
-          case BinaryOp(Minus, Identifier(name2, loc1), id@Identifier(name3, loc2), _) if name == name2 && updatedVars.contains(name3) =>
-            None
-          case BinaryOp(Plus, Identifier(name2, loc1), id@Identifier(name3, loc2), _) if name == name3 && updatedVars.contains(name2) =>
-            None
-          case BinaryOp(Minus, Identifier(name2, loc1), id@Identifier(name3, loc2), _) if name == name3 && updatedVars.contains(name2) =>
-            None
-          case BinaryOp(Plus, Identifier(name2, loc1), id@Identifier(_, loc2), _) if name == name2 =>
-            Some(name, (iterations => (x =>
-              simplifyArithExpr(BinaryOp(Plus, x, BinaryOp(Times, iterations, symbolicState.getSymbolicVal(id.name, id.loc).asInstanceOf[Symbolic], loc2), loc1)))))
-          case BinaryOp(Minus, Identifier(name2, loc1), id@Identifier(_, loc2), _) if name == name2 =>
-            Some(name, (iterations => (x =>
-              simplifyArithExpr(BinaryOp(Plus, x, BinaryOp(Times, iterations, Not(symbolicState.getSymbolicVal(id.name, id.loc).asInstanceOf[Symbolic], loc2), loc2), loc1)))))
-          case BinaryOp(Plus, n@Number(_, loc2), Identifier(name2, loc1), _) if name == name2 =>
-            Some(name, (iterations => (x =>
-              simplifyArithExpr(BinaryOp(Plus, x, BinaryOp(Times, iterations, n, loc2), loc1)))))
-          case BinaryOp(Minus, Number(value, loc2), Identifier(name2, loc1), _) if name == name2 =>
-            Some(name, (iterations => (x =>
-              simplifyArithExpr(BinaryOp(Plus, x, BinaryOp(Times, iterations, Number(-value, loc2), loc2), loc1)))))
-          case BinaryOp(Plus, id@Identifier(_, loc2), Identifier(name2, loc1), _) if name == name2 =>
-            Some(name, (iterations => (x =>
-              simplifyArithExpr(BinaryOp(Plus, x, BinaryOp(Times, iterations, symbolicState.getSymbolicVal(id.name, id.loc).asInstanceOf[Symbolic], loc2), loc1)))))
-          case BinaryOp(Minus, id@Identifier(_, loc2), Identifier(name2, loc1), _) if name == name2 =>
-            Some(name, (iterations => (x =>
-              simplifyArithExpr(BinaryOp(Plus, x, BinaryOp(Times, iterations, Not(symbolicState.getSymbolicVal(id.name, id.loc).asInstanceOf[Symbolic], loc2), loc2), loc1)))))
+          case BinaryOp(Plus, Identifier(name2, loc1), n@Number(_, loc2), _)
+            if sameSymbolicVal(symbolicState, symbolicState.getSymbolicValOpt(name2).get, rightSideMemoryLocation) =>
+              val changeFunction: Expr => Expr => Expr = (iterations => (x =>
+                Utility.simplifyArithExpr(BinaryOp(Plus, x, BinaryOp(Times, iterations, n, loc2), loc1))))
+              updatedMemoryLocations.put(rightSideMemoryLocation, changeFunction)
+              Some(id, changeFunction)
+          case BinaryOp(Minus, Identifier(name2, loc1), Number(value, loc2), _)
+            if sameSymbolicVal(symbolicState, symbolicState.getSymbolicValOpt(name2).get, rightSideMemoryLocation) =>
+              val changeFunction: Expr => Expr => Expr = (iterations => (x =>
+                Utility.simplifyArithExpr(BinaryOp(Plus, x, BinaryOp(Times, iterations, Number(-value, loc2), loc2), loc1))))
+              updatedMemoryLocations.put(rightSideMemoryLocation, changeFunction)
+              Some(id, changeFunction)
+          case BinaryOp(Plus, Identifier(name2, loc1), id@Identifier(name3, loc2), _)
+            if sameSymbolicVal(symbolicState, symbolicState.getSymbolicValOpt(name2).get, rightSideMemoryLocation) && updatedMemoryLocations.contains(symbolicState.getSymbolicValOpt(name3).get) =>
+              None
+          case BinaryOp(Minus, Identifier(name2, loc1), id@Identifier(name3, loc2), _)
+            if sameSymbolicVal(symbolicState, symbolicState.getSymbolicValOpt(name2).get, rightSideMemoryLocation) && updatedMemoryLocations.contains(symbolicState.getSymbolicValOpt(name3).get) =>
+              None
+          case BinaryOp(Plus, Identifier(name2, loc1), id@Identifier(name3, loc2), _)
+            if sameSymbolicVal(symbolicState, symbolicState.getSymbolicValOpt(name3).get, rightSideMemoryLocation) && updatedMemoryLocations.contains(symbolicState.getSymbolicValOpt(name2).get) =>
+              None
+          case BinaryOp(Minus, Identifier(name2, loc1), id@Identifier(name3, loc2), _)
+            if sameSymbolicVal(symbolicState, symbolicState.getSymbolicValOpt(name3).get, rightSideMemoryLocation) && updatedMemoryLocations.contains(symbolicState.getSymbolicValOpt(name2).get) =>
+              None
+          case BinaryOp(Plus, resId@Identifier(name2, loc1), id@Identifier(_, loc2), _)
+            if sameSymbolicVal(symbolicState, symbolicState.getSymbolicValOpt(name2).get, rightSideMemoryLocation) =>
+              val v = symbolicState.getSymbolicVal(id.name, id.loc).asInstanceOf[Symbolic]
+              val changeFunction: Expr => Expr => Expr = (iterations => (x =>
+                Utility.simplifyArithExpr(BinaryOp(Plus, x, BinaryOp(Times, iterations, v, loc2), loc1))))
+              updatedMemoryLocations.put(rightSideMemoryLocation, changeFunction)
+              Some(resId, changeFunction)
+          case BinaryOp(Minus, resId@Identifier(name2, loc1), id@Identifier(_, loc2), _)
+            if sameSymbolicVal(symbolicState, symbolicState.getSymbolicValOpt(name2).get, rightSideMemoryLocation) =>
+              val v = symbolicState.getSymbolicVal(id.name, id.loc).asInstanceOf[Symbolic]
+              val changeFunction: Expr => Expr => Expr = (iterations => (x =>
+                Utility.simplifyArithExpr(BinaryOp(Plus, x, BinaryOp(Times, iterations, BinaryOp(Minus, Number(0, CodeLoc(0, 0)), v, loc2), loc2), loc1))))
+              updatedMemoryLocations.put(rightSideMemoryLocation, changeFunction)
+                Some(resId, changeFunction)
+          case BinaryOp(Plus, n@Number(_, loc2), Identifier(name2, loc1), _)
+            if sameSymbolicVal(symbolicState, symbolicState.getSymbolicValOpt(name2).get, rightSideMemoryLocation) =>
+              val changeFunction: Expr => Expr => Expr = (iterations => (x =>
+                Utility.simplifyArithExpr(BinaryOp(Plus, x, BinaryOp(Times, iterations, n, loc2), loc1))))
+              updatedMemoryLocations.put(rightSideMemoryLocation, changeFunction)
+              Some(id, changeFunction)
+          case BinaryOp(Minus, Number(value, loc2), Identifier(name2, loc1), _)
+            if sameSymbolicVal(symbolicState, symbolicState.getSymbolicValOpt(name2).get, rightSideMemoryLocation) =>
+              val changeFunction: Expr => Expr => Expr = (iterations => (x =>
+                Utility.simplifyArithExpr(BinaryOp(Plus, x, BinaryOp(Times, iterations, Number(-value, loc2), loc2), loc1))))
+              updatedMemoryLocations.put(rightSideMemoryLocation, changeFunction)
+              Some(id, changeFunction)
+          case BinaryOp(Plus, id@Identifier(_, loc2), resId@Identifier(name2, loc1), _)
+            if sameSymbolicVal(symbolicState, symbolicState.getSymbolicValOpt(name2).get, rightSideMemoryLocation) =>
+              val v = symbolicState.getSymbolicVal(id.name, id.loc).asInstanceOf[Symbolic]
+              val changeFunction: Expr => Expr => Expr = (iterations => (x =>
+                Utility.simplifyArithExpr(BinaryOp(Plus, x, BinaryOp(Times, iterations, v, loc2), loc1))))
+              updatedMemoryLocations.put(rightSideMemoryLocation, changeFunction)
+              Some(resId, changeFunction)
+          case BinaryOp(Minus, id@Identifier(_, loc2), resId@Identifier(name2, loc1), _)
+            if sameSymbolicVal(symbolicState, symbolicState.getSymbolicValOpt(name2).get, rightSideMemoryLocation) =>
+            val v = symbolicState.getSymbolicVal(id.name, id.loc).asInstanceOf[Symbolic]
+            val changeFunction: Expr => Expr => Expr = (iterations => (x =>
+              Utility.simplifyArithExpr(BinaryOp(Plus, x, BinaryOp(Times, iterations, BinaryOp(Minus, Number(0, CodeLoc(0, 0)), v, loc2), loc2), loc1))))
+            updatedMemoryLocations.put(rightSideMemoryLocation, changeFunction)
+            Some(resId, changeFunction)
           case expr: BinaryOp if !Utility.varIsFromOriginalProgram(name) =>
-            Some(name, (iterations => (x => simplifyArithExpr(expr))))
+            Some(id, (iterations => (x => Utility.simplifyArithExpr(expr))))
+          case n@Not(expr, loc) =>
+            Some(id, (iterations => (x => n)))
+          case arr@ArrayNode(elems, loc) =>
+            Some(id, (iterations => (x => arr)))
+          case arr@ArrayAccess(Identifier(name, loc1), Number(n, loc2), loc3) if !updatedMemoryLocations.contains(symbolicState.getSymbolicValOpt(name).get) =>
+            val elem = symbolicState.symbolicStore.storage.memory(symbolicState.getSymbolicVal(name, loc).asInstanceOf[ArrVal].elems(n).address).asInstanceOf[Symbolic]
+            Some(id, (iterations => (x => elem)))
+          case f@FieldAccess(Identifier(name, loc1), field, loc2) =>
+            val rec = symbolicState.getSymbolicVal(name, loc1).asInstanceOf[RecVal]
+            val r = rec.fields(field).asInstanceOf[Symbolic]
+            Some(id, (iterations => (x => r)))
           case n@Number(_, _) =>
-            Some(name, (iterations => (x => n)))
-          case id@Identifier(_, _) =>
-            Some(name, (iterations => (x => symbolicState.getSymbolicVal(id.name, id.loc).asInstanceOf[Symbolic])))
+            Some(id, (iterations => (x => n)))
+          case a@Alloc(expr, _) =>
+            Some(id, (iterations => (x => a)))
+          case in@Input(loc) =>
+            Some(id, (iterations => (x => SymbolicVal(CodeLoc(0, 0)))))
+          case Identifier(name, loc) =>
+            val location = symbolicState.getSymbolicValOpt(name).get
+            if (!updatedMemoryLocations.contains(location)) {
+              val v = symbolicState.getSymbolicVal(name, loc).asInstanceOf[Symbolic]
+              Some(id, (iterations => (x => v)))
+            }
+            else {
+              Some(id, updatedMemoryLocations(location))
+            }
           case _ =>
             None
-
         }
-      case _ => None
+      case AssignStmt(a@ArrayAccess(Identifier(name, loc), Number(index, _), _), expr, _) =>
+        val arrayOnIndex = symbolicState.symbolicStore.storage.memory(symbolicState.getSymbolicVal(name, loc).asInstanceOf[ArrVal].elems(index).address)
+        Utility.simplifyArithExpr(expr) match {
+          case BinaryOp(_, SymbolicVal(_), _, _) =>
+            None
+          case BinaryOp(_, _, SymbolicVal(_), _) =>
+            None
+          case BinaryOp(Plus, Identifier(name2, loc1), n@Number(_, loc2), _)
+            if symbolicState.symbolicStore.storage.memory(symbolicState.getSymbolicValOpt(name2).get.asInstanceOf[PointerVal].address) == arrayOnIndex =>
+              Some(a, (iterations => (x =>
+                Utility.simplifyArithExpr(BinaryOp(Plus, x, BinaryOp(Times, iterations, n, loc2), loc1)))))
+          case BinaryOp(Minus, Identifier(name2, loc1), Number(value, loc2), _)
+            if symbolicState.symbolicStore.storage.memory(symbolicState.getSymbolicValOpt(name2).get.asInstanceOf[PointerVal].address) == arrayOnIndex =>
+              Some(a, (iterations => (x =>
+                Utility.simplifyArithExpr(BinaryOp(Plus, x, BinaryOp(Times, iterations, Number(-value, loc2), loc2), loc1)))))
+          case BinaryOp(Plus, Identifier(name2, loc1), id@Identifier(name3, loc2), _)
+            if symbolicState.symbolicStore.storage.memory(symbolicState.getSymbolicValOpt(name2).get.asInstanceOf[PointerVal].address) == arrayOnIndex && updatedMemoryLocations.contains(symbolicState.getSymbolicValOpt(name3).get) =>
+              None
+          case BinaryOp(Minus, Identifier(name2, loc1), id@Identifier(name3, loc2), _)
+            if symbolicState.symbolicStore.storage.memory(symbolicState.getSymbolicValOpt(name2).get.asInstanceOf[PointerVal].address) == arrayOnIndex && updatedMemoryLocations.contains(symbolicState.getSymbolicValOpt(name3).get) =>
+              None
+          case BinaryOp(Plus, Identifier(name2, loc1), id@Identifier(name3, loc2), _)
+            if symbolicState.symbolicStore.storage.memory(symbolicState.getSymbolicValOpt(name3).get.asInstanceOf[PointerVal].address) == arrayOnIndex && updatedMemoryLocations.contains(symbolicState.getSymbolicValOpt(name2).get) =>
+              None
+          case BinaryOp(Minus, Identifier(name2, loc1), id@Identifier(name3, loc2), _)
+            if symbolicState.symbolicStore.storage.memory(symbolicState.getSymbolicValOpt(name3).get.asInstanceOf[PointerVal].address) == arrayOnIndex && updatedMemoryLocations.contains(symbolicState.getSymbolicValOpt(name2).get) =>
+            None
+          case BinaryOp(Plus, resId@Identifier(name2, loc1), id@Identifier(_, loc2), _)
+            if symbolicState.symbolicStore.storage.memory(symbolicState.getSymbolicValOpt(name2).get.asInstanceOf[PointerVal].address) == arrayOnIndex =>
+              val v = symbolicState.getSymbolicVal(id.name, id.loc).asInstanceOf[Symbolic]
+              Some(a, (iterations => (x =>
+                Utility.simplifyArithExpr(BinaryOp(Plus, x, BinaryOp(Times, iterations, v, loc2), loc1)))))
+          case BinaryOp(Minus, resId@Identifier(name2, loc1), id@Identifier(_, loc2), _)
+            if symbolicState.symbolicStore.storage.memory(symbolicState.getSymbolicValOpt(name2).get.asInstanceOf[PointerVal].address) == arrayOnIndex =>
+              val v = symbolicState.getSymbolicVal(id.name, id.loc).asInstanceOf[Symbolic]
+              Some(a, (iterations => (x =>
+                Utility.simplifyArithExpr(BinaryOp(Plus, x, BinaryOp(Times, iterations, BinaryOp(Minus, Number(0, CodeLoc(0, 0)), v, loc2), loc2), loc1)))))
+          case BinaryOp(Plus, n@Number(_, loc2), Identifier(name2, loc1), _)
+            if symbolicState.symbolicStore.storage.memory(symbolicState.getSymbolicValOpt(name2).get.asInstanceOf[PointerVal].address) == arrayOnIndex =>
+              Some(a, (iterations => (x =>
+                Utility.simplifyArithExpr(BinaryOp(Plus, x, BinaryOp(Times, iterations, n, loc2), loc1)))))
+          case BinaryOp(Minus, Number(value, loc2), Identifier(name2, loc1), _)
+            if symbolicState.symbolicStore.storage.memory(symbolicState.getSymbolicValOpt(name2).get.asInstanceOf[PointerVal].address) == arrayOnIndex =>
+              Some(a, (iterations => (x =>
+                Utility.simplifyArithExpr(BinaryOp(Plus, x, BinaryOp(Times, iterations, Number(-value, loc2), loc2), loc1)))))
+          case BinaryOp(Plus, id@Identifier(_, loc2), resId@Identifier(name2, loc1), _)
+            if symbolicState.symbolicStore.storage.memory(symbolicState.getSymbolicValOpt(name2).get.asInstanceOf[PointerVal].address) == arrayOnIndex =>
+              val v = symbolicState.getSymbolicVal(id.name, id.loc).asInstanceOf[Symbolic]
+              Some(a, (iterations => (x =>
+                Utility.simplifyArithExpr(BinaryOp(Plus, x, BinaryOp(Times, iterations, v, loc2), loc1)))))
+          case BinaryOp(Minus, id@Identifier(_, loc2), resId@Identifier(name2, loc1), _)
+            if symbolicState.symbolicStore.storage.memory(symbolicState.getSymbolicValOpt(name2).get.asInstanceOf[PointerVal].address) == arrayOnIndex =>
+              val v = symbolicState.getSymbolicVal(id.name, id.loc).asInstanceOf[Symbolic]
+              Some(a, (iterations => (x =>
+                Utility.simplifyArithExpr(BinaryOp(Plus, x, BinaryOp(Times, iterations, BinaryOp(Minus, Number(0, CodeLoc(0, 0)), v, loc2), loc2), loc1)))))
+          case arr@ArrayAccess(Identifier(name, loc1), Number(n, loc2), loc3) if !updatedMemoryLocations.contains(symbolicState.getSymbolicValOpt(name).get) =>
+            val elem = symbolicState.symbolicStore.storage.memory(symbolicState.getSymbolicVal(name, loc)
+              .asInstanceOf[ArrVal].elems(n).address).asInstanceOf[Symbolic]
+            Some(a, (iterations => (x => elem)))
+          case f@FieldAccess(Identifier(name, loc1), field, loc2) =>
+            val rec = symbolicState.getSymbolicVal(name, loc1).asInstanceOf[RecVal]
+            val r = rec.fields(name).asInstanceOf[Symbolic]
+            Some(a, (iterations => (x => r)))
+          case n@Number(_, _) =>
+            Some(a, (iterations => (x => n)))
+          case a@Alloc(expr, _) =>
+            Some(a, (iterations => (x => a)))
+          case in@Input(loc) =>
+            Some(a, (iterations => (x => SymbolicVal(CodeLoc(0, 0)))))
+          case id@Identifier(_, _) =>
+            val v = symbolicState.getSymbolicVal(id.name, id.loc).asInstanceOf[Symbolic]
+            Some(a, (iterations => (x => v)))
+          case _ =>
+            None
+        }
+   case _ => None
     }
   }
 
@@ -347,7 +454,7 @@ class LoopSummary(program: ProgramCfg,
       case _ =>
     }
     paths = paths.appended(falsePath)
-    val updatedVars = getUpdatedVars(stmt.ast.asInstanceOf[WhileStmt])
+    val updatedVars = mutable.HashMap[PointerVal, Expr => Expr => Expr]()//getUpdatedVars(stmt.ast.asInstanceOf[WhileStmt])
     val pathsOpt = getAllTruePaths2(stmt.succ.minBy(node => node.id), stmt.id, symbolicState.deepCopy(), updatedVars)
     if (pathsOpt.isEmpty) {
       return None
@@ -367,7 +474,7 @@ class LoopSummary(program: ProgramCfg,
     val res = mutable.HashSet[String]()
     for (stmt <- loop.block.asInstanceOf[NestedBlockStmt].body) {
       stmt match {
-        case AssignStmt(left: Identifier, _, _) => res.add(left.name)
+        case AssignStmt(left: Identifier, _, _) if Utility.varIsFromOriginalProgram(left.name) => res.add(left.name)
         case _ =>
       }
     }
@@ -375,8 +482,24 @@ class LoopSummary(program: ProgramCfg,
   }
 
 
+  def getSymbolicRepressentation(v: Val, name: String, originalSymbolicState: SymbolicState, symbolicState: SymbolicState, symbolicState2: SymbolicState): Val = {
+    val res = v match {
+      case ArrVal(elems) =>
+        ArrVal(elems.map(elem => {
+            getSymbolicRepressentation(originalSymbolicState.getVal(elem).get, name, originalSymbolicState, symbolicState, symbolicState2)
+          //in the recursive call the element is added to the last place
+          PointerVal(symbolicState.symbolicStore.storage.size - 1)
+          }))
+      case _ =>
+        SymbolicVal(CodeLoc(0, 0))
+    }
+    symbolicState.addedVar(name, v)
+    symbolicState2.addedVar(name, v)
+    res
+  }
 
-  def computePathRelationship(vertex1: Vertex, vertex2: Vertex, variables: List[IdentifierDecl], symbolicState: SymbolicState): Option[Edge] = {
+
+  def computePathRelationship(vertex1: Vertex, vertex2: Vertex, variables: List[IdentifierDecl], originalSymbolicState: SymbolicState): Option[Edge] = {
     val ctx = new Context()
     val solver = new ConstraintSolver(ctx)
 
@@ -386,54 +509,70 @@ class LoopSummary(program: ProgramCfg,
     var symbolicState = new SymbolicState(null, PathCondition.initial(), new SymbolicStore(Map.empty))
     var symbolicState2 = new SymbolicState(null, PathCondition.initial(), new SymbolicStore(Map.empty))
 
-    val mapping: mutable.HashMap[SymbolicVal, Identifier] = new mutable.HashMap[SymbolicVal, Identifier]()
+    val mapping: mutable.HashMap[Val, Identifier] = new mutable.HashMap[Val, Identifier]()
     for (v <- variables) {
-      val tmpSymVal = SymbolicVal(v.loc)
-      symbolicState = symbolicState.addedVar(v.name, tmpSymVal)
-      symbolicState2 = symbolicState2.addedVar(v.name, tmpSymVal)
+      val tmpSymVal = getSymbolicRepressentation(originalSymbolicState.getSymbolicVal(v.name, v.loc, true), v.name, originalSymbolicState, symbolicState, symbolicState2)
       mapping.put(tmpSymVal, Identifier(v.name, v.loc))
     }
     changes.foreach(change => {
-      symbolicState = symbolicState.addedVar(change._1,
-        change._2.apply(BinaryOp(Minus, iterations, Number(1, CodeLoc(0, 0)), CodeLoc(0, 0))).apply(symbolicState.getSymbolicVal(change._1, CodeLoc(0, 0)).asInstanceOf[Symbolic]) match {
-          case s@SymbolicVal(_) => s
-          case e: Expr => SymbolicExpr(e, CodeLoc(0, 0))
-          case _ => throw new Exception("IMPLEMENT")
-        }
-      )
-      val v = symbolicState.getSymbolicVal(change._1, CodeLoc(0, 0))
-      v match {
-        case s@SymbolicVal(_) => s
-        case e: Expr => SymbolicExpr(e, CodeLoc(0, 0))
-        case _ => throw new Exception("This should not happen")
+      change._1 match {
+        case Identifier(name, loc) =>
+          symbolicState = symbolicState.addedVar(name,
+            change._2.apply(BinaryOp(Minus, iterations, Number(1, CodeLoc(0, 0)), CodeLoc(0, 0)))
+              .apply(symbolicState.getSymbolicVal(name, CodeLoc(0, 0)).asInstanceOf[Symbolic]) match {
+              case s@SymbolicVal(_) => s
+              case e: Expr => SymbolicExpr(e, CodeLoc(0, 0))
+              case _ => throw new Exception("IMPLEMENT")
+            }
+          )
+        case ArrayAccess(Identifier(name, loc1), Number(value, _), loc2) =>
+          val array = symbolicState.getSymbolicVal(name, CodeLoc(0, 0)).asInstanceOf[ArrVal]
+          val valAtIndex = symbolicState.getVal(array.elems(value)).get
+          val newPtr = symbolicState.addedAlloc(
+            change._2.apply(BinaryOp(Minus, iterations, Number(1, CodeLoc(0, 0)), CodeLoc(0, 0)))
+              .apply(valAtIndex.asInstanceOf[Symbolic]) match {
+              case s@SymbolicVal(_) => s
+              case e: Expr => SymbolicExpr(e, CodeLoc(0, 0))
+              case _ => throw new Exception("IMPLEMENT")
+            }
+          )
+          array.elems(value) = newPtr
       }
     })
     val path1Constraint = solver.applyTheState(vertex1.condition, symbolicState)
     val path1ConstraintOnce = solver.applyTheStateOnce(vertex1.condition, symbolicState)
 
-    val resChanges = new mutable.HashMap[String, Expr => Expr]()
+    val resChanges = new mutable.HashMap[Expr, Expr => Expr]()
     for (change <- changes) {
       resChanges.put(change._1, change._2.apply(iterations))
     }
     changes.foreach(change => {
-      symbolicState2 = symbolicState2.addedVar(change._1,
-        change._2.apply(iterations).apply(symbolicState2.getSymbolicVal(change._1, CodeLoc(0, 0)).asInstanceOf[Symbolic]) match {
-          case s@SymbolicVal(_) => s
-          case e: Expr => SymbolicExpr(e, CodeLoc(0, 0))
-          case _ => throw new Exception("IMPLEMENT")
-        }
-      )
-      val v = symbolicState2.getSymbolicVal(change._1, CodeLoc(0, 0)) match {
-        case s@SymbolicVal(_) => s
-        case e: Expr => SymbolicExpr(e, CodeLoc(0, 0))
-        case _ => throw new Exception("This should not happen")
-      }
-    })
+      change._1 match {
+        case Identifier(name, loc) =>
+          symbolicState2 = symbolicState2.addedVar(name,
+            change._2.apply(iterations).apply(symbolicState2.getSymbolicVal(name, CodeLoc(0, 0)).asInstanceOf[Symbolic]) match {
+              case s@SymbolicVal(_) => s
+              case e: Expr => SymbolicExpr(e, CodeLoc(0, 0))
+              case _ => throw new Exception("IMPLEMENT")
+            }
+          )
+        case ArrayAccess(Identifier(name, loc1), Number(value, _), loc2) =>
+          val array = symbolicState.getSymbolicVal(name, CodeLoc(0, 0)).asInstanceOf[ArrVal]
+          val valAtIndex = symbolicState.getVal(array.elems(value)).get
+          val newPtr = symbolicState.addedAlloc(
+            change._2.apply(iterations).apply(valAtIndex.asInstanceOf[Symbolic]) match {
+              case s@SymbolicVal(_) => s
+              case e: Expr => SymbolicExpr(e, CodeLoc(0, 0))
+              case _ => throw new Exception("IMPLEMENT")
+            }
+          )
+          array.elems(value) = newPtr
+    }})
     val ctxSolver = ctx.mkSolver()
     val path2Constraint = solver.applyTheState(vertex2.condition, symbolicState2)
     val path2ConstraintOnce = solver.applyTheStateOnce(vertex2.condition, symbolicState2)
     val pathsConstraints = {
-      simplifyArithExpr(
+      Utility.simplifyArithExpr(
         BinaryOp(
           AndAnd,
           BinaryOp(AndAnd, path1Constraint, path2Constraint, CodeLoc(0, 0)),
@@ -443,7 +582,7 @@ class LoopSummary(program: ProgramCfg,
       )
     }
     val pathsConstraintsOnce = {
-      simplifyArithExpr(
+      Utility.simplifyArithExpr(
           BinaryOp(AndAnd, path1ConstraintOnce, path2ConstraintOnce, CodeLoc(0, 0)),
       )
     }
@@ -455,19 +594,7 @@ class LoopSummary(program: ProgramCfg,
     ctxSolver.check() match {
       case Status.SATISFIABLE =>
         val tmp = applyMapping(pathsConstraints, mapping)
-        val tmp2 = {
-          applyMapping(
-            simplifyArithExpr(
-              BinaryOp(
-                AndAnd,
-                path2Constraint,
-                BinaryOp(GreaterEqual, iterations, Number(0, CodeLoc(0, 0)), CodeLoc(0, 0)),
-                CodeLoc(0, 0)
-              )
-            ),
-            mapping
-          )
-        }
+        println(tmp)
         Some(Edge(vertex2, tmp, resChanges))
       case _ =>
         None
@@ -477,7 +604,7 @@ class LoopSummary(program: ProgramCfg,
 
 
 
-  def applyMapping(expr: Expr, mapping: mutable.HashMap[SymbolicVal, Identifier]): Expr = {
+  def applyMapping(expr: Expr, mapping: mutable.HashMap[Val, Identifier]): Expr = {
     expr match {
       case Not(expr, loc) =>
         Not(applyMapping(expr, mapping), loc)

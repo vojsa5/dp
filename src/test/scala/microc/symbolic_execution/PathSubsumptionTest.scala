@@ -156,7 +156,7 @@ class PathSubsumptionTest extends FunSuite with MicrocSupport with Examples {
     val ctx = new Context()
     val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx), ctx)), ctx);
     executor.run()
-    assert(executor.statistics.stoppedWithSubsumption == 0)
+    assert(executor.statistics.stoppedWithSubsumption == 1)
     assert(executor.statistics.numPaths == 2)
     null
   }
@@ -191,8 +191,8 @@ class PathSubsumptionTest extends FunSuite with MicrocSupport with Examples {
     val ctx = new Context()
     val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx), ctx)), ctx, new DFSSearchStrategy());
     val res = executor.run()
-    assert(executor.statistics.stoppedWithSubsumption > 0)
-    assert(executor.statistics.numPaths > executor.statistics.stoppedWithSubsumption)
+    assert(executor.statistics.stoppedWithSubsumption == 2)
+    assert(executor.statistics.numPaths == 3)
     null
   }
 
@@ -259,6 +259,400 @@ class PathSubsumptionTest extends FunSuite with MicrocSupport with Examples {
     val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx), ctx)), ctx, new DFSSearchStrategy());
     val res = executor.run()
     assert(executor.statistics.stoppedWithSubsumption > 1)
+  }
+
+
+  test("nested loop") {
+    val code =
+      """
+        |main() {
+        |  var x, y, i, j, n;
+        |  x = input;
+        |  i = input;
+        |  j = input;
+        |  n = input;
+        |  y = x;
+        |  while (i < n) {
+        |     i = i + 1;
+        |     while (j < n) {
+        |         x = x + 1;
+        |         j = j + 1;
+        |     }
+        |  }
+        |  if (x < y) {
+        |     x = 1 / 0;
+        |  }
+        |  return 0;
+        |}
+        |""".stripMargin;
+    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+    val ctx = new Context()
+    val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx), ctx)), ctx, new DFSSearchStrategy());
+    val res = executor.run()
+    assert(executor.statistics.stoppedWithSubsumption > 1)
+  }
+
+  test("possible error removes annotation") {
+    val code =
+      """
+        |main() {
+        |  var x, y, i;
+        |  x = input;
+        |  i = input;
+        |  if (i == 0) {
+        |     i = 1;
+        |  }
+        |  i = 1 / i;
+        |  y = x;
+        |   if (x < y) {
+        |     x = 1 / 0;
+        |  }
+        |  return 0;
+        |}
+        |""".stripMargin;
+    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+    val ctx = new Context()
+    val subsumption = new PathSubsumption(new ConstraintSolver(ctx), ctx)
+    val executor = new SymbolicExecutor(cfg, Some(subsumption), ctx, new DFSSearchStrategy());
+    executor.run()
+    assert(executor.statistics.stoppedWithSubsumption == 1)
+    assert(executor.statistics.numPaths == 3)
+    assert(!subsumption.annotations.contains(cfg.nodes.find(node => node.id == 4.0).get))
+    assert(!subsumption.annotations.contains(cfg.nodes.find(node => node.id == 8.0).get))
+    null
+  }
+
+
+  test("no error at all") {
+    val code =
+      """
+        |main() {
+        |  var x,y;
+        |  x = 0;
+        |  if (input) {
+        |
+        |  }
+        |  else {
+        |    y = input;
+        |    if (y < 0) {
+        |      y = 0 - y;
+        |    }
+        |    x = x + y;
+        |  }
+        |  if (input) {
+        |
+        |  }
+        |  else {
+        |    output x;
+        |  }
+        |  return 0;
+        |}
+        |""".stripMargin;
+    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+    val ctx = new Context()
+    val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx), ctx)), ctx, new DFSSearchStrategy());
+    executor.run()
+    assert(executor.statistics.stoppedWithSubsumption == 3)
+    assert(executor.statistics.numPaths == 4)
+    null
+  }
+
+
+  test("pointers") {
+    val code =
+      """
+        |main() {
+        |  var x,y,z,a;
+        |  z = 0;
+        |  x = &z;
+        |  if (input) {
+        |
+        |  }
+        |  else {
+        |    a = input;
+        |    y = &a;
+        |    if (*y < 0) {
+        |      *y = 0 - *y;
+        |    }
+        |    *x = *x + *y;
+        |  }
+        |  if (*x >= 0) {
+        |
+        |  }
+        |  else {
+        |    *x = 1 / 0;
+        |  }
+        |  return 0;
+        |}
+        |""".stripMargin;
+    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+    val ctx = new Context()
+    val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx), ctx)), ctx, new DFSSearchStrategy());
+    val res = executor.run()
+    assert(executor.statistics.stoppedWithSubsumption == 2)
+    assert(executor.statistics.numPaths == 3)
+    null
+  }
+
+
+  test("pointers pointers") {
+    val code =
+      """
+        |main() {
+        |  var x,y,z,z2,a,a2;
+        |  z = 0;
+        |  z2 = &z;
+        |  x = &z2;
+        |  if (input) {
+        |
+        |  }
+        |  else {
+        |    a = input;
+        |    a2 = &a;
+        |    y = &a2;
+        |    if (**y < 0) {
+        |      **y = 0 - **y;
+        |    }
+        |    **x = **x + **y;
+        |  }
+        |  if (**x >= 0) {
+        |
+        |  }
+        |  else {
+        |    **x = 1 / 0;
+        |  }
+        |  return 0;
+        |}
+        |""".stripMargin;
+    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+    val ctx = new Context()
+    val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx), ctx)), ctx, new DFSSearchStrategy());
+    val res = executor.run()
+    assert(executor.statistics.stoppedWithSubsumption == 2)
+    assert(executor.statistics.numPaths == 3)
+    null
+  }
+
+
+  test("arrays") {
+    val code =
+      """
+        |main() {
+        |  var x,y;
+        |  x = [0];
+        |  if (input) {
+        |
+        |  }
+        |  else {
+        |    y = [input];
+        |    if (y[0] < 0) {
+        |      y[0] = 0 - y[0];
+        |    }
+        |    x[0] = x[0] + y[0];
+        |  }
+        |  if (x[0] >= 0) {
+        |
+        |  }
+        |  else {
+        |    x[0] = 1 / 0;
+        |  }
+        |  return 0;
+        |}
+        |""".stripMargin;
+    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+    val ctx = new Context()
+    val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx), ctx)), ctx, new DFSSearchStrategy());
+    val res = executor.run()
+    assert(executor.statistics.stoppedWithSubsumption == 2)
+    assert(executor.statistics.numPaths == 3)
+    null
+  }
+
+
+
+  test("arrays arrays") {
+    val code =
+      """
+        |main() {
+        |  var x,y;
+        |  x = [[0]];
+        |  if (input) {
+        |
+        |  }
+        |  else {
+        |    y = [[input]];
+        |    if (y[0][0] < 0) {
+        |      y[0][0] = 0 - y[0][0];
+        |    }
+        |    x[0][0] = x[0][0] + y[0][0];
+        |  }
+        |  if (x[0][0] >= 0) {
+        |
+        |  }
+        |  else {
+        |    x[0][0] = 1 / 0;
+        |  }
+        |  return 0;
+        |}
+        |""".stripMargin;
+    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+    val ctx = new Context()
+    val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx), ctx)), ctx, new DFSSearchStrategy());
+    val res = executor.run()
+    assert(executor.statistics.stoppedWithSubsumption == 2)
+    assert(executor.statistics.numPaths == 3)
+    null
+  }
+
+
+  test("records") {
+    val code =
+      """
+        |main() {
+        |  var x,y;
+        |  x = {value: 0};
+        |  if (input) {
+        |
+        |  }
+        |  else {
+        |    y = {value: input};
+        |    if (y.value < 0) {
+        |      y.value = 0 - y.value;
+        |    }
+        |    x.value = x.value + y.value;
+        |  }
+        |  if (x.value >= 0) {
+        |
+        |  }
+        |  else {
+        |    x.value = 1 / 0;
+        |  }
+        |  return 0;
+        |}
+        |""".stripMargin;
+    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+    val ctx = new Context()
+    val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx), ctx)), ctx, new DFSSearchStrategy());
+    val res = executor.run()
+    assert(executor.statistics.stoppedWithSubsumption == 2)
+    assert(executor.statistics.numPaths == 3)
+    null
+  }
+
+
+  test("pointers arrays") {
+    val code =
+      """
+        |main() {
+        |  var x,y,z,a;
+        |  z = [0];
+        |  x = &z;
+        |  if (input) {
+        |
+        |  }
+        |  else {
+        |    a = [input];
+        |    y = &a;
+        |    if ((*y)[0] < 0) {
+        |      (*y)[0] = 0 - (*y)[0];
+        |    }
+        |    (*x)[0] = (*x)[0] + (*y)[0];
+        |  }
+        |  if ((*x)[0] >= 0) {
+        |
+        |  }
+        |  else {
+        |    (*x)[0] = 1 / 0;
+        |  }
+        |  return 0;
+        |}
+        |""".stripMargin;
+    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+    val ctx = new Context()
+    val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx), ctx)), ctx, new DFSSearchStrategy());
+    val res = executor.run()
+    assert(executor.statistics.stoppedWithSubsumption == 2)
+    assert(executor.statistics.numPaths == 3)
+    null
+  }
+
+
+  test("arrays pointers") {
+    val code =
+      """
+        |main() {
+        |  var x,y,z,a;
+        |  z = 0;
+        |  x = [&z];
+        |  if (input) {
+        |
+        |  }
+        |  else {
+        |    a = input;
+        |    y = [&a];
+        |    if (*y[0] < 0) {
+        |      *y[0] = 0 - *y[0];
+        |    }
+        |    *x[0] = *x[0] + *y[0];
+        |  }
+        |  if (*x[0] >= 0) {
+        |
+        |  }
+        |  else {
+        |    *x[0] = 1 / 0;
+        |  }
+        |  return 0;
+        |}
+        |""".stripMargin;
+    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+    val ctx = new Context()
+    val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx), ctx)), ctx, new DFSSearchStrategy());
+    val res = executor.run()
+    assert(executor.statistics.stoppedWithSubsumption == 2)
+    assert(executor.statistics.numPaths == 3)
+    null
+  }
+
+
+  test("do not do path summarization for unclear array indices") {
+    val code =
+      """
+        |main() {
+        |  var x,y,z;
+        |  x = [0, 0];
+        |  z = input;
+        |  if (z > 1) {
+        |     z = 1;
+        |  }
+        |  if (z < 0) {
+        |     z = 0;
+        |  }
+        |  if (input) {
+        |
+        |  }
+        |  else {
+        |    y = [input, input];
+        |    if (y[z] < 0) {
+        |      y[z] = 0 - y[z];
+        |    }
+        |    x[z] = x[z] + y[z];
+        |  }
+        |  if (x[z] >= 0) {
+        |
+        |  }
+        |  else {
+        |    x[z] = 1 / 0;
+        |  }
+        |  return 0;
+        |}
+        |""".stripMargin;
+    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+    val ctx = new Context()
+    val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx), ctx)), ctx, new DFSSearchStrategy());
+    executor.run()
+    assert(executor.statistics.stoppedWithSubsumption == 8)
+    assert(executor.statistics.numPaths == 10)
+    null
   }
 
 }

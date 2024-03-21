@@ -2,7 +2,7 @@ package microc.symbolic_execution
 
 import microc.ast.{CodeLoc, Identifier, Loc}
 import microc.symbolic_execution.ExecutionException.{errorIncompatibleTypes, errorUninitializedReference}
-import microc.symbolic_execution.Value.{FunVal, IteVal, NullRef, PointerVal, RefVal, SymbolicVal, UninitializedRef, Val}
+import microc.symbolic_execution.Value.{ArrVal, FunVal, IteVal, NullRef, PointerVal, RecVal, RefVal, SymbolicVal, UninitializedRef, Val}
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
@@ -19,7 +19,11 @@ class SymbolicStore(functionDeclarations: Map[String, FunVal]) {
       newStorage.size = this.size
       newStorage.memory = ArrayBuffer()
       for (v <- this.memory) {
-        newStorage.memory += v
+        newStorage.memory += (v match {
+          case ArrVal(elems) => ArrVal(elems.map(elem => PointerVal(elem.address)))//deep copy pointers within an array
+          //case RecVal(fields) => RecVal(fields.map(field => ))
+          case _ => v
+        })
       }
       newStorage
     }
@@ -61,7 +65,8 @@ class SymbolicStore(functionDeclarations: Map[String, FunVal]) {
             Some(ite)
           }
         }
-        case v => Some(v)
+        case v =>
+          Some(v)
       }
     }
 
@@ -82,7 +87,7 @@ class SymbolicStore(functionDeclarations: Map[String, FunVal]) {
 
   var storage: Storage = Storage()
 
-  private var frames: Array[Map[String, RefVal]] = Array(Map.empty)
+  private var frames: Array[Map[String, PointerVal]] = Array(Map.empty)
 
   def pushFrame(): Unit = frames = frames.appended(Map.empty)
 
@@ -99,7 +104,7 @@ class SymbolicStore(functionDeclarations: Map[String, FunVal]) {
     frames.length
   }
 
-  def addVar(name: String, ref: RefVal): Unit = {
+  def addVar(name: String, ref: PointerVal): Unit = {
     val frame = frames.last
     frames = frames.dropRight(1)
     frames = frames.appended(frame.updated(name, ref))
@@ -113,7 +118,7 @@ class SymbolicStore(functionDeclarations: Map[String, FunVal]) {
     res
   }
 
-  def findVar(name: String): Option[RefVal] = {
+  def findVar(name: String): Option[PointerVal] = {
     for (frame <- frames.reverse) {
       if (frame.contains(name)) {
         return Some(frame(name))
@@ -125,7 +130,7 @@ class SymbolicStore(functionDeclarations: Map[String, FunVal]) {
   def contains(name: String): Boolean = {
     for (frame <- frames.reverse) {
       if (frame.contains(name)) {
-        storage.getVal(frame(name).asInstanceOf[PointerVal]) match {
+        storage.getVal(frame(name)) match {
           case Some(UninitializedRef) =>
             return false
           case Some(_) =>
@@ -142,16 +147,15 @@ class SymbolicStore(functionDeclarations: Map[String, FunVal]) {
     storage.getVal(ptr, allowReturnNonInitialized)
   }
 
-  def getVal(name: String, loc: Loc, allowReturnNonInitialized: Boolean = false): Val = {
+  def getVal(name: String, loc: Loc, symbolicState: SymbolicState, allowReturnNonInitialized: Boolean = false): Val = {
     findVar(name) match {
       case Some(PointerVal(decl)) =>
         storage.getVal(PointerVal(decl)) match {
           case Some(res) => res
           case None if allowReturnNonInitialized => UninitializedRef
           case None =>
-            throw errorUninitializedReference(loc)
+            throw errorUninitializedReference(loc, symbolicState)
         }
-      case Some(NullRef) => throw errorUninitializedReference(loc)
       //case Some(e@SymbolicExpr(_, _)) => e
       case Some(_) => throw new Exception("Internal error")
       case None =>
@@ -212,10 +216,10 @@ class SymbolicStore(functionDeclarations: Map[String, FunVal]) {
                   if (!res) {
                     resMap.add(variable)
                   }
-                case (NullRef, _) =>
-                  resMap.add(variable)
-                case (_, NullRef) =>
-                  resMap.add(variable)
+//                case (NullRef, _) =>
+//                  resMap.add(variable)
+//                case (_, NullRef) =>
+//                  resMap.add(variable)
                 case _ =>
               }
             }
@@ -244,10 +248,10 @@ class SymbolicStore(functionDeclarations: Map[String, FunVal]) {
                   if (!res) {
                     return false
                   }
-                case (NullRef, _) =>
-                  return false
-                case (_, NullRef) =>
-                  return false
+//                case (NullRef, _) =>
+//                  return false
+//                case (_, NullRef) =>
+//                  return false
                 case _ =>
               }
             }

@@ -72,6 +72,9 @@ class StateHistory {
   def removeStateInner(state: SymbolicState): Unit = {
     preds.get(state) match {
       case Some(parent) =>
+        if (!unfinishedPaths.contains(parent) ) {
+          throw new Exception("IMPLEMENT")
+        }
         unfinishedPaths(parent).remove(state)
         if (unfinishedPaths(parent).isEmpty) {
           unfinishedPaths.remove(parent)

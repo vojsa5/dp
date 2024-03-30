@@ -159,11 +159,11 @@ class KleeSearchStrategy(stateHistory: StateHistory, covered: mutable.HashSet[Cf
 
   override def addState(symbolicState: SymbolicState): Unit = {
     coverageSearchStrategy.addState(symbolicState)
-    println("COUNTS AFTER ADD:", randomPathSearchStrategy.statesCount())
+    //println("COUNTS AFTER ADD:", randomPathSearchStrategy.statesCount())
   }
 
   override def getState(): SymbolicState = {
-    println("COUNTS IN GET:", randomPathSearchStrategy.statesCount())
+    //println("COUNTS IN GET:", randomPathSearchStrategy.statesCount())
     val res = if (isCoverageStage) {
       isCoverageStage = false
       val res = coverageSearchStrategy.getState()
@@ -176,7 +176,7 @@ class KleeSearchStrategy(stateHistory: StateHistory, covered: mutable.HashSet[Cf
       coverageSearchStrategy.set.remove(res)
       res
     }
-    println("COUNTS AFTER GET:", randomPathSearchStrategy.statesCount())
+    //println("COUNTS AFTER GET:", randomPathSearchStrategy.statesCount())
     res
   }
 

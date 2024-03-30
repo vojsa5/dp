@@ -189,6 +189,8 @@ object Value {
         case v@SymbolicVal(_) => name == v.name
         case _ => false
       }
+
+    override def hashCode(): Int = name.hashCode
   }
 
   case class SymbolicExpr(value: Expr, loc: Loc) extends Symbolic {

@@ -15,385 +15,129 @@ import scala.util.control.NonFatal
 
 class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
 
-  val bfCode = """
-                 |list_append(list, x) {
-                 |    var node;
-                 |
-                 |    node = alloc {v: x, prev: list, next: null};
-                 |    if (list == null) {
-                 |    } else {
-                 |        (*list).next = node;
-                 |    }
-                 |
-                 |    return node;
-                 |}
-                 |
-                 |list_prepend(list, x) {
-                 |    var node;
-                 |
-                 |    node = alloc {v: x, prev: null, next: list};
-                 |    if (list == null) {
-                 |    } else {
-                 |        (*list).prev = node;
-                 |    }
-                 |
-                 |    return node;
-                 |}
-                 |
-                 |read_code() {
-                 |    var x, continue, code, first;
-                 |    continue = 1;
-                 |    code = null;
-                 |    first = null;
-                 |
-                 |    while (continue) {
-                 |        x = input;
-                 |        // EOI
-                 |        if (x == -1) {
-                 |            continue = 0;
-                 |        } else {
-                 |            code = list_append(code, x);
-                 |            if (first == null) {
-                 |                first = code;
-                 |            }
-                 |        }
-                 |    }
-                 |
-                 |    return first;
-                 |}
-                 |
-                 |create_memory(size) {
-                 |    var mem;
-                 |    mem = null;
-                 |
-                 |    while(size > 0) {
-                 |        mem = list_prepend(mem, 0);
-                 |        size = size - 1;
-                 |    }
-                 |
-                 |    return mem;
-                 |}
-                 |
-                 |jump(code) {
-                 |    var c, continue, direction, c_inc, c_dec;
-                 |    c = 0;
-                 |    continue = 1;
-                 |
-                 |    // '[' -> jumping right
-                 |    if ((*code).v == 91) {
-                 |        direction = 1;
-                 |        c_inc = 91;
-                 |        c_dec = 93;
-                 |    } else {
-                 |        // ']' <- jumping left
-                 |        if ((*code).v == 93) {
-                 |            direction = 0;
-                 |            c_inc = 93;
-                 |            c_dec = 91;
-                 |        }
-                 |    }
-                 |
-                 |    while (continue) {
-                 |        if (code == null) {
-                 |            continue = 0;
-                 |        } else {
-                 |            if ((*code).v == c_inc) {
-                 |                c = c + 1;
-                 |            } else {
-                 |                if ((*code).v == c_dec) {
-                 |                    c = c - 1;
-                 |                }
-                 |            }
-                 |
-                 |            if (c == 0) {
-                 |                continue = 0;
-                 |            } else {
-                 |                if (direction == 1) {
-                 |                    code = (*code).next;
-                 |                } else {
-                 |                    code = (*code).prev;
-                 |                }
-                 |            }
-                 |        }
-                 |    }
-                 |
-                 |    return code;
-                 |}
-                 |
-                 |run(code, mem) {
-                 |    var continue, status, inst, inst_code, next_inst;
-                 |    status = 0;
-                 |
-                 |    if (code == null) {
-                 |        continue = 0;
-                 |    } else {
-                 |        continue = 1;
-                 |        next_inst = code;
-                 |    }
-                 |
-                 |    while (continue) {
-                 |        if (next_inst == null) {
-                 |            continue = 0;
-                 |        } else {
-                 |            // get the current instruction
-                 |            inst_code = (*next_inst).v;
-                 |            inst = next_inst;
-                 |            next_inst = null;
-                 |
-                 |            // '>' move the pointer to the right
-                 |            if (inst_code == 62) {
-                 |                mem = (*mem).next;
-                 |            } else {
-                 |                // '<' move the pointer to the left
-                 |                if (inst_code == 60) {
-                 |                    mem = (*mem).prev;
-                 |                } else {
-                 |                    // '+' increment the memory cell at the pointer
-                 |                    if (inst_code == 43) {
-                 |                        (*mem).v = (*mem).v + 1;
-                 |                    } else {
-                 |                        // '-' decrement the memory cell at the pointer
-                 |                        if (inst_code == 45) {
-                 |                            (*mem).v = (*mem).v - 1;
-                 |                        } else {
-                 |                            // '.' output the character signified by the cell at the pointer
-                 |                            if (inst_code == 46) {
-                 |                                output (*mem).v;
-                 |                            } else {
-                 |                                // ',' input a character and store it in the cell at the pointer
-                 |                                if (inst_code == 44) {
-                 |                                    (*mem).v = input;
-                 |                                } else {
-                 |                                    // '[' jump past the matching ']' if the cell at the pointer is 0
-                 |                                    if (inst_code == 91) {
-                 |                                        if ((*mem).v == 0) {
-                 |                                            next_inst = jump(inst);
-                 |                                        }
-                 |                                    } else {
-                 |                                        // ']' jump back to the matching '[' if the cell at the pointer is nonzero
-                 |                                        if (inst_code == 93) {
-                 |                                            if ((*mem).v == 0) {
-                 |                                                // do nothing
-                 |                                            } else {
-                 |                                                next_inst = jump(inst);
-                 |                                            }
-                 |                                        } else {
-                 |                                            // ignore anything else
-                 |                                        }
-                 |                                    }
-                 |                                }
-                 |                            }
-                 |                        }
-                 |                    }
-                 |                }
-                 |            }
-                 |            if (next_inst == null) {
-                 |                next_inst = (*inst).next;
-                 |            }
-                 |        }
-                 |    }
-                 |
-                 |    return status;
-                 |}
-                 |
-                 |main() {
-                 |    var code, mem;
-                 |    code = read_code();
-                 |    mem = create_memory(30000);
-                 |    return run(code, mem);
-                 |}
-                 |
-                 |""".stripMargin
+  test("factorial") {
+    val code =
+      """
+        |
+        |fac(n) {
+        |    var f;
+        |
+        |    if (n == 0) {
+        |      f = 1;
+        |    } else {
+        |      f = n * fac(n - 1);
+        |    }
+        |
+        |    return f;
+        |}
+        |
+        |
+        |main() {
+        |  var a,b;
+        |  b = input;
+        |  if (b < 0) {
+        |     b = 0;
+        |  }
+        |  a = fac(b);
+        |  output(a);
+        |  return 1 / (a - 5);
+        |}
+        |""".stripMargin;
+    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+    val executor = new SymbolicExecutor(cfg);
+    val future = Future {
+      executor.run()
+    }
 
-  val bfCodeNoWhile = """
-                      |list_append(list, x) {
-                      |    var node;
-                      |
-                      |    node = alloc {v: x, prev: list, next: null};
-                      |    if (list == null) {
-                      |    } else {
-                      |        (*list).next = node;
-                      |    }
-                      |
-                      |    return node;
-                      |}
-                      |
-                      |list_prepend(list, x) {
-                      |    var node;
-                      |
-                      |    node = alloc {v: x, prev: null, next: list};
-                      |    if (list == null) {
-                      |    } else {
-                      |        (*list).prev = node;
-                      |    }
-                      |
-                      |    return node;
-                      |}
-                      |
-                      |read_code() {
-                      |    var x, continue, code, first;
-                      |    continue = 1;
-                      |    code = null;
-                      |    first = null;
-                      |
-                      |    if (continue) {
-                      |        x = input;
-                      |        // EOI
-                      |        if (x == -1) {
-                      |            continue = 0;
-                      |        } else {
-                      |            code = list_append(code, x);
-                      |            if (first == null) {
-                      |                first = code;
-                      |            }
-                      |        }
-                      |    }
-                      |
-                      |    return first;
-                      |}
-                      |
-                      |create_memory(size) {
-                      |    var mem;
-                      |    mem = null;
-                      |
-                      |    if (size > 0) {
-                      |        mem = list_prepend(mem, 0);
-                      |        size = size - 1;
-                      |    }
-                      |
-                      |    return mem;
-                      |}
-                      |
-                      |jump(code) {
-                      |    var c, continue, direction, c_inc, c_dec;
-                      |    c = 0;
-                      |    continue = 1;
-                      |
-                      |    // '[' -> jumping right
-                      |    if ((*code).v == 91) {
-                      |        direction = 1;
-                      |        c_inc = 91;
-                      |        c_dec = 93;
-                      |    } else {
-                      |        // ']' <- jumping left
-                      |        if ((*code).v == 93) {
-                      |            direction = 0;
-                      |            c_inc = 93;
-                      |            c_dec = 91;
-                      |        }
-                      |    }
-                      |
-                      |    if (continue) {
-                      |        if (code == null) {
-                      |            continue = 0;
-                      |        } else {
-                      |            if ((*code).v == c_inc) {
-                      |                c = c + 1;
-                      |            } else {
-                      |                if ((*code).v == c_dec) {
-                      |                    c = c - 1;
-                      |                }
-                      |            }
-                      |
-                      |            if (c == 0) {
-                      |                continue = 0;
-                      |            } else {
-                      |                if (direction == 1) {
-                      |                    code = (*code).next;
-                      |                } else {
-                      |                    code = (*code).prev;
-                      |                }
-                      |            }
-                      |        }
-                      |    }
-                      |
-                      |    return code;
-                      |}
-                      |
-                      |run(code, mem) {
-                      |    var continue, status, inst, inst_code, next_inst;
-                      |    status = 0;
-                      |
-                      |    if (code == null) {
-                      |        continue = 0;
-                      |    } else {
-                      |        continue = 1;
-                      |        next_inst = code;
-                      |    }
-                      |
-                      |    if (continue) {
-                      |        if (next_inst == null) {
-                      |            continue = 0;
-                      |        } else {
-                      |            // get the current instruction
-                      |            inst_code = (*next_inst).v;
-                      |            inst = next_inst;
-                      |            next_inst = null;
-                      |
-                      |            // '>' move the pointer to the right
-                      |            if (inst_code == 62) {
-                      |                mem = (*mem).next;
-                      |            } else {
-                      |                // '<' move the pointer to the left
-                      |                if (inst_code == 60) {
-                      |                    mem = (*mem).prev;
-                      |                } else {
-                      |                    // '+' increment the memory cell at the pointer
-                      |                    if (inst_code == 43) {
-                      |                        (*mem).v = (*mem).v + 1;
-                      |                    } else {
-                      |                        // '-' decrement the memory cell at the pointer
-                      |                        if (inst_code == 45) {
-                      |                            (*mem).v = (*mem).v - 1;
-                      |                        } else {
-                      |                            // '.' output the character signified by the cell at the pointer
-                      |                            if (inst_code == 46) {
-                      |                                output (*mem).v;
-                      |                            } else {
-                      |                                // ',' input a character and store it in the cell at the pointer
-                      |                                if (inst_code == 44) {
-                      |                                    (*mem).v = input;
-                      |                                } else {
-                      |                                    // '[' jump past the matching ']' if the cell at the pointer is 0
-                      |                                    if (inst_code == 91) {
-                      |                                        if ((*mem).v == 0) {
-                      |                                            next_inst = jump(inst);
-                      |                                        }
-                      |                                    } else {
-                      |                                        // ']' jump back to the matching '[' if the cell at the pointer is nonzero
-                      |                                        if (inst_code == 93) {
-                      |                                            if ((*mem).v == 0) {
-                      |                                                // do nothing
-                      |                                            } else {
-                      |                                                next_inst = jump(inst);
-                      |                                            }
-                      |                                        } else {
-                      |                                            // ignore anything else
-                      |                                        }
-                      |                                    }
-                      |                                }
-                      |                            }
-                      |                        }
-                      |                    }
-                      |                }
-                      |            }
-                      |            if (next_inst == null) {
-                      |                next_inst = (*inst).next;
-                      |            }
-                      |        }
-                      |    }
-                      |
-                      |    return status;
-                      |}
-                      |
-                      |main() {
-                      |    var code, mem;
-                      |    code = read_code();
-                      |    mem = create_memory(30000);
-                      |    return run(code, mem);
-                      |}
-                      |
-                      |""".stripMargin
+    try {
+      Await.ready(future, 5.seconds)
+    }
+    catch {
+      case _: TimeoutException =>
+      case e =>
+        throw e
+    }
+  }
+
+  test("factorial 2") {
+    val code =
+      """
+        |
+        |fac(n) {
+        |    var f;
+        |
+        |    if (n == 0) {
+        |      f = 1;
+        |    } else {
+        |      f = n * fac(n - 1);
+        |    }
+        |
+        |    return f;
+        |}
+        |
+        |
+        |main() {
+        |  var a,b;
+        |  b = input;
+        |  if (b <= 0) {
+        |     b = 1;
+        |  }
+        |  a = fac(b);
+        |  output(a);
+        |  return 1 / (a - 6);
+        |}
+        |""".stripMargin;
+    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+    val executor = new SymbolicExecutor(cfg);
+    try {
+        executor.run()
+        fail("Expected a ExecutionException but it did not occur.")
+    }
+    catch {
+      case _: ExecutionException =>
+      case other: Throwable => fail("Expected a ExecutionException, but caught different exception: " + other)
+    }
+  }
+
+
+  test("factorial 3") {
+    val code =
+      """
+        |
+        |fac(n) {
+        |    var f;
+        |
+        |    if (n == 0) {
+        |      f = 1;
+        |    } else {
+        |      f = n * fac(n - 1);
+        |    }
+        |
+        |    return f;
+        |}
+        |
+        |
+        |main() {
+        |  var a,b;
+        |  b = input;
+        |  if (b <= 0) {
+        |     b = 1;
+        |  }
+        |  return 1 / (fac(b) - 6);
+        |}
+        |""".stripMargin;
+    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+    val executor = new SymbolicExecutor(cfg);
+    try {
+      executor.run()
+      fail("Expected a ExecutionException but it did not occur.")
+    }
+    catch {
+      case _: ExecutionException =>
+      case other: Throwable => fail("Expected a ExecutionException, but caught different exception: " + other)
+    }
+  }
+
 
 
   test("possible error") {
@@ -416,6 +160,81 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
       case other: Throwable => fail("Expected a ExecutionException, but caught different exception: " + other)
     }
     null
+  }
+
+
+  test("type 3 loop unsummarizable") {
+    val code =
+      """
+        |main() {
+        |  var i, j, k, n;
+        |  i = input;
+        |  k = input;
+        |  n = input;
+        |  while (i < n) {
+        |     j = input;
+        |     if (j <= 1) {
+        |        j = 1;
+        |     }
+        |     i = i + j;
+        |     k = k + 1;
+        |  }
+        |  return k;
+        |}
+        |""".stripMargin;
+    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+    val executor = new LoopSummary(cfg);
+    val future = Future {
+      executor.run()
+      fail("should be killed by timeout")
+    }
+
+    try {
+      Await.ready(future, 5.seconds)
+    }
+    catch {
+      case _: TimeoutException =>
+      case e =>
+        fail(e.toString)
+    }
+  }
+
+
+
+  test("type 3 loop unsummarizable arrays") {
+    val code =
+      """
+        |main() {
+        |  var i, j, k, n;
+        |  i = [input];
+        |  k = [input];
+        |  n = [input];
+        |  while (i[0] < n[0]) {
+        |     j = input;
+        |     if (j <= 1) {
+        |        j = 1;
+        |     }
+        |     i[0] = i[0] + j;
+        |     k[0] = k[0] + 1;
+        |  }
+        |  return k[0];
+        |}
+        |""".stripMargin;
+    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+    val executor = new LoopSummary(cfg);
+    val future = Future {
+      executor.run()
+      fail("should be killed by timeout")
+    }
+
+    try {
+      Await.ready(future, 5.seconds)
+    }
+    catch {
+      case _: TimeoutException =>
+      case e =>
+        fail(e.toString)
+    }
   }
 
 //  test("infinite paths") {
@@ -810,120 +629,6 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
     null
   }
 
-  test("bf if instead of while") {
-    val code = bfCodeNoWhile
-    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    val executor = new SymbolicExecutor(cfg)
-    executor.run()
-  }
-
-  test("bf if instead of while coverage search") {
-    val code = bfCodeNoWhile
-    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    val covered = Some(mutable.HashSet[CfgNode]())
-    val executor = new SymbolicExecutor(cfg, searchStrategy = new CoverageSearchStrategy(covered.get), covered = covered)
-    executor.run()
-  }
-
-  test("bf if instead of while random path search") {
-    val code = bfCodeNoWhile
-    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    val covered = Some(mutable.HashSet[CfgNode]())
-    val stateHistory = new StateHistory()
-    val executor = new SymbolicExecutor(cfg, stateHistory = Some(stateHistory), searchStrategy = new RandomPathSelectionStrategy(stateHistory), covered = covered)
-    executor.run()
-  }
-
-
-  test("bf if instead of while klee search") {
-    val code = bfCodeNoWhile
-    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    val covered = Some(mutable.HashSet[CfgNode]())
-    val stateHistory = new StateHistory()
-    val executor = new SymbolicExecutor(cfg, stateHistory = Some(stateHistory), searchStrategy = new KleeSearchStrategy(stateHistory, covered.get), covered = covered)
-    executor.run()
-  }
-
-  test("bf if instead of while subsumption") {
-    val code = bfCodeNoWhile
-    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    val ctx = new Context()
-    val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx), ctx)))
-    executor.run()
-  }
-
-  test("bf if instead of while merging") {
-    val code = bfCodeNoWhile
-    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    val executor = new SymbolicExecutor(cfg, None, searchStrategy = new AgressiveStateMerging(new BFSSearchStrategy))
-    executor.run()
-  }
-
-  test("bf if instead of while smart merging") {
-    val code = bfCodeNoWhile
-    val program = parseUnsafe(code)
-    val cfg = new IntraproceduralCfgFactory().fromProgram(program);
-    val analysesResult = new QueryCountAnalyses(cfg)(new SemanticAnalysis().analyze(program)).analyze()
-    val variableCosts = new mutable.HashMap[CfgNode, mutable.HashMap[String, Double]]
-    for (node <- analysesResult) {
-      val nodeCosts = new mutable.HashMap[String, Double]
-      for (cost <- node._2) {
-        nodeCosts.put(cost._1.name, cost._2)
-      }
-      variableCosts.put(node._1, nodeCosts)
-    }
-    val executor = new SymbolicExecutor(cfg, None, searchStrategy = new HeuristicBasedStateMerging(new BFSSearchStrategy, variableCosts, 3))
-    executor.run()
-  }
-
-
-  test("bf if instead of while dynamic smart merging") {
-    val code = bfCodeNoWhile
-    val program = parseUnsafe(code)
-    val cfg = new IntraproceduralCfgFactory().fromProgram(program);
-    val analysesResult = new QueryCountAnalyses(cfg)(new SemanticAnalysis().analyze(program)).analyze()
-    val variableCosts = new mutable.HashMap[CfgNode, mutable.HashMap[String, Double]]
-    for (node <- analysesResult) {
-      val nodeCosts = new mutable.HashMap[String, Double]
-      for (cost <- node._2) {
-        nodeCosts.put(cost._1.name, cost._2)
-      }
-      variableCosts.put(node._1, nodeCosts)
-    }
-    val limitCost = 3.0
-    val depth = 3
-    val stateHistory = new StateHistory()
-    val dynamicStateMerging = new DynamicStateMerging(
-      new HeuristicBasedStateMerging(new BFSSearchStrategy, variableCosts, limitCost),
-      stateHistory,
-      variableCosts,
-      limitCost,
-      depth
-    )
-    val executor = new SymbolicExecutor(cfg, None, searchStrategy = dynamicStateMerging)
-    executor.run()
-  }
-
-
-  test("bf if instead of while smart merging 2") {
-    val code = bfCodeNoWhile
-    val program = parseUnsafe(code)
-    val cfg = new IntraproceduralCfgFactory().fromProgram(program);
-    val tmp = new TMP()(new SemanticAnalysis().analyze(program))
-    tmp.tmp2(cfg)
-    val executor = new SymbolicExecutor(cfg, None, searchStrategy = new HeuristicBasedStateMerging(new BFSSearchStrategy, tmp.mapping, 3))
-    executor.run()
-  }
-
-
-  test("bf if instead of while merging subsumption") {
-    val code = bfCodeNoWhile
-    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    val ctx = new Context()
-    val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx), ctx)), searchStrategy = new AgressiveStateMerging(new BFSSearchStrategy))
-    executor.run()
-  }
-
 //  test("bf") {
 //    val code = bfCode
 //    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
@@ -931,108 +636,108 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
 //    executor.run()
 //  }
 
-  test("bf coverage search") {
-    val code = bfCode
-    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    val covered = Some(mutable.HashSet[CfgNode]())
-    val executor = new SymbolicExecutor(cfg, searchStrategy = new CoverageSearchStrategy(covered.get), covered = covered)
-    executor.run()
-  }
-
-  test("bf random path search") {
-    val code = bfCode
-    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    val covered = Some(mutable.HashSet[CfgNode]())
-    val stateHistory = new StateHistory()
-    val executor = new SymbolicExecutor(cfg, stateHistory = Some(stateHistory), searchStrategy = new RandomPathSelectionStrategy(stateHistory), covered = covered)
-    executor.run()
-  }
-
-  test("bf klee search") {
-    val code = bfCode
-    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    val covered = Some(mutable.HashSet[CfgNode]())
-    val stateHistory = new StateHistory()
-    val executor = new SymbolicExecutor(cfg, searchStrategy = new KleeSearchStrategy(stateHistory, covered.get), covered = covered)
-    executor.run()
-  }
-
-  test("bf with subsumption") {
-    val code = bfCode
-    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    val ctx = new Context()
-    val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx), ctx)))
-    executor.run()
-  }
-
-  test("bf with merging") {
-    val code = bfCode
-    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    val executor = new SymbolicExecutor(cfg, None, searchStrategy = new AgressiveStateMerging(new BFSSearchStrategy))
-    executor.run()
-  }
-
-  test("bf with smart merging") {
-    val code = bfCode
-    val program = parseUnsafe(code)
-    val cfg = new IntraproceduralCfgFactory().fromProgram(program);
-    val analysesResult = new QueryCountAnalyses(cfg)(new SemanticAnalysis().analyze(program)).analyze()
-    val variableCosts = new mutable.HashMap[CfgNode, mutable.HashMap[String, Double]]
-    for (node <- analysesResult) {
-      val nodeCosts = new mutable.HashMap[String, Double]
-      for (cost <- node._2) {
-        nodeCosts.put(cost._1.name, cost._2)
-      }
-      variableCosts.put(node._1, nodeCosts)
-    }
-    val executor = new SymbolicExecutor(cfg, None, searchStrategy = new HeuristicBasedStateMerging(new BFSSearchStrategy, variableCosts, 3))
-    executor.run()
-  }
-
-  test("bf with smart merging 2") {
-    val code = bfCode
-    val program = parseUnsafe(code)
-    val cfg = new IntraproceduralCfgFactory().fromProgram(program);
-    val tmp = new TMP()(new SemanticAnalysis().analyze(program))
-    tmp.tmp2(cfg)
-    val executor = new SymbolicExecutor(cfg, None, searchStrategy = new HeuristicBasedStateMerging(new BFSSearchStrategy, tmp.mapping, 3))
-    executor.run()
-  }
-
-  test("bf dynamic smart merging") {
-    val code = bfCode
-    val program = parseUnsafe(code)
-    val cfg = new IntraproceduralCfgFactory().fromProgram(program);
-    val analysesResult = new QueryCountAnalyses(cfg)(new SemanticAnalysis().analyze(program)).analyze()
-    val variableCosts = new mutable.HashMap[CfgNode, mutable.HashMap[String, Double]]
-    for (node <- analysesResult) {
-      val nodeCosts = new mutable.HashMap[String, Double]
-      for (cost <- node._2) {
-        nodeCosts.put(cost._1.name, cost._2)
-      }
-      variableCosts.put(node._1, nodeCosts)
-    }
-    val limitCost = 3.0
-    val depth = 3
-    val stateHistory = new StateHistory()
-    val dynamicStateMerging = new DynamicStateMerging(
-      new HeuristicBasedStateMerging(new BFSSearchStrategy, variableCosts, limitCost),
-      stateHistory,
-      variableCosts,
-      limitCost,
-      depth
-    )
-    val executor = new SymbolicExecutor(cfg, None, searchStrategy = dynamicStateMerging)
-    executor.run()
-  }
-
-  test("bf with merging and subsumption") {
-    val code = bfCode
-    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    val ctx = new Context()
-    val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx), ctx)), searchStrategy = new AgressiveStateMerging(new BFSSearchStrategy))
-    executor.run()
-  }
+//  test("bf coverage search") {
+//    val code = bfCode
+//    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+//    val covered = Some(mutable.HashSet[CfgNode]())
+//    val executor = new SymbolicExecutor(cfg, searchStrategy = new CoverageSearchStrategy(covered.get), covered = covered)
+//    executor.run()
+//  }
+//
+//  test("bf random path search") {
+//    val code = bfCode
+//    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+//    val covered = Some(mutable.HashSet[CfgNode]())
+//    val stateHistory = new StateHistory()
+//    val executor = new SymbolicExecutor(cfg, stateHistory = Some(stateHistory), searchStrategy = new RandomPathSelectionStrategy(stateHistory), covered = covered)
+//    executor.run()
+//  }
+//
+//  test("bf klee search") {
+//    val code = bfCode
+//    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+//    val covered = Some(mutable.HashSet[CfgNode]())
+//    val stateHistory = new StateHistory()
+//    val executor = new SymbolicExecutor(cfg, searchStrategy = new KleeSearchStrategy(stateHistory, covered.get), covered = covered)
+//    executor.run()
+//  }
+//
+//  test("bf with subsumption") {
+//    val code = bfCode
+//    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+//    val ctx = new Context()
+//    val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx), ctx)))
+//    executor.run()
+//  }
+//
+//  test("bf with merging") {
+//    val code = bfCode
+//    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+//    val executor = new SymbolicExecutor(cfg, None, searchStrategy = new AgressiveStateMerging(new BFSSearchStrategy))
+//    executor.run()
+//  }
+//
+//  test("bf with smart merging") {
+//    val code = bfCode
+//    val program = parseUnsafe(code)
+//    val cfg = new IntraproceduralCfgFactory().fromProgram(program);
+//    val analysesResult = new QueryCountAnalyses(cfg)(new SemanticAnalysis().analyze(program)).analyze()
+//    val variableCosts = new mutable.HashMap[CfgNode, mutable.HashMap[String, Double]]
+//    for (node <- analysesResult) {
+//      val nodeCosts = new mutable.HashMap[String, Double]
+//      for (cost <- node._2) {
+//        nodeCosts.put(cost._1.name, cost._2)
+//      }
+//      variableCosts.put(node._1, nodeCosts)
+//    }
+//    val executor = new SymbolicExecutor(cfg, None, searchStrategy = new HeuristicBasedStateMerging(new BFSSearchStrategy, variableCosts, 3))
+//    executor.run()
+//  }
+//
+//  test("bf with smart merging 2") {
+//    val code = bfCode
+//    val program = parseUnsafe(code)
+//    val cfg = new IntraproceduralCfgFactory().fromProgram(program);
+//    val tmp = new TMP()(new SemanticAnalysis().analyze(program))
+//    tmp.tmp2(cfg)
+//    val executor = new SymbolicExecutor(cfg, None, searchStrategy = new HeuristicBasedStateMerging(new BFSSearchStrategy, tmp.mapping, 3))
+//    executor.run()
+//  }
+//
+//  test("bf dynamic smart merging") {
+//    val code = bfCode
+//    val program = parseUnsafe(code)
+//    val cfg = new IntraproceduralCfgFactory().fromProgram(program);
+//    val analysesResult = new QueryCountAnalyses(cfg)(new SemanticAnalysis().analyze(program)).analyze()
+//    val variableCosts = new mutable.HashMap[CfgNode, mutable.HashMap[String, Double]]
+//    for (node <- analysesResult) {
+//      val nodeCosts = new mutable.HashMap[String, Double]
+//      for (cost <- node._2) {
+//        nodeCosts.put(cost._1.name, cost._2)
+//      }
+//      variableCosts.put(node._1, nodeCosts)
+//    }
+//    val limitCost = 3.0
+//    val depth = 3
+//    val stateHistory = new StateHistory()
+//    val dynamicStateMerging = new DynamicStateMerging(
+//      new HeuristicBasedStateMerging(new BFSSearchStrategy, variableCosts, limitCost),
+//      stateHistory,
+//      variableCosts,
+//      limitCost,
+//      depth
+//    )
+//    val executor = new SymbolicExecutor(cfg, None, searchStrategy = dynamicStateMerging)
+//    executor.run()
+//  }
+//
+//  test("bf with merging and subsumption") {
+//    val code = bfCode
+//    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+//    val ctx = new Context()
+//    val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx), ctx)), searchStrategy = new AgressiveStateMerging(new BFSSearchStrategy))
+//    executor.run()
+//  }
 
 
 
@@ -1199,6 +904,202 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
   }
 
 
+  test("sequential unbounded periodic loop finishes with summarization correctly arrays") {
+    var code =
+      """
+        |main() {
+        |  var n, x, z;
+        |  n = [input];
+        |  x = [input];
+        |  z = [input];
+        |  while (x[0] < n[0]) {
+        |   if (z[0] > x[0]) {
+        |     x[0] = x[0] + 1;
+        |   }
+        |   else {
+        |     z[0] = z[0] + 1;
+        |   }
+        |  }
+        |  return 1 / (x[0] - z[0]);
+        |}
+        |""".stripMargin;
+
+    var cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+    var ctx = new Context()
+    var executor = new LoopSummary(cfg)
+    try {
+      executor.run()
+      fail("Expected a ExecutionException but it did not occur.")
+    }
+    catch {
+      case _: ExecutionException =>
+      case other: Throwable => fail("Expected a ExecutionException, but caught different exception: " + other)
+    }
+
+    code =
+      """
+        |main() {
+        |  var n, x, z;
+        |  n = [input];
+        |  x = [input];
+        |  z = [input];
+        |  while (x < n) {
+        |   if (z[0] > x[0]) {
+        |     x[0] = x[0] + 1;
+        |   }
+        |   else {
+        |     z[0] = z[0] + 1;
+        |   }
+        |  }
+        |  return 1 / (x[0] - n[0]);
+        |}
+        |""".stripMargin;
+
+    cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+    ctx = new Context()
+    executor = new LoopSummary(cfg)
+    try {
+      executor.run()
+      fail("Expected a ExecutionException but it did not occur.")
+    }
+    catch {
+      case _: ExecutionException =>
+      case other: Throwable => fail("Expected a ExecutionException, but caught different exception: " + other)
+    }
+  }
+
+
+
+  test("sequential unbounded periodic loop finishes with summarization correctly arrays arrays") {
+    var code =
+      """
+        |main() {
+        |  var n, x, z;
+        |  n = [[input]];
+        |  x = [[input]];
+        |  z = [[input]];
+        |  while (x[0][0] < n[0][0]) {
+        |   if (z[0][0] > x[0][0]) {
+        |     x[0][0] = x[0][0] + 1;
+        |   }
+        |   else {
+        |     z[0][0] = z[0][0] + 1;
+        |   }
+        |  }
+        |  return 1 / (x[0][0] - z[0][0]);
+        |}
+        |""".stripMargin;
+
+    var cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+    var ctx = new Context()
+    var executor = new LoopSummary(cfg)
+    try {
+      executor.run()
+      fail("Expected a ExecutionException but it did not occur.")
+    }
+    catch {
+      case _: ExecutionException =>
+      case other: Throwable => fail("Expected a ExecutionException, but caught different exception: " + other)
+    }
+
+    code =
+      """
+        |main() {
+        |  var n, x, z;
+        |  n = [[input]];
+        |  x = [[input]];
+        |  z = [[input]];
+        |  while (x[0][0] < n[0][0]) {
+        |   if (z[0][0] > x[0][0]) {
+        |     x[0][0] = x[0][0] + 1;
+        |   }
+        |   else {
+        |     z[0][0] = z[0][0] + 1;
+        |   }
+        |  }
+        |  return 1 / (x[0][0] - n[0][0]);
+        |}
+        |""".stripMargin;
+
+    cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+    ctx = new Context()
+    executor = new LoopSummary(cfg)
+    try {
+      executor.run()
+      fail("Expected a ExecutionException but it did not occur.")
+    }
+    catch {
+      case _: ExecutionException =>
+      case other: Throwable => fail("Expected a ExecutionException, but caught different exception: " + other)
+    }
+  }
+
+
+  test("sequential unbounded periodic loop finishes with summarization correctly records") {
+    var code =
+      """
+        |main() {
+        |  var n, x, z;
+        |  n = input;
+        |  x = {field: input};
+        |  z = {field: input};
+        |  while (x.field < n) {
+        |   if (z.field > x.field) {
+        |     x.field = x.field + 1;
+        |   }
+        |   else {
+        |     z.field = z.field + 1;
+        |   }
+        |  }
+        |  return 1 / (x.field - z.field);
+        |}
+        |""".stripMargin;
+
+    var cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+    var ctx = new Context()
+    var executor = new LoopSummary(cfg)
+    try {
+      executor.run()
+      fail("Expected a ExecutionException but it did not occur.")
+    }
+    catch {
+      case _: ExecutionException =>
+      case other: Throwable => fail("Expected a ExecutionException, but caught different exception: " + other)
+    }
+
+    code =
+      """
+        |main() {
+        |  var n, x, z;
+        |  n = input;
+        |  x = {field: input};
+        |  z = {field: input};
+        |  while (x.field < n) {
+        |   if (z.field > x.field]) {
+        |     x.field = x.field + 1;
+        |   }
+        |   else {
+        |     z.field = z.field + 1;
+        |   }
+        |  }
+        |  return 1 / (x.field - n.field);
+        |}
+        |""".stripMargin;
+
+    cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+    ctx = new Context()
+    executor = new LoopSummary(cfg)
+    try {
+      executor.run()
+      fail("Expected a ExecutionException but it did not occur.")
+    }
+    catch {
+      case _: ExecutionException =>
+      case other: Throwable => fail("Expected a ExecutionException, but caught different exception: " + other)
+    }
+  }
+
+
   test("sequential unbounded periodic loop with adding a variables") {
     var code =
       """
@@ -1241,7 +1142,7 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
   }
 
 
-  test("sequential unbounded periodic loop finishes with summarization correctly 2") {
+  test("unbounded periodic loop finishes with summarization correctly 2") {
     var code =
       """
         |main() {

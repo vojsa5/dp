@@ -1,42 +1,14 @@
 package microc.symbolic_execution
 
 import com.microsoft.z3.{ArithExpr, ArithSort, BoolSort, Context, Solver, Status}
-import microc.ast.{AndAnd, ArrayAccess, ArrayNode, AssignStmt, AstNode, BinaryOp, CodeLoc, Deref, Expr, FieldAccess, Identifier, IfStmt, Input, NestedBlockStmt, Not, Null, Number, OrOr, Record, RecordField, Stmt, VarRef, WhileStmt}
+import microc.ast.{Alloc, AndAnd, ArrayAccess, ArrayNode, AssignStmt, AstNode, BinaryOp, CodeLoc, Deref, Expr, FieldAccess, Identifier, IfStmt, Input, NestedBlockStmt, Not, Null, Number, OrOr, Record, RecordField, Stmt, VarRef, WhileStmt}
 import microc.cfg.CfgNode
-import microc.symbolic_execution.PathSubsumption.replaceExpr
 import microc.symbolic_execution.Value.{SymbolicExpr, SymbolicVal}
 
 import java.util
 import scala.collection.mutable
 
 
-object PathSubsumption {
-
-
-  def replaceExpr(expr: Expr, toReplace: Expr, newValue: Expr): Expr = {
-    expr match {
-      case _ if expr.equals(toReplace) => newValue
-      case Not(expr, loc) =>
-        Not(replaceExpr(expr, toReplace,newValue), loc)
-      case BinaryOp(operator, left, right, loc) =>
-        BinaryOp(operator, replaceExpr(left, toReplace, newValue), replaceExpr(right, toReplace, newValue), loc)
-      case id@Identifier(_, _) => id
-      case n@Number(_, _) => n
-      case v@SymbolicVal(_) => v
-      case SymbolicExpr(expr, _) => replaceExpr(expr, toReplace, newValue)
-      case Null(loc) => Null(loc)
-      case Input(loc) => SymbolicVal(CodeLoc(0, 0))
-      case ArrayAccess(array, index, loc) => ArrayAccess(replaceExpr(array, toReplace, newValue), replaceExpr(index, toReplace, newValue), loc)
-      case ArrayNode(elems, loc) => ArrayNode(elems.map(elem => replaceExpr(elem, toReplace, newValue)), loc)
-      case Deref(pointer, loc) => Deref(replaceExpr(pointer, toReplace, newValue), loc)
-      case VarRef(id, loc) => replaceExpr(id, toReplace, newValue)
-      case FieldAccess(record, field, loc) => FieldAccess(replaceExpr(record, toReplace, newValue), field, loc)
-      case Record(fields, loc) => Record(fields.map(field => RecordField(field.name, replaceExpr(field.expr, toReplace, newValue), field.loc)), loc)
-      case _ =>
-        throw new Exception("IMPLEMENT")
-    }
-  }
-}
 
 
 
@@ -45,23 +17,20 @@ class PathSubsumption(constraintSolver: ConstraintSolver, ctx: Context) {
   val annotations = mutable.HashMap[CfgNode, Expr]()
 
 
-  def addAnnotationsToALoop(loop: CfgNode, annotation: Expr): Unit = {
-    val succs = loop.succ
-    val maxSucc = succs.maxBy(node => node.id).id
-    for (s <- succs) {
-      addAnotations(s, loop.id, maxSucc, annotation)
+  def replaceSubsumptionIdentifier(nodes: List[CfgNode], identifier: Identifier, newValue: Expr) = {
+    for (node <- nodes) {
+      annotations.get(node) match {
+        case Some(ann) =>
+          annotations.put(node, Utility.replaceExpr(ann, identifier, newValue))
+        case None =>
+      }
     }
   }
 
-  def addAnotations(node: CfgNode, minId: Double, maxId: Double, annotation: Expr): Unit = {
-    if (node.id < maxId && node.id > minId) {
-      node.ast match {
-        case WhileStmt(_, _, _) =>
-          addAnnotationsToALoop(node, annotation)
-        case _ =>
-          addAnnotation(node, annotation)
-          node.succ.foreach(s => addAnotations(s, minId, maxId, annotation))
-      }
+
+  def addAnnotationsToALoop(loopNodes: List[CfgNode], annotation: Expr): Unit = {
+    for (node <- loopNodes) {
+      addAnnotation(node, annotation)
     }
   }
 
@@ -70,16 +39,25 @@ class PathSubsumption(constraintSolver: ConstraintSolver, ctx: Context) {
   }
 
 
-  def computeAnnotation(node: CfgNode): Unit = {
+  def computeAnnotation(node: CfgNode, considerTrueBranchForWhile: Boolean = false): Unit = {
     val t: util.LinkedList[mutable.HashSet[Expr]] = new util.LinkedList[mutable.HashSet[Expr]]
     if (node.succ.size == 2) {
+      var annotation: Expr = Number(0, CodeLoc(0, 0))
       val (guard, thenBranch) = node.ast match {
         case IfStmt(guard, thenBranch, _, _) => (guard, thenBranch)
-        case WhileStmt(guard, thenBranch, _) => (guard, thenBranch)
+        case WhileStmt(guard, thenBranch, _) => {
+          if (!considerTrueBranchForWhile) {
+            val elseNode = node.succ.maxBy(node => node.id)
+            if (annotations.contains(elseNode)) {
+              annotations.put(node, annotations(elseNode))
+            }
+            return
+          }
+          (guard, thenBranch)
+        }
         case _ =>
           throw new Exception("This should never happen")
       }
-      var annotation: Expr = Number(0, CodeLoc(0, 0))
       val thenNode = node.succ.minBy(node => node.id)
       if (annotations.contains(thenNode)) {
         if (thenBranch.asInstanceOf[NestedBlockStmt].body.isEmpty) {
@@ -106,8 +84,10 @@ class PathSubsumption(constraintSolver: ConstraintSolver, ctx: Context) {
       if (annotations.contains(node.succ.head)) {
         val annotation = annotations(node.succ.head)
         val newAnnotation = node.ast match {
+          case AssignStmt(Identifier(name, _), _, _) if Utility.isSubsumptionVar(name) =>
+            annotation
           case AssignStmt(left, right, _) =>
-            replaceExpr(annotation, left, right)
+            Utility.replaceExpr(annotation, left, right)
           case _ =>
             annotation
         }
@@ -118,21 +98,19 @@ class PathSubsumption(constraintSolver: ConstraintSolver, ctx: Context) {
 
 
 
-  def checkSubsumption(node: CfgNode, expr: Expr, symbolicState: SymbolicState): Boolean = {
+  def checkSubsumption(symbolicState: SymbolicState): Boolean = {
+    val node = symbolicState.nextStatement
     if (annotations.contains(node)) {
       val anotation = annotations(node)
       val solver = ctx.mkSolver()
-      val constraint = constraintSolver.getCondition(
-        constraintSolver.createConstraintWithState(
-          BinaryOp(
-            AndAnd,
-            symbolicState.pathCondition.expr,
-            Not(anotation, CodeLoc(0, 0)),
-            CodeLoc(0, 0)
-          ),
-          symbolicState)
+      val expr =
+        BinaryOp(
+        AndAnd,
+        symbolicState.pathCondition.expr,
+        Not(anotation, CodeLoc(0, 0)),
+        CodeLoc(0, 0)
       )
-      System.out.println(constraint)
+      val constraint = constraintSolver.getCondition(constraintSolver.createConstraintWithState(expr, symbolicState))
       solver.add(constraint)
       solver.check() match {
         case Status.UNSATISFIABLE =>

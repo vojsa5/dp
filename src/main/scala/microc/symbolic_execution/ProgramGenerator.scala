@@ -42,7 +42,7 @@ case class RecType(fields: mutable.HashMap[String, VarType]) extends VarType {
 
 
 
-object ProgramGenerator {
+class ProgramGenerator() {
   val random = new Random()
 
   val existingTypes: mutable.HashSet[VarType] = mutable.HashSet[VarType]()
@@ -84,6 +84,14 @@ object ProgramGenerator {
     throw new Exception("")
   }
 
+  def randomArrayOfSize(expectedType: ArrayType, declaredIdentifiers: Map[String, VarType], size: Int): Expr = {
+    val filteredIdentifiers = declaredIdentifiers.filter(_._2 == expectedType).filter(id => arraySizes(id._1) == size).keys.toList
+    if (filteredIdentifiers.nonEmpty) {
+      return Identifier(filteredIdentifiers(random.nextInt(filteredIdentifiers.size)), randomLoc())
+    }
+    ArrayNode((1 to size).map(_ => randomExpr(expectedType.innerType, 1, declaredIdentifiers)).toList, randomLoc())
+  }
+
   def randomIdentifierOfType(expectedType: VarType, declaredIdentifiers: Map[String, VarType]): Identifier = {
     val filteredIdentifiers = declaredIdentifiers.filter(_._2 == expectedType).keys.toList
     if (filteredIdentifiers.nonEmpty) {
@@ -96,8 +104,8 @@ object ProgramGenerator {
     Identifier(functionNames(random.nextInt(functionNames.size)), randomLoc())
   }
 
-  def randomExpr(expectedType: VarType, depth: Int = 0, declaredIdentifiers: Map[String, VarType]): Expr = {
-    if (depth > 5) {
+  def randomExpr(expectedType: VarType, depth: Int = 0, declaredIdentifiers: Map[String, VarType], arrSize: Int = 0): Expr = {
+    if (depth > 4) {
       getRandomValueOfType(expectedType)
     }
     else {
@@ -145,8 +153,10 @@ object ProgramGenerator {
             case 2 => VarRef(randomIdentifierOfType(inner, declaredIdentifiers), randomLoc())
             case 3 => Null(randomLoc())
           }
-        case ArrayType(inner) =>
+        case a@ArrayType(inner) if arrSize == 0 =>
           randomIdentifierOfType(expectedType, declaredIdentifiers)
+        case a@ArrayType(inner) =>
+          randomArrayOfSize(a, declaredIdentifiers, arrSize)
         case RecType(fields) =>
           randomIdentifierOfType(expectedType, declaredIdentifiers)
       }
@@ -154,20 +164,28 @@ object ProgramGenerator {
   }
 
   def randomStmt(depth: Int = 0, declaredIdentifiers: Map[String, VarType]): StmtInNestedBlock = {
-    if (depth > 3) {
+    if (depth > 2) {
       random.nextInt(2) match {
         case 0 =>
           OutputStmt (randomExpr (NumType (), declaredIdentifiers = declaredIdentifiers), randomLoc () )
         case 1 =>
           val identifier = randomIdentifier(declaredIdentifiers)
-          AssignStmt(identifier, randomExpr(declaredIdentifiers(identifier.name), depth + 1, declaredIdentifiers), randomLoc())
+          val size = declaredIdentifiers(identifier.name) match {
+            case ArrayType(_) => arraySizes(identifier.name)
+            case _ => 0
+          }
+          AssignStmt(identifier, randomExpr(declaredIdentifiers(identifier.name), depth + 1, declaredIdentifiers, size), randomLoc())
       }
     }
     else {
       random.nextInt(5) match {
         case 0 => {
           val identifier = randomIdentifier(declaredIdentifiers)
-          AssignStmt(identifier, randomExpr(declaredIdentifiers(identifier.name), depth + 1, declaredIdentifiers), randomLoc())
+          val size = declaredIdentifiers(identifier.name) match {
+            case ArrayType(_) => arraySizes(identifier.name)
+            case _ => 0
+          }
+          AssignStmt(identifier, randomExpr(declaredIdentifiers(identifier.name), depth + 1, declaredIdentifiers, size), randomLoc())
         }
         case 1 if generatedAnArray => {
           val identifier = randomArrayIdentifier(declaredIdentifiers)
@@ -197,13 +215,13 @@ object ProgramGenerator {
         }
         case 2 => IfStmt(
           randomExpr(NumType(), depth + 1, declaredIdentifiers),
-          NestedBlockStmt((1 to random.nextInt(5) + 5).map(_ => randomStmt(depth + 1, declaredIdentifiers)).toList, randomLoc()),
-          Some(NestedBlockStmt((1 to random.nextInt(5) + 5).map(_ => randomStmt(depth + 1, declaredIdentifiers)).toList, randomLoc())),
+          NestedBlockStmt((1 to random.nextInt(3) + 3).map(_ => randomStmt(depth + 1, declaredIdentifiers)).toList, randomLoc()),
+          Some(NestedBlockStmt((1 to random.nextInt(3) + 3).map(_ => randomStmt(depth + 1, declaredIdentifiers)).toList, randomLoc())),
           randomLoc()
         )
         case 3 => WhileStmt(
           randomExpr(NumType(), depth + 1, declaredIdentifiers),
-          NestedBlockStmt((1 to random.nextInt(5) + 5).map(_ => randomStmt(depth + 1, declaredIdentifiers)).toList, randomLoc()),
+          NestedBlockStmt((1 to random.nextInt(3) + 3).map(_ => randomStmt(depth + 1, declaredIdentifiers)).toList, randomLoc()),
           randomLoc()
         )
         case 4 =>
@@ -264,13 +282,16 @@ object ProgramGenerator {
 
 
     // Variable declarations
-    val varDecls = (0 to random.nextInt(15) + 15  ).map { i =>
+    var varDecls = (0 to random.nextInt(15) + 15  ).map { i =>
       val varName = s"var${i}"
       val varType = getRandomTypeWithHardcodedProbabilities()
       //println(varName, varType)
       declaredIdentifiers += (varName -> varType)
       IdentifierDecl(varName, randomLoc())
     }.toList
+    val guaranteedArray = (s"var${varDecls.size}" -> ArrayType(NumType()))
+    declaredIdentifiers += guaranteedArray
+    varDecls = varDecls.appended(IdentifierDecl(s"var${varDecls.size}", randomLoc()))
 
     val varsStmt = VarStmt(varDecls, randomLoc())
 

@@ -1,12 +1,19 @@
 package microc.symbolic_execution
 
-import microc.ast.{Alloc, AndAnd, ArrayAccess, ArrayNode, AssignStmt, BinaryOp, CallFuncExpr, Decl, Divide, Equal, Expr, GreaterEqual, GreaterThan, Identifier, IfStmt, Input, LowerEqual, LowerThan, Minus, Not, NotEqual, Null, Number, OrOr, OutputStmt, Plus, ReturnStmt, Stmt, Times, WhileStmt}
+import microc.ast.{Alloc, AndAnd, ArrayAccess, ArrayNode, AssignStmt, AstPrinter, BinaryOp, CallFuncExpr, CodeLoc, Decl, Deref, Divide, Equal, Expr, FieldAccess, GreaterEqual, GreaterThan, Identifier, IfStmt, Input, LowerEqual, LowerThan, Minus, Not, NotEqual, Null, Number, OrOr, OutputStmt, Plus, Record, RecordField, ReturnStmt, Stmt, Times, VarRef, WhileStmt}
+import microc.symbolic_execution.Value.{ArrVal, IteVal, NullRef, PointerVal, RecVal, Symbolic, SymbolicExpr, SymbolicVal, Val}
 
+import scala.collection.immutable.HashSet
+import scala.collection.mutable
 import scala.util.Random
 
 object Utility {
   def varIsFromOriginalProgram(name: String): Boolean = {
-    !(name.length > 2 && name(0) == '_' && name(1) == 't')
+    !(name.length > 2 && name(0) == '_' && (name(1) == 't' || name(1) == 'l'))
+  }
+
+  def isSubsumptionVar(name: String): Boolean = {
+    name.length > 2 && name(0) == '_' && name(1) == 'l'
   }
 
   def generateRandomString(): String = {
@@ -105,14 +112,18 @@ object Utility {
       case BinaryOp(OrOr, Number(0, _), expr, _) => simplifyArithExpr(expr)
       case BinaryOp(AndAnd, expr, Number(1, _), _) => simplifyArithExpr(expr)
       case BinaryOp(OrOr, expr, Number(0, _), _) => simplifyArithExpr(expr)
-      case BinaryOp(AndAnd, expr1, expr2, _) if expr1 == expr2 => simplifyArithExpr(expr1)
-      case BinaryOp(OrOr, expr1, expr2, _) if expr1 == expr2 => simplifyArithExpr(expr1)
+      case BinaryOp(AndAnd, Number(0, loc), expr, _) => Number(0, loc)
+      case BinaryOp(OrOr, Number(1, loc), expr, _) => Number(1, loc)
+      case BinaryOp(AndAnd, expr, Number(0, loc), _) => Number(0, loc)
+      case BinaryOp(OrOr, expr, Number(1, loc), _) => Number(1, loc)
+      case BinaryOp(AndAnd, expr1, expr2, _) if expr1.equals(expr2) => simplifyArithExpr(expr1)
+      case BinaryOp(OrOr, expr1, expr2, _) if expr1.equals(expr2) => simplifyArithExpr(expr1)
       case BinaryOp(Plus, expr, Number(0, _), _) => simplifyArithExpr(expr)
       case BinaryOp(Times, expr, Number(1, _), _) => simplifyArithExpr(expr)
       case BinaryOp(Plus, Number(0, _), expr, _) => simplifyArithExpr(expr)
       case BinaryOp(Times, Number(1, _), expr, _) => simplifyArithExpr(expr)
-      case BinaryOp(OrOr, Not(expr1, _), expr2, loc) if expr1 == expr2 => Number(1, loc)
-      case BinaryOp(OrOr, expr1, Not(expr2, _), loc) if expr1 == expr2 => Number(1, loc)
+      case BinaryOp(OrOr, Not(expr1, _), expr2, loc) if expr1.equals(expr2) => Number(1, loc)
+      case BinaryOp(OrOr, expr1, Not(expr2, _), loc) if expr1.equals(expr2) => Number(1, loc)
       case BinaryOp(operator, left, right, loc) =>
         (simplifyArithExpr(left), simplifyArithExpr(right)) match {
           case (Number(value, loc), Number(value2, _)) =>
@@ -140,4 +151,154 @@ object Utility {
     }
     res
   }
+
+  def applyVal(v: Val, state: SymbolicState, allowReturnNonInitialized: Boolean = false): Expr = {
+    v match {
+      case n@Number(_, _) => n
+      case v@SymbolicVal(_) => v
+      case NullRef => NullRef
+      case PointerVal(addr) => PointerVal(addr)
+      case SymbolicExpr(expr, _) => applyTheState(expr, state, allowReturnNonInitialized)
+      case IteVal(val1, val2, cond, loc) =>
+        (applyVal(val1, state), applyVal(val2, state)) match {
+          case (a: Symbolic, b: Symbolic) => IteVal(a, b, applyTheState(cond, state, allowReturnNonInitialized), loc)
+          case (a: Symbolic, b) => IteVal(a, SymbolicExpr(b, loc), applyTheState(cond, state, allowReturnNonInitialized), loc)
+          case (a, b: Symbolic) => IteVal(SymbolicExpr(a, loc), b, applyTheState(cond, state, allowReturnNonInitialized), loc)
+          case (a, b) => IteVal(SymbolicExpr(a, loc), SymbolicExpr(b, loc), applyTheState(cond, state, allowReturnNonInitialized), loc)
+        }
+      case r@RecVal(fields) => r
+      //RecVal(fields.map(field => (field._1, SymbolicExpr(applyVal(field._2, state, allowReturnNonInitialized), CodeLoc(0, 0)))))
+      case a@ArrVal(elems) => a
+      //        ArrVal(elems.map(elem => applyVal(state.getVal(elem).get, state, allowReturnNonInitialized)))
+      case _ =>
+        throw new Exception("IMPLEMENT")
+    }
+  }
+
+  def applyTheState(expr: Expr, state: SymbolicState, allowReturnNonInitialized: Boolean = false): Expr = {
+    var res = expr match {
+      case Not(expr, loc) =>
+        Not(applyTheState(expr, state, allowReturnNonInitialized), loc)
+      case BinaryOp(operator, left, right, loc) => BinaryOp(operator, applyTheState(left, state, allowReturnNonInitialized), applyTheState(right, state, allowReturnNonInitialized), loc)
+      case Identifier(name, loc) => applyVal(state.getSymbolicVal(name, loc, allowReturnNonInitialized), state, allowReturnNonInitialized)
+      case n@Number(_, _) => n
+      case v@SymbolicVal(_) => v
+      case NullRef => NullRef
+      case PointerVal(addr) => PointerVal(addr)
+      case SymbolicExpr(expr, _) => applyTheState(expr, state, allowReturnNonInitialized)
+      case r@RecVal(_) => r
+      case a@ArrVal(_) => a
+      case i@Input(loc) => SymbolicVal(CodeLoc(0, 0))
+      case _ =>
+        throw new Exception("")
+    }
+    if (res != expr) {
+      res = applyTheState(res, state, allowReturnNonInitialized)
+    }
+    res
+  }
+
+
+
+  def removeUnnecessarySymbolicExpr(expr: SymbolicExpr): Val = {
+    expr.value match {
+      case inner@SymbolicExpr(_, _) => removeUnnecessarySymbolicExpr(inner)
+      case n@Number(_, _) => n
+      case s@SymbolicVal(_) => s
+      case p@PointerVal(_) => p
+      case a@ArrVal(_) => a
+      case r@RecVal(_) => r
+      case other => //at least for arrnode, do not remove symbolic expr
+        expr
+    }
+  }
+
+  def removePossibleUnnecessarySymbolicExpr(v: Val): Val = {
+    v match {
+      case s: SymbolicExpr => removeUnnecessarySymbolicExpr(s)
+      case _ => v
+    }
+  }
+
+  def replaceExpr(expr: Expr, toReplace: Expr, newValue: Expr): Expr = {
+    expr match {
+      case _ if expr.equals(toReplace) => newValue
+      case Not(expr, loc) =>
+        Not(replaceExpr(expr, toReplace,newValue), loc)
+      case BinaryOp(operator, left, right, loc) =>
+        BinaryOp(operator, replaceExpr(left, toReplace, newValue), replaceExpr(right, toReplace, newValue), loc)
+      case id@Identifier(_, _) => id
+      case n@Number(_, _) => n
+      case v@SymbolicVal(_) => v
+      case SymbolicExpr(expr, _) => replaceExpr(expr, toReplace, newValue)
+      case Null(loc) => Null(loc)
+      case Input(loc) => SymbolicVal(CodeLoc(0, 0))
+      case ArrayAccess(array, index, loc) => ArrayAccess(replaceExpr(array, toReplace, newValue), replaceExpr(index, toReplace, newValue), loc)
+      case ArrayNode(elems, loc) => ArrayNode(elems.map(elem => replaceExpr(elem, toReplace, newValue)), loc)
+      case Deref(pointer, loc) => Deref(replaceExpr(pointer, toReplace, newValue), loc)
+      case VarRef(id, loc) => replaceExpr(id, toReplace, newValue)
+      case FieldAccess(record, field, loc) => FieldAccess(replaceExpr(record, toReplace, newValue), field, loc)
+      case Record(fields, loc) => Record(fields.map(field => RecordField(field.name, replaceExpr(field.expr, toReplace, newValue), field.loc)), loc)
+      case Alloc(expr, loc) => Alloc(replaceExpr(expr, toReplace, newValue), loc)
+      case _ =>
+        throw new Exception("IMPLEMENT")
+    }
+  }
+
+  def containsVariableNotStartingInAProgram(expr: Expr): Boolean = {
+    expr match {
+      case BinaryOp(operator, left, right, loc) => containsVariableNotStartingInAProgram(left) || containsVariableNotStartingInAProgram(right)
+      case Not(expr, _) => containsVariableNotStartingInAProgram(expr)
+      case Identifier(name, _) => !Utility.varIsFromOriginalProgram(name)
+      case SymbolicExpr(expr, _) => containsVariableNotStartingInAProgram(expr)
+      case _ => false
+    }
+  }
+
+  def getMemoryCellsFromAnExpr(expr: Expr): mutable.HashSet[Expr] = {
+    expr match {
+      case BinaryOp(_, left, right, _) =>
+        val res = mutable.HashSet[Expr]()
+        res.addAll(getMemoryCellsFromAnExpr(left))
+        for (e <- getMemoryCellsFromAnExpr(right)) {
+          if (res.forall(e2 => !e.equals(e2))) {
+            res.add(e)
+          }
+        }
+        res
+      case Not(expr, _) =>
+        getMemoryCellsFromAnExpr(expr)
+      case id@Identifier(_, _) =>
+        val res = mutable.HashSet[Expr]()
+        res.add(id)
+        res
+      case a@ArrayAccess(_, _, _) =>
+        val res = mutable.HashSet[Expr]()
+        res.add(a)
+        res
+      case SymbolicExpr(expr, _) =>
+        getMemoryCellsFromAnExpr(expr)
+      case _ =>
+        mutable.HashSet()
+    }
+  }
+
+
+  def exprContainsAMemoryLocation(expr: Expr, vars: mutable.HashSet[String], printer: AstPrinter): Boolean = {
+    expr match {
+      case BinaryOp(_, left, right, _) =>
+        exprContainsAMemoryLocation(left, vars, printer) || exprContainsAMemoryLocation(right, vars, printer)
+      case Not(expr, _) =>
+        exprContainsAMemoryLocation(expr, vars, printer)
+      case SymbolicExpr(expr, _) =>
+        exprContainsAMemoryLocation(expr, vars, printer)
+      case id@Identifier(_, _) if vars.contains(printer.print(id)) =>
+        true
+      case a@ArrayAccess(_, _, _) if vars.contains(printer.print(a)) =>
+        true
+      case _ =>
+        false
+    }
+  }
+
 }

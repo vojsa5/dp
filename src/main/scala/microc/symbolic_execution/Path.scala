@@ -28,7 +28,7 @@ import scala.collection.mutable
 //}
 
 
-class Path(val statements: List[Stmt], var condition: Expr, var changes: mutable.HashMap[Expr, (Expr) => ((Expr) => Expr)]) {
+class Path(val statements: List[Stmt], var condition: Expr, var changes: List[(Expr, (Expr) => ((Expr) => Expr))]) {
 
   val iterations = SymbolicVal(CodeLoc(0, 0))
 
@@ -42,9 +42,9 @@ class Path(val statements: List[Stmt], var condition: Expr, var changes: mutable
   }
 
   def appendedAsPath(path: Path): Path = {
-    val newChanges = mutable.HashMap[Expr, (Expr) => ((Expr) => Expr)]()
-    newChanges.addAll(path.changes)
-    newChanges.addAll(changes)
+    var newChanges = List[(Expr, (Expr) => ((Expr) => Expr))]()
+    newChanges = newChanges.appendedAll(changes)
+    newChanges = newChanges.appendedAll(path.changes)
     new Path(statements.appendedAll(path.statements), BinaryOp(AndAnd, condition, path.condition, condition.loc), newChanges)
   }
 
@@ -53,9 +53,9 @@ class Path(val statements: List[Stmt], var condition: Expr, var changes: mutable
   }
 
   def updatedChanges(name: Expr, change: (Expr) => ((Expr) => Expr)): Path = {
-    val newChanges = mutable.HashMap[Expr, (Expr) => ((Expr) => Expr)]()
-    newChanges.addAll(changes)
-    newChanges.put(name, change)
+    var newChanges = List[(Expr, (Expr) => ((Expr) => Expr))]()
+    newChanges = newChanges.appendedAll(changes)
+    newChanges = newChanges.appended(name, change)
     new Path(statements, Utility.simplifyArithExpr(condition), newChanges)
   }
 

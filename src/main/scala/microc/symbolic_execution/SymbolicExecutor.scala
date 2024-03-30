@@ -85,13 +85,13 @@ class SymbolicExecutor(program: ProgramCfg,
                        ctx: Context = new Context(),
                        searchStrategy: SearchStrategy = new BFSSearchStrategy,
                        stateHistory: Option[StateHistory] = None,
-                       covered: Option[mutable.HashSet[CfgNode]] = None
+                       covered: Option[mutable.HashSet[CfgNode]] = None,
+                       printStats: Boolean = true
                       ) {
 
   val solver = new ConstraintSolver(ctx)
   var statistics = new Statistics()
   var currentPathStopped = false
-  var backTrackingPath: Option[SymbolicState] = None
   private var functionDeclarations: Map[String, FunVal] = Map.empty
   var loops: mutable.HashMap[CfgNode, Identifier] = mutable.HashMap.empty
   var subsumptionLoopVar = 1
@@ -123,7 +123,9 @@ class SymbolicExecutor(program: ProgramCfg,
     searchStrategy.addState(initialState)
     var res: Option[Val] = None
     while (searchStrategy.statesCount() != 0) {
-      statistics.printStats()
+      if (printStats) {
+        statistics.printStats()
+      }
       var path = searchStrategy.getState()
       currentPathStopped = false
       step(path)
@@ -153,6 +155,7 @@ class SymbolicExecutor(program: ProgramCfg,
         res = path.returnValue
       }
     }
+
     if (res.isEmpty) {//TODO look at this
       return 0
     }
@@ -181,6 +184,7 @@ class SymbolicExecutor(program: ProgramCfg,
     val fceState = symbolicState.goTo(fce, fce.fun.params)
     step(fceState)
     symbolicState.returnValue = fceState.returnValue
+    symbolicState.pathCondition = fceState.pathCondition
     symbolicState.symbolicStore = fceState.symbolicStore
     symbolicState.symbolicStore.popFrame()
     symbolicState.callStack = symbolicState.callStack.dropRight(1)
@@ -218,55 +222,80 @@ class SymbolicExecutor(program: ProgramCfg,
     val loopAst = loop.ast.asInstanceOf[WhileStmt]
     if (subsumption.nonEmpty) {
       if (!loops.contains(loop)) {
-        var goOutOfSubsumptionIteration = false
-        if (!inSubsumptionIteration) {
-          inSubsumptionIteration = true
-          goOutOfSubsumptionIteration = true
-        }
         val loopIter = createSubsumptionLoopVar()
-        val loopIterCond = BinaryOp(GreaterEqual, loopIter, Number(0, CodeLoc(0, 0)), CodeLoc(0, 0))
-        subsumption.get.addAnnotationsToALoop(loop, loopIterCond)
-        //subsumption.get.addAnnotation(loop, loopIterCond)
-        val decreaseLoopIter = AssignStmt(loopIter, BinaryOp(Minus, loopIter, Number(1, CodeLoc(0, 0)), CodeLoc(0, 0)), CodeLoc(0, 0))
-        val lastBody = loopAst.block.asInstanceOf[NestedBlockStmt].body
-        val body = lastBody.appended(decreaseLoopIter)
-        loop.ast = WhileStmt(loopAst.guard, NestedBlockStmt(body, loopAst.block.loc), loopAst.loc)
         loops.put(loop, loopIter)
-
-        val lastLoopStmt = loop.pred.maxBy(node => node.id)
-        val newStmt = new CfgStmtNode(lastLoopStmt.id + 0.5, decreaseLoopIter)
-        lastLoopStmt.succ.foreach(s => {
-          s.pred.remove(lastLoopStmt)
-          s.pred.add(newStmt)
-          newStmt.succ.add(s)
-        })
-        lastLoopStmt.succ.clear()
-        lastLoopStmt.succ.add(newStmt)
-        newStmt.pred.add(lastLoopStmt)
-
-
-        symbolicState.addedVar(loops(loop).name, Number(0, CodeLoc(0, 0)))
-
         solver.solveCondition(symbolicState.pathCondition.expr, loopAst.guard, symbolicState) match {
           case Status.SATISFIABLE | Status.UNKNOWN =>
             val nextState = symbolicState.getIfTrueState()
+            var goOutOfSubsumptionIteration = false
+            if (!inSubsumptionIteration) {
+              inSubsumptionIteration = true
+              goOutOfSubsumptionIteration = true
+            }
+            val loopIterCond = BinaryOp(LowerThan, loopIter, Number(0, CodeLoc(0, 0)), CodeLoc(0, 0))
+            val lastLoopStmt = loop.pred.maxBy(node => node.id)
+            subsumption.get.addAnnotationsToALoop(program.nodes.filter(node => node.id > loop.id && node.id <= lastLoopStmt.id).toList, loopIterCond)
+            //subsumption.get.addAnnotation(loop, loopIterCond)
+            val decreaseLoopIter = AssignStmt(loopIter, BinaryOp(Minus, loopIter, Number(1, CodeLoc(0, 0)), CodeLoc(0, 0)), CodeLoc(0, 0))
+            val lastBody = loopAst.block.asInstanceOf[NestedBlockStmt].body
+            val body = lastBody.appended(decreaseLoopIter)
+            loop.ast = WhileStmt(loopAst.guard, NestedBlockStmt(body, loopAst.block.loc), loopAst.loc)
+
+            val newStmt = new CfgStmtNode(lastLoopStmt.id + 0.5, decreaseLoopIter)
+
+            lastLoopStmt.succ.remove(loop)
+            lastLoopStmt.succ.add(newStmt)
+            loop.pred.remove(lastLoopStmt)
+            loop.pred.add(newStmt)
+            newStmt.succ.add(loop)
+            newStmt.pred.add(lastLoopStmt)
+
+            nextState.addedVar(loops(loop).name, Number(0, CodeLoc(0, 0)))
+
             step(nextState)
-//            if (stateHistory.nonEmpty) {
-//              stateHistory.get.addState(symbolicState, nextState)
-//            }
-            backTrackingPath = Some(nextState)
 
-            symbolicState.pathCondition = nextState.pathCondition.prev.get
+            subsumption.get.replaceSubsumptionIdentifier(
+              program.nodes.filter(node => node.id >= loop.id && node.id <= newStmt.id).toList,
+              loopIter,
+              Number(0, CodeLoc(0, 0))
+            )
+
+//            lastLoopStmt.succ.clear()
+//            lastLoopStmt.succ.addAll(tmpSuccs)
+//            lastLoopStmt.succ.foreach(s => {
+//              s.pred.remove(newStmt)
+//              s.pred.add(lastLoopStmt)
+//              newStmt.succ.add(s)
+//            })
+
+            lastLoopStmt.succ.add(loop)
+            lastLoopStmt.succ.remove(newStmt)
+            loop.pred.add(lastLoopStmt)
+            loop.pred.remove(newStmt)
+
+
+//            symbolicState.pathCondition = nextState.pathCondition.prev.get
             symbolicState.returnValue = nextState.returnValue
-            symbolicState.symbolicStore = nextState.symbolicStore
+//            symbolicState.symbolicStore = nextState.symbolicStore
 
+            loop.ast = loopAst
 
-          case Status.UNSATISFIABLE =>
+            subsumption.get.computeAnnotation(symbolicState.nextStatement, true)
+            if (subsumption.get.checkSubsumption(symbolicState)) {
+              statistics.stoppedWithSubsumption += 1
+              currentPathStopped = true
+              return
+            }
+
+            if (goOutOfSubsumptionIteration) {
+              inSubsumptionIteration = false
+            }
+            else {
+              null
+            }
+
+          case Status.UNSATISFIABLE =>//TODO look at this
             subsumption.get.computeAnnotation(symbolicState.nextStatement)
-        }
-        loop.ast = loopAst
-        if (goOutOfSubsumptionIteration) {
-          inSubsumptionIteration = false
         }
       }
     }
@@ -279,29 +308,26 @@ class SymbolicExecutor(program: ProgramCfg,
           stateHistory.get.addNode(symbolicState, nextState)
         }
         step(nextState)
-        backTrackingPath = Some(nextState)
-        symbolicState.pathCondition = nextState.pathCondition.prev.get
-        symbolicState.returnValue = nextState.returnValue
         whileLeavingState = Some(nextState)
       case Status.UNSATISFIABLE =>
         currentPathStopped = true
     }
-    solver.solveCondition(symbolicState.pathCondition.expr, loopAst.guard, symbolicState) match {
-      case Status.SATISFIABLE | Status.UNKNOWN =>
-        val nextState = symbolicState.getIfTrueState()
-        if (inSubsumptionIteration) {
-          statistics.numPaths += 1
-          step(nextState)
-        }
-        else {
+    if (subsumption.isEmpty) {
+      solver.solveCondition(symbolicState.pathCondition.expr, loopAst.guard, symbolicState) match {
+        case Status.SATISFIABLE | Status.UNKNOWN =>
+          val nextState = symbolicState.getIfTrueState()
+          //        if (inSubsumptionIteration) {
+          //          statistics.numPaths += 1
+          //          step(nextState)
+          //        }
           searchStrategy.addState(nextState)
-        }
-        if (stateHistory.nonEmpty) {
-          stateHistory.get.addState(symbolicState, nextState)
-          backTrackingPath = Some(nextState)
-        }
 
-      case Status.UNSATISFIABLE =>
+          if (stateHistory.nonEmpty) {
+            stateHistory.get.addState(symbolicState, nextState)
+          }
+
+        case Status.UNSATISFIABLE =>
+      }
     }
     if (subsumption.nonEmpty) {
       subsumption.get.computeAnnotation(symbolicState.nextStatement)
@@ -319,10 +345,10 @@ class SymbolicExecutor(program: ProgramCfg,
     }
     val statement = symbolicState.nextStatement
     val ast = symbolicState.nextStatement.ast
+    println(statement)
     if (subsumption.nonEmpty) {
-      if (subsumption.get.checkSubsumption(symbolicState.nextStatement, symbolicState.pathCondition.expr, symbolicState)) {
+      if (subsumption.get.checkSubsumption(symbolicState)) {
         statistics.stoppedWithSubsumption += 1
-        currentPathStopped = true
         return
       }
     }
@@ -340,12 +366,13 @@ class SymbolicExecutor(program: ProgramCfg,
     if (subsumption.nonEmpty) {
       ast match {
         case stmt: AssignStmt if Utility.statementCanCauseError(stmt) =>
+          println("KKKKKKKK", statement.id)
         case _ =>
           subsumption.get.computeAnnotation(statement)
       }
     }
-    symbolicState.returnValue = nextState.returnValue
-    symbolicState.symbolicStore = nextState.symbolicStore
+    //symbolicState.returnValue = nextState.returnValue
+    //symbolicState.symbolicStore = nextState.symbolicStore//TODO maybe comment this???
   }
 
 
@@ -388,7 +415,6 @@ class SymbolicExecutor(program: ProgramCfg,
             }
             else {
               searchStrategy.addState(path)
-              backTrackingPath = Some(path)
             }
           case Status.UNSATISFIABLE =>
             if (subsumption.nonEmpty) {
@@ -396,7 +422,8 @@ class SymbolicExecutor(program: ProgramCfg,
             }
         }
         if (ifState.nonEmpty) {
-          symbolicState.pathCondition = ifState.get.pathCondition.prev.get
+          symbolicState.pathCondition = ifState.get.pathCondition
+          //symbolicState.pathCondition = ifState.get.pathCondition.prev.get
           symbolicState.returnValue = ifState.get.returnValue
           symbolicState.symbolicStore = ifState.get.symbolicStore
         }
@@ -426,7 +453,6 @@ class SymbolicExecutor(program: ProgramCfg,
           case Times => Number(l * r, loc)
           case Divide =>
             if (r == 0) {
-              println(operator, val1, val2)
               throw errorDivByZero(loc, symbolicState)
             }
             Number(l / r, loc)
@@ -496,6 +522,22 @@ class SymbolicExecutor(program: ProgramCfg,
     }
   }
 
+  def loadArray(arr: ArrayNode, symbolicState: SymbolicState): ArrVal = {
+    var prev: Val = null
+    val elems = arr.elems
+    val vals = elems.map { e =>
+      val v = evaluate(e, symbolicState)
+      if (prev != null && !prev.getClass.isAssignableFrom(v.getClass)) {
+        throw errorIncompatibleTypes(e.loc, prev.toString, v.toString, symbolicState)
+      }
+      else {
+        prev = v
+      }
+      symbolicState.addedAlloc(v)
+    }.toArray
+    ArrVal(vals)
+  }
+
   def evaluate(expr: Expr, symbolicState: SymbolicState): Val = {
     expr match {
       case BinaryOp(operator, left, right, loc) =>
@@ -549,19 +591,8 @@ class SymbolicExecutor(program: ProgramCfg,
           case e =>
             throw errorNonPointerDereference(loc, e.toString, symbolicState)
         }
-      case ArrayNode(elems, _) =>
-        var prev: Val = null
-        val vals = elems.map { e =>
-          val v = evaluate(e, symbolicState)
-          if (prev != null && !prev.getClass.isAssignableFrom(v.getClass)) {
-            throw errorIncompatibleTypes(e.loc, prev.toString, v.toString, symbolicState)
-          }
-          else {
-            prev = v
-          }
-          symbolicState.addedAlloc(v)
-        }.toArray
-        ArrVal(vals)
+      case a@ArrayNode(_, _) =>
+        loadArray(a, symbolicState)
       case ArrayAccess(array, index, loc) =>
         evaluate(array, symbolicState) match {
           case ArrVal(elems) => {
@@ -572,7 +603,8 @@ class SymbolicExecutor(program: ProgramCfg,
                 }
                 symbolicState.getVal(elems(value)) match {
                   case Some(v) => v
-                  case None => throw errorUninitializedReference(loc, symbolicState)
+                  case None =>
+                    throw errorUninitializedReference(loc, symbolicState)
                 }
               case s: Symbolic =>
                 solver.solveConstraint(
@@ -598,6 +630,7 @@ class SymbolicExecutor(program: ProgramCfg,
                                 throw new Exception("this should never happen.")
                             }
                             if (subsumption.nonEmpty) {
+                              //TODO take return value???
                               step(newState)
                             }
                             else {
@@ -635,7 +668,11 @@ class SymbolicExecutor(program: ProgramCfg,
           case RecVal(fields) =>
             fields.get(field) match {
               case Some(PointerVal(res)) =>
-                symbolicState.getVal(PointerVal(res)).get
+                symbolicState.getVal(PointerVal(res)) match {
+                  case Some(r) => r
+                  case None =>
+                    throw new Exception("IMPLEMENT")
+                }
               case None => throw errorNonExistingFieldAccess(loc, RecVal(fields).toString, field, symbolicState)
             }
           case v => throw errorNonRecordFieldAccess(loc, v.toString, symbolicState)
@@ -701,6 +738,7 @@ class SymbolicExecutor(program: ProgramCfg,
                               throw new Exception("this should never happen.")
                           }
                           if (subsumption.nonEmpty) {
+                            //TODO take return value???
                             step(newState)
                           }
                           else {

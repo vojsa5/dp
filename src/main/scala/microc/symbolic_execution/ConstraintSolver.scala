@@ -18,10 +18,7 @@ class ConstraintSolver(val ctx: Context) {
 
   def solveConstraint(constraint: com.microsoft.z3.Expr[_]): Status = {
     val solver = ctx.mkSolver()
-    constraint match {
-      case cond: BoolExpr => solver.add(cond)
-      case cond: IntNum => solver.add(getCondition(cond))
-    }
+    solver.add(getCondition(constraint))
     solver.check()
   }
 
@@ -130,7 +127,8 @@ class ConstraintSolver(val ctx: Context) {
         val innerResult = createConstraintWithState(expr, state, allowNonInitializedVals)
         val cond = innerResult match {
           case boolExpr: BoolExpr => boolExpr
-          case numExpr: ArithExpr[_] => ctx.mkEq (numExpr, one)
+          case numExpr: ArithExpr[_] =>
+            ctx.mkNot( ctx.mkEq (numExpr, zero) )
         }
         ctx.mkITE(cond, zero, one)
       case BinaryOp(operator, left, right, _) =>
@@ -214,13 +212,15 @@ class ConstraintSolver(val ctx: Context) {
         ctx.mkInt(1)
       case PointerVal(_) =>
         ctx.mkInt(1)
+      case ArrVal(_) =>
+        ctx.mkInt(1)
       case a@ArrayAccess(_, _, _) =>
-        valToExpr(state.getVal(getTarget(a, state)).get, state)
+        valToExpr(getTarget(a, state, allowNonInitializedVals), state)
       case d@Deref(_, _) =>
-        valToExpr(state.getVal(getTarget(d, state)).get, state)
+        valToExpr(getTarget(d, state, allowNonInitializedVals), state)
       case FieldAccess(record, field, loc) =>
-        val rec = getTarget(record, state)
-        state.getVal(rec).get match {
+        val rec = getTarget(record, state, allowNonInitializedVals)
+        rec match {
           case RecVal(fields) =>
             valToExpr(fields(field), state, allowNonInitializedVals)
           case _ =>
@@ -231,75 +231,47 @@ class ConstraintSolver(val ctx: Context) {
     }
   }
 
+  private def getTarget(expr: Expr, symbolicState: SymbolicState, allowNonInitializedVals: Boolean): Val = {
+    getTargetInner(expr, symbolicState) match {
+      case v: Val => v
+      case e: Expr =>
+        SymbolicExpr(e, e.loc)
+    }
+  }
 
-  private def getTarget(expr: Expr, symbolicState: SymbolicState): PointerVal = {
+  private def getTargetInner(expr: Expr, symbolicState: SymbolicState): Expr = {
     expr match {
-      case Identifier(name, _) =>
-        symbolicState.getSymbolicValOpt(name).get
+      case Identifier(name, loc) =>
+        symbolicState.getSymbolicVal(name, loc).asInstanceOf[Symbolic]
       case ArrayAccess(array, index, loc) =>
-        val ptr = getTarget(array, symbolicState)
-        symbolicState.getVal(ptr).get match {
-          case ArrVal(elems) =>
-            index match {
-              case Number(value, _) =>
+        index match {
+          case Number(value, _) =>
+            val arr = getTargetInner(array, symbolicState)
+            arr match {
+              case ArrayNode(elems, _) =>
                 elems(value)
+              case ArrVal(elems) =>
+                symbolicState.getVal(elems(value)).get.asInstanceOf[Symbolic]
               case _ =>
                 throw new Exception("IMPLEMENT")
+          case _ =>
+            throw new Exception("IMPLEMENT")
             }
+        }
+      case Deref(pointer, loc) =>
+        getTargetInner(pointer, symbolicState) match {
+          case p@PointerVal(_) =>
+            symbolicState.getVal(p).get.asInstanceOf[Symbolic]
           case _ =>
             throw new Exception("IMPLEMENT")
         }
-      case Deref(pointer, loc) =>
-        symbolicState.getVal(getTarget(pointer, symbolicState)).get.asInstanceOf[PointerVal]
+      case a@ArrayNode(_, _) => a
       case _ =>
         throw new Exception("IMPLEMENT")
     }
   }
 
 
-  def applyVal(v: Val, state: SymbolicState, allowReturnNonInitialized: Boolean = false): Expr = {
-    v match {
-      case n@Number(_, _) => n
-      case v@SymbolicVal(_) => v
-      case NullRef => NullRef
-      case PointerVal(addr) => PointerVal(addr)
-      case SymbolicExpr(expr, _) => applyTheState(expr, state, allowReturnNonInitialized)
-      case IteVal(val1, val2, cond, loc) =>
-        (applyVal(val1, state), applyVal(val2, state)) match {
-          case (a: Symbolic, b: Symbolic) => IteVal(a, b, applyTheState(cond, state, allowReturnNonInitialized), loc)
-          case (a: Symbolic, b) => IteVal(a, SymbolicExpr(b, loc), applyTheState(cond, state, allowReturnNonInitialized), loc)
-          case (a, b: Symbolic) => IteVal(SymbolicExpr(a, loc), b, applyTheState(cond, state, allowReturnNonInitialized), loc)
-          case (a, b) => IteVal(SymbolicExpr(a, loc), SymbolicExpr(b, loc), applyTheState(cond, state, allowReturnNonInitialized), loc)
-        }
-//      case RecVal(fields) =>
-//        RecVal(fields.map(field => (field._1, SymbolicExpr(applyVal(field._2, state, allowReturnNonInitialized), CodeLoc(0, 0)))))
-//      case ArrVal(elems) =>
-//        ArrVal(elems.map(elem => applyVal(state.getVal(elem).get, state, allowReturnNonInitialized)))
-      case _ =>
-        throw new Exception("IMPLEMENT")
-    }
-  }
-
-
-  def applyTheState(expr: Expr, state: SymbolicState, allowReturnNonInitialized: Boolean = false): Expr = {
-    var res = expr match {
-      case Not(expr, loc) =>
-        Not(applyTheState(expr, state, allowReturnNonInitialized), loc)
-      case BinaryOp(operator, left, right, loc) => BinaryOp(operator, applyTheState(left, state, allowReturnNonInitialized), applyTheState(right, state, allowReturnNonInitialized), loc)
-      case Identifier(name, loc) => applyVal(state.getSymbolicVal(name, loc, allowReturnNonInitialized), state, allowReturnNonInitialized)
-      case n@Number(_, _) => n
-      case v@SymbolicVal(_) => v
-      case NullRef => NullRef
-      case PointerVal(addr) => PointerVal(addr)
-      case SymbolicExpr(expr, _) => applyTheState(expr, state, allowReturnNonInitialized)
-      case _ =>
-        throw new Exception("")
-    }
-    if (res != expr) {
-      res = applyTheState(res, state, allowReturnNonInitialized)
-    }
-    res
-  }
 
   def applyTheStateOnce(expr: Expr, state: SymbolicState, allowReturnNonInitialized: Boolean = false): Expr = {
     expr match {
@@ -335,7 +307,7 @@ class ConstraintSolver(val ctx: Context) {
           }
         }
         else {
-          applyVal(symbolicState.getSymbolicVal(name, loc), symbolicState)
+          Utility.applyVal(symbolicState.getSymbolicVal(name, loc), symbolicState)
         }
       case n@Number(_, _) => n
       case v@SymbolicVal(_) => v
@@ -350,9 +322,9 @@ class ConstraintSolver(val ctx: Context) {
   def getCondition(expr: com.microsoft.z3.Expr[_]): BoolExpr = {
     expr match {
       case op: BoolExpr => op
-      case op: IntExpr => ctx.mkEq(op, ctx.mkInt(1))
+      case op: IntExpr => ctx.mkNot(ctx.mkEq(op, ctx.mkInt(0)))
       case op: IntNum =>
-        ctx.mkEq(op, ctx.mkInt(1))
+        ctx.mkNot(ctx.mkEq(op, ctx.mkInt(0)))
     }
   }
 

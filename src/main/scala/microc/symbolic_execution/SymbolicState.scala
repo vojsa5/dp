@@ -1,8 +1,8 @@
 package microc.symbolic_execution
 
-import microc.ast.{AndAnd, BinaryOp, CodeLoc, Decl, Equal, Expr, Identifier, IdentifierDecl, IfStmt, Loc, NestedBlockStmt, Not, Null, Number, OrOr, WhileStmt}
+import microc.ast.{AndAnd, ArrayAccess, BinaryOp, CodeLoc, Decl, Equal, Expr, FieldAccess, Identifier, IdentifierDecl, IfStmt, Loc, NestedBlockStmt, Not, Null, Number, OrOr, WhileStmt}
 import microc.cfg.CfgNode
-import microc.symbolic_execution.Value.{NullRef, PointerVal, Symbolic, SymbolicExpr, SymbolicVal, UninitializedRef, Val}
+import microc.symbolic_execution.Value.{ArrVal, NullRef, PointerVal, RecVal, Symbolic, SymbolicExpr, SymbolicVal, UninitializedRef, Val}
 
 import scala.collection.mutable
 
@@ -50,6 +50,10 @@ class SymbolicState(
     ptr
   }
 
+  def addToMemoryLocation(location: PointerVal, v: Val): Unit = {
+    symbolicStore.storage.addVal(location, v)
+  }
+
   def nextStates(): Array[SymbolicState] = {
     nextStatement.succ.map { node => new SymbolicState(node, pathCondition, symbolicStore, callStack, variableDecls)}.toArray
   }
@@ -69,6 +73,36 @@ class SymbolicState(
 
   def getSymbolicValOpt(name: String): Option[PointerVal] = {
     symbolicStore.findVar(name)
+  }
+
+  def getMemoryLoc(expr: Expr): PointerVal = {
+    expr match {
+      case Identifier(name, _) =>
+        symbolicStore.findVar(name).get
+      case ArrayAccess(array, index, loc) =>
+        symbolicStore.getValOfPtr(getMemoryLoc(array)) match {
+          case Some(ArrVal(elems)) =>
+            index match {
+              case Number(value, _) =>
+                elems(value)
+              case _ =>
+                throw new Exception("IMPLEMENT")
+            }
+          case _ =>
+            throw new Exception("IMPLEMENT")
+        }
+      case FieldAccess(record, field, loc) =>
+        symbolicStore.getValOfPtr(getMemoryLoc(record)) match {
+          case Some(RecVal(fields)) =>
+            fields(field)
+          case _ =>
+            throw new Exception("IMPLEMENT")
+        }
+    }
+  }
+
+  def getValAtMemoryLoc(expr: Expr, allowReturnNonInitialized: Boolean = false): Val = {
+    symbolicStore.storage.getVal(getMemoryLoc(expr), allowReturnNonInitialized).get
   }
 
   def containsVar(name: String): Boolean = {

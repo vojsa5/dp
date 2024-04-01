@@ -1,6 +1,6 @@
 package microc.symbolic_execution
 
-import microc.ast.{CodeLoc, Identifier, Loc}
+import microc.ast.{CodeLoc, Expr, Identifier, Loc}
 import microc.symbolic_execution.ExecutionException.{errorIncompatibleTypes, errorUninitializedReference}
 import microc.symbolic_execution.Value.{ArrVal, FunVal, IteVal, NullRef, PointerVal, RecVal, RefVal, SymbolicVal, UninitializedRef, Val}
 
@@ -433,7 +433,7 @@ class SymbolicStore(functionDeclarations: Map[String, FunVal]) {
 
 
   // states should have the same number of frames
-  def mergeStores(other: SymbolicStore, pathCondition: PathCondition): Option[SymbolicStore] = {
+  def mergeStores(other: SymbolicStore, pathCondition: Expr): Option[SymbolicStore] = {
     val res = new SymbolicStore(functionDeclarations)
     val thisPointerMapping: mutable.HashMap[Int, Int] = new mutable.HashMap[Int, Int]()
     val otherPointerMapping: mutable.HashMap[Int, Int] = new mutable.HashMap[Int, Int]()
@@ -459,7 +459,7 @@ class SymbolicStore(functionDeclarations: Map[String, FunVal]) {
                 }
 
                 val v2 = res.storage.getVal(addr2, true).get
-                res.updateRef(addr, IteVal(v1, v2, pathCondition.expr, CodeLoc(0, 0)))
+                res.updateRef(addr, IteVal(v1, v2, pathCondition, CodeLoc(0, 0)))
               }
 //              (storage.getVal(PointerVal(ptr1)), other.storage.getVal(PointerVal(ptr2))) match {
 //                case (Some(val1), Some(val2)) if val1 == val2 =>

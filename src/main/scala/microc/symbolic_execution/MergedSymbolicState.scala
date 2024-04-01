@@ -1,12 +1,12 @@
 package microc.symbolic_execution
 
-import microc.ast.{IdentifierDecl, IfStmt, NestedBlockStmt, Not, WhileStmt}
+import microc.ast.{Expr, IdentifierDecl, IfStmt, NestedBlockStmt, Not, WhileStmt}
 import microc.cfg.CfgNode
 
 
 class MergedSymbolicState(
                            nextStatement: CfgNode,
-                           pathCondition: PathCondition,
+                           pathCondition: Expr,
                            symbolicStore: SymbolicStore,
                            callStack: List[(CfgNode, List[IdentifierDecl])] = List.empty,
                            var subStates: (SymbolicState, SymbolicState))

@@ -491,7 +491,7 @@ class BfTest extends FunSuite with MicrocSupport with Examples {
     val code = bfCodeNoWhile
     val program = parseUnsafe(code)
     val cfg = new IntraproceduralCfgFactory().fromProgram(program);
-    val tmp = new TMP()(new SemanticAnalysis().analyze(program))
+    val tmp = new RecursionBasedAnalyses()(new SemanticAnalysis().analyze(program))
     tmp.tmp2(cfg)
     val executor = new SymbolicExecutor(cfg, None, searchStrategy = new HeuristicBasedStateMerging(new BFSSearchStrategy, tmp.mapping, 3))
     executor.run()

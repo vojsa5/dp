@@ -1,9 +1,9 @@
 package microc.symbolic_execution
 
 import com.microsoft.z3.Context
-import microc.analysis.SemanticAnalysis
-import microc.ast.AstNormalizer
-import microc.cfg.{CfgNode, IntraproceduralCfgFactory}
+import microc.analysis.{QueryCountAnalyses, SemanticAnalysis}
+import microc.ast.{AstNormalizer, Program}
+import microc.cfg.{CfgNode, IntraproceduralCfgFactory, ProgramCfg}
 
 import scala.collection.mutable
 import scala.concurrent.{Await, Future, TimeoutException}
@@ -14,9 +14,45 @@ class ExperimentRunner {
 
 
   def run(): Unit = {
-    for (_ <- 0 until 3) {
+    for (_ <- 0 until 1) {
       runOneProgram()
     }
+  }
+
+  def getSearchStrategies(covered: Option[mutable.HashSet[CfgNode]], stateHistory: StateHistory): Array[(String, SearchStrategy)] = {
+    Array(
+//      ("random", new RandomSearchStrategy()),
+//      ("dfs", new DFSSearchStrategy()),
+//      ("bfs", new BFSSearchStrategy()),
+//      ("cov", new CoverageSearchStrategy(covered.get)),
+//      ("path", new RandomPathSelectionStrategy(stateHistory)),
+      ("klee", new KleeSearchStrategy(stateHistory, covered.get))
+    )
+  }
+
+  def getMergeStrategies(program: Program, cfg: ProgramCfg, covered: Option[mutable.HashSet[CfgNode]], stateHistory: StateHistory): Array[(String, SearchStrategy)] = {
+    var res = Array[(String, SearchStrategy)]()
+    for (searchStrategy <- getSearchStrategies(covered, stateHistory)) {
+      res = res.appended(searchStrategy)
+
+      val analysesResult = new QueryCountAnalyses(cfg)(new SemanticAnalysis().analyze(program)).analyze()
+      val variableCosts = new mutable.HashMap[CfgNode, mutable.HashMap[String, Double]]
+      for (node <- analysesResult) {
+        val nodeCosts = new mutable.HashMap[String, Double]
+        for (cost <- node._2) {
+          nodeCosts.put(cost._1.name, cost._2)
+        }
+        variableCosts.put(node._1, nodeCosts)
+      }
+      res = res.appended("heur1 " + searchStrategy._1, new HeuristicBasedStateMerging(searchStrategy._2, variableCosts, 3))
+
+      val tmp = new RecursionBasedAnalyses()(new SemanticAnalysis().analyze(program))
+      tmp.tmp2(cfg)
+
+      res = res.appended("heur2 " + searchStrategy._1, new HeuristicBasedStateMerging(searchStrategy._2, tmp.mapping, 3))
+      res = res.appended("aggr " + searchStrategy._1, new AgressiveStateMerging(searchStrategy._2))
+    }
+    res
   }
 
   private def runOneProgram(): Unit = {
@@ -25,223 +61,90 @@ class ExperimentRunner {
     var executor: SymbolicExecutor = null
 
     println("Experiment started")
+    val covered = Some(mutable.HashSet[CfgNode]())
+    val stateHistory = new StateHistory()
 
-    val ctx = new Context()
-    val subsumptions: Array[Option[PathSubsumption]] = Array(None, Some(new PathSubsumption(new ConstraintSolver(ctx), ctx)))
 
-    val tmp = new TMP()(new SemanticAnalysis().analyze(program))
+    val tmp = new RecursionBasedAnalyses()(new SemanticAnalysis().analyze(program))
     tmp.tmp2(cfg)
 
-    for (subsumption <- subsumptions) {
+    val timeout = 20.seconds
 
+    for (mergeStrategy <- getMergeStrategies(program, cfg, covered, stateHistory)) {
+      var ctx = new Context()
+      executor = new SymbolicExecutor(cfg, None, ctx, mergeStrategy._2, Some(stateHistory), covered, false)
       var future = Future {
-        val ctx = new Context()
-        val solver = new ConstraintSolver(ctx)
-        executor = new SymbolicExecutor(cfg, ctx = ctx, printStats = false)
-        executor.run()
-      }
-      //
-      //    try {
-      //      Await.ready(future, 10.seconds)
-      //      println("Default symbolic executor: No error found. Paths explored: ", executor.statistics.numPaths)
-      //    }
-      //    catch {
-      //      case _: TimeoutException =>
-      //        println("Default symbolic executor: No error found. Max time reached. Paths explored: ", executor.statistics.numPaths)
-      //      case e@ExecutionException(_, _, _) =>
-      //        println("Default symbolic executor: An error found: ", e.message, "Paths explored: ", executor.statistics.numPaths)
-      //      case e =>
-      //        throw e
-      //    }
-      //
-      //    future = Future {
-      //      val ctx = new Context()
-      //      val solver = new ConstraintSolver(ctx)
-      //      executor = new LoopSummary(cfg, ctx = ctx, printStats = false)
-      //      executor.run()
-      //    }
-      //
-      //    try {
-      //      Await.ready(future, 10.seconds)
-      //      println("Loop summarization symbolic executor: No error found. Paths explored: ", executor.statistics.numPaths)
-      //    }
-      //    catch {
-      //      case _: TimeoutException =>
-      //        println("Loop summarization symbolic executor: No error found. Max time reached. Paths explored: ", executor.statistics.numPaths)
-      //      case e@ExecutionException(_, _, _) =>
-      //        println("Loop summarization symbolic executor: An error found: ", e.message, "Paths explored: ", executor.statistics.numPaths)
-      //      case e =>
-      //        throw e
-      //    }
-      //
-      //    future = Future {
-      //      val ctx = new Context()
-      //      val solver = new ConstraintSolver(ctx)
-      //      executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx), ctx)), printStats = false)
-      //      executor.run()
-      //    }
-      //
-      //    try {
-      //      Await.ready(future, 10.seconds)
-      //      println("Subsumption symbolic executor: No error found. Paths explored: ", executor.statistics.numPaths)
-      //    }
-      //    catch {
-      //      case _: TimeoutException =>
-      //        println("Subsumption symbolic executor: No error found. Max time reached. Paths explored: ", executor.statistics.numPaths)
-      //      case e@ExecutionException(_, _, _) =>
-      //        println("Subsumption symbolic executor: An error found: ", e.message, "Paths explored: ", executor.statistics.numPaths)
-      //      case e =>
-      //        throw e
-      //    }
-
-
-      future = Future {
-        val ctx = new Context()
-        val solver = new ConstraintSolver(ctx)
-        val covered = Some(mutable.HashSet[CfgNode]())
-        val stateHistory = new StateHistory()
-        executor =
-          new SymbolicExecutor(
-            cfg,
-            stateHistory = Some(stateHistory),
-            searchStrategy = new KleeSearchStrategy(stateHistory, covered.get),
-            covered = covered,
-            printStats = false
-          )
-          if (executor == null) {
-            println("hi")
-          }
         executor.run()
       }
 
       try {
-        Await.ready(future, 10.seconds)
-        println("klee search symbolic executor[subsumption used: " , subsumption.nonEmpty, "]: No error found. Paths explored: ", executor.statistics.numPaths)
+        Await.ready(future, timeout)
+        println("subsumption: false, summarization: false, " + mergeStrategy._1 + ": No error found. Paths explored: ", executor.statistics.numPaths)
       }
       catch {
         case _: TimeoutException =>
-          println("klee search symbolic executor[subsumption used: " , subsumption.nonEmpty, "]: No error found. Max time reached. Paths explored: ", executor.statistics.numPaths)
+          println("subsumption: false, summarization: false, " + mergeStrategy._1 + ": No error found. Max time reached. Paths explored: ", executor.statistics.numPaths)
         case e@ExecutionException(_, _, _) =>
-          println("klee search symbolic executor[subsumption used: " , subsumption.nonEmpty, "]: An error found: ", e.message, "Paths explored: ", executor.statistics.numPaths)
+          println("subsumption: false, summarization: false, " + mergeStrategy._1 + ": An error found: ", e.message, "Paths explored: ", executor.statistics.numPaths)
         case e =>
           throw e
       }
 
-
+      ctx = new Context()
+      executor = new LoopSummary(cfg, None, ctx, mergeStrategy._2, Some(stateHistory), covered, false)
       future = Future {
-        val covered = Some(mutable.HashSet[CfgNode]())
-        val stateHistory = new StateHistory()
-        val executor = new SymbolicExecutor(
-          cfg,
-          stateHistory = Some(stateHistory),
-          searchStrategy = new RandomPathSelectionStrategy(stateHistory),
-          covered = covered,
-          printStats = false
-        )
         executor.run()
       }
 
       try {
-        Await.ready(future, 10.seconds)
-        println("random path search symbolic executor[subsumption used: " , subsumption.nonEmpty, "]: No error found. Paths explored: ", executor.statistics.numPaths)
+        Await.ready(future, timeout)
+        println("subsumption: false, summarization: true, " + mergeStrategy._1 + ": No error found. Paths explored: ", executor.statistics.numPaths)
       }
       catch {
         case _: TimeoutException =>
-          println("random path search symbolic executor[subsumption used: " , subsumption.nonEmpty, "]: No error found. Max time reached. Paths explored: ", executor.statistics.numPaths)
+          println("subsumption: false, summarization: true, " + mergeStrategy._1 + ": No error found. Max time reached. Paths explored: ", executor.statistics.numPaths)
         case e@ExecutionException(_, _, _) =>
-          println("random path search symbolic executor[subsumption used: " , subsumption.nonEmpty, "]: An error found: ", e.message, "Paths explored: ", executor.statistics.numPaths)
+          println("subsumption: false, summarization: true, " + mergeStrategy._1 + ": An error found: ", e.message, "Paths explored: ", executor.statistics.numPaths)
         case e =>
           throw e
       }
 
+      ctx = new Context()
+      executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx), ctx)), ctx, mergeStrategy._2, Some(stateHistory), covered, false)
+
       future = Future {
-        val covered = Some(mutable.HashSet[CfgNode]())
-        val executor = new SymbolicExecutor(
-          cfg,
-          searchStrategy = new CoverageSearchStrategy(covered.get),
-          covered = covered,
-          printStats = false
-        )
         executor.run()
       }
 
       try {
-        Await.ready(future, 10.seconds)
-        println("coverage search symbolic executor[subsumption used: " , subsumption.nonEmpty, "]: No error found. Paths explored: ", executor.statistics.numPaths)
+        Await.ready(future, timeout)
+        println("subsumption: true, summarization: false, " + mergeStrategy._1 + ": No error found. Paths explored: ", executor.statistics.numPaths)
       }
       catch {
         case _: TimeoutException =>
-          println("coverage search symbolic executor[subsumption used: " , subsumption.nonEmpty, "]: No error found. Max time reached. Paths explored: ", executor.statistics.numPaths)
+          println("subsumption: true, summarization: false, " + mergeStrategy._1 + ": No error found. Max time reached. Paths explored: ", executor.statistics.numPaths)
         case e@ExecutionException(_, _, _) =>
-          println("coverage search symbolic executor[subsumption used: " , subsumption.nonEmpty, "]: An error found: ", e.message, "Paths explored: ", executor.statistics.numPaths)
+          println("subsumption: true, summarization: false, " + mergeStrategy._1 + ": An error found: ", e.message, "Paths explored: ", executor.statistics.numPaths)
         case e =>
           throw e
       }
 
+      ctx = new Context()
+      executor = new LoopSummary(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx), ctx)), ctx, mergeStrategy._2, Some(stateHistory), covered, false)
 
       future = Future {
-        val executor = new SymbolicExecutor(
-          cfg,
-          searchStrategy = new BFSSearchStrategy(),
-          printStats = false
-        )
         executor.run()
       }
 
       try {
-        Await.ready(future, 10.seconds)
-        println("bfs search symbolic executor[subsumption used: " , subsumption.nonEmpty, "]: No error found. Paths explored: ", executor.statistics.numPaths)
+        Await.ready(future, timeout)
+        println("subsumption: true, summarization: true, " + mergeStrategy._1 + ": No error found. Paths explored: ", executor.statistics.numPaths)
       }
       catch {
         case _: TimeoutException =>
-          println("bfs search symbolic executor[subsumption used: " , subsumption.nonEmpty, "]: No error found. Max time reached. Paths explored: ", executor.statistics.numPaths)
+          println("subsumption: true, summarization: true, " + mergeStrategy._1 + ": No error found. Max time reached. Paths explored: ", executor.statistics.numPaths)
         case e@ExecutionException(_, _, _) =>
-          println("bfs search symbolic executor[subsumption used: " , subsumption.nonEmpty, "]: An error found: ", e.message, "Paths explored: ", executor.statistics.numPaths)
-        case e =>
-          throw e
-      }
-
-
-      future = Future {
-        val executor = new SymbolicExecutor(
-          cfg,
-          searchStrategy = new DFSSearchStrategy(),
-          printStats = false
-        )
-        executor.run()
-      }
-
-      try {
-        Await.ready(future, 10.seconds)
-        println("dfs search symbolic executor[subsumption used: " , subsumption.nonEmpty, "]: No error found. Paths explored: ", executor.statistics.numPaths)
-      }
-      catch {
-        case _: TimeoutException =>
-          println("dfs search symbolic executor[subsumption used: " , subsumption.nonEmpty, "]: No error found. Max time reached. Paths explored: ", executor.statistics.numPaths)
-        case e@ExecutionException(_, _, _) =>
-          println("dfs search symbolic executor[subsumption used: " , subsumption.nonEmpty, "]: An error found: ", e.message, "Paths explored: ", executor.statistics.numPaths)
-        case e =>
-          throw e
-      }
-
-      future = Future {
-        val executor = new SymbolicExecutor(
-          cfg,
-          searchStrategy = new RandomSearchStrategy(),
-          printStats = false
-        )
-        executor.run()
-      }
-
-      try {
-        Await.ready(future, 10.seconds)
-        println("random search symbolic executor[subsumption used: " , subsumption.nonEmpty, "]: No error found. Paths explored: ", executor.statistics.numPaths)
-      }
-      catch {
-        case _: TimeoutException =>
-          println("random search symbolic executor[subsumption used: " , subsumption.nonEmpty, "]: No error found. Max time reached. Paths explored: ", executor.statistics.numPaths)
-        case e@ExecutionException(_, _, _) =>
-          println("random search symbolic executor[subsumption used: " , subsumption.nonEmpty, "]: An error found: ", e.message, "Paths explored: ", executor.statistics.numPaths)
+          println("subsumption: true, summarization: true, " + mergeStrategy._1 + ": An error found: ", e.message, "Paths explored: ", executor.statistics.numPaths)
         case e =>
           throw e
       }

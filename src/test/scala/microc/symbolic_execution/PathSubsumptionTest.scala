@@ -27,20 +27,20 @@ class PathSubsumptionTest extends FunSuite with MicrocSupport with Examples {
     val constraintSolver = new ConstraintSolver(context)
     var pathSubsumption = new PathSubsumption(constraintSolver, context)
     val node = new CfgStmtNode(1, Null(CodeLoc(0, 0)))
-    val symbolicState = new SymbolicState(null, PathCondition.initial(), new SymbolicStore(Map.empty))
+    val symbolicState = new SymbolicState(null, Number(1, CodeLoc(0, 0)), new SymbolicStore(Map.empty))
     symbolicState.addedVar("x", SymbolicVal(CodeLoc(0, 0)))
 //    for (_ <- 0 to 10) {
-//      assert(pathSubsumption.checkSubsumption(node, generateRandomExpr(), new SymbolicState(null, PathCondition.initial(), new SymbolicStore(Map.empty))))
+//      assert(pathSubsumption.checkSubsumption(node, generateRandomExpr(), new SymbolicState(null, Number(1, CodeLoc(0, 0)), new SymbolicStore(Map.empty))))
 //    }
 //    for (_ <- 0 to 10) {
 //      pathSubsumption = new PathSubsumption(new ConstraintSolver(context), context)
 //      pathSubsumption.addAnnotation(node, constraintSolver.createConstraintWithState(generateRandomExpr(), symbolicState))
-//      assert(pathSubsumption.checkSubsumption(node, Number(1, CodeLoc(0, 0)), new SymbolicState(null, PathCondition.initial(), new SymbolicStore(Map.empty))))
+//      assert(pathSubsumption.checkSubsumption(node, Number(1, CodeLoc(0, 0)), new SymbolicState(null, Number(1, CodeLoc(0, 0)), new SymbolicStore(Map.empty))))
 //    }
 //    for (_ <- 0 to 10) {
 //      pathSubsumption = new PathSubsumption(new ConstraintSolver(context), context)
 //      pathSubsumption.addAnnotation(node, constraintSolver.createConstraintWithState(Number(1, CodeLoc(0, 0)), symbolicState))
-//      assert(!pathSubsumption.checkSubsumption(node, generateRandomExpr(), new SymbolicState(null, PathCondition.initial(), new SymbolicStore(Map.empty))))
+//      assert(!pathSubsumption.checkSubsumption(node, generateRandomExpr(), new SymbolicState(null, Number(1, CodeLoc(0, 0)), new SymbolicStore(Map.empty))))
 //    }
 
     var oldCondition = BinaryOp(
@@ -757,6 +757,349 @@ class PathSubsumptionTest extends FunSuite with MicrocSupport with Examples {
     assert(executor.statistics.stoppedWithSubsumption == 2)
     assert(executor.statistics.numPaths == 3)
     null
+  }
+
+  test("random generated test finishes with no error") {
+    val code =
+      """
+        |main() {
+        |  var var0,var1,var2,var3,var4,var5,var6,var7,var8,var9,var10,var11,var12,var13,var14,var15,var16,var17,var18;
+        |  var0 = {FrbkUriwKD:2};
+        |  var1 = 7;
+        |  var2 = 4;
+        |  var3 = alloc 4;
+        |  var4 = {ZpXlPyHmHH:5,dDqnONreXn:8,JLaheWDogc:alloc 3,vmnUidYZzD:[3,-1,6,7,8],bCwcGzSyvN:alloc 8};
+        |  var5 = 8;
+        |  var6 = [2,1,8,1,3];
+        |  var7 = 8;
+        |  var8 = 6;
+        |  var9 = 1;
+        |  var10 = alloc 3;
+        |  var11 = alloc 5;
+        |  var12 = {JjAdAZdRmn:5,qNOvLPeZSX:alloc alloc 6,GojQXAWRfc:alloc 8};
+        |  var13 = alloc 7;
+        |  var14 = 8;
+        |  var15 = 6;
+        |  var16 = 0;
+        |  var17 = alloc 5;
+        |  var18 = [8,4,8,4,8];
+        |  if (!var18[3]) {
+        |    output var18[2];
+        |    var6[1] = var6[3];
+        |    while (input) {
+        |      while (var4.dDqnONreXn) {
+        |        var1 = var12.JjAdAZdRmn;
+        |        var3 = var13;
+        |        output var6[0];
+        |        output input;
+        |      }
+        |      if (input) {
+        |        output var18[4];
+        |        var17 = &var5;
+        |        var11 = &var2;
+        |        var17 = &var5;
+        |      } else {
+        |        output var12.JjAdAZdRmn;
+        |        output input;
+        |        output var1;
+        |        var2 = [4,1,2,5,4,6][4];
+        |        var4 = var4;
+        |      }
+        |      while (!!2) {
+        |        var14 = input;
+        |        output var7;
+        |        output var8;
+        |        output !var0.FrbkUriwKD;
+        |      }
+        |      var1 = var8;
+        |    }
+        |    var2 = var12.JjAdAZdRmn;
+        |    if (var18[0]) {
+        |      if (var2) {
+        |        output var18[0];
+        |        output var2;
+        |        var9 = var4.ZpXlPyHmHH;
+        |        var6 = var18;
+        |      } else {
+        |        output var12.JjAdAZdRmn;
+        |        var1 = [7,8,0,-1,3,-1,1][4];
+        |        var1 = !7;
+        |        var12 = var12;
+        |      }
+        |      if (var18[1]) {
+        |        output var18[2];
+        |        output (var5 * var6[3]);
+        |        var1 = [7,7,6,7,2,7,-1,1,3][3];
+        |        output !input;
+        |      } else {
+        |        output input;
+        |        var7 = input;
+        |        var10 = alloc 1;
+        |      }
+        |      var4 = var4;
+        |    } else {
+        |      if ((var1 - input)) {
+        |        output input;
+        |        var6 = var6;
+        |        var8 = var9;
+        |        var12 = var12;
+        |      } else {
+        |        output input;
+        |        var12 = var12;
+        |        output var0.FrbkUriwKD;
+        |      }
+        |      while (var18[4]) {
+        |        var15 = var7;
+        |        var4 = var4;
+        |        output !input;
+        |      }
+        |      while (input) {
+        |        output var12.JjAdAZdRmn;
+        |        var6 = var6;
+        |        var2 = [0,2,0,-1,0,4,6,6][0];
+        |        output var4.ZpXlPyHmHH;
+        |      }
+        |      var5 = var0.FrbkUriwKD;
+        |    }
+        |  } else {
+        |    output var9;
+        |    if (input) {
+        |      if (var18[3]) {
+        |        output !!input;
+        |        output var6[3];
+        |        output var0.FrbkUriwKD;
+        |        output var1;
+        |        output var4.dDqnONreXn;
+        |      } else {
+        |        output !var18[2];
+        |        var9 = [0,5,7,6,8,6,1][3];
+        |        output var14;
+        |        var2 = var12.JjAdAZdRmn;
+        |      }
+        |      while (!var5) {
+        |        output var18[4];
+        |        output (input * (input + var18[3]));
+        |        output !var6[0];
+        |        var14 = var7;
+        |        var4 = var4;
+        |      }
+        |      while ((var16 * input)) {
+        |        output (var5 + (!input - input));
+        |        output var0.FrbkUriwKD;
+        |        output var6[4];
+        |        var18 = var6;
+        |        output var0.FrbkUriwKD;
+        |      }
+        |      var6[1] = input;
+        |    } else {
+        |      var15 = var12.JjAdAZdRmn;
+        |      var18[2] = var4.ZpXlPyHmHH;
+        |      var11 = alloc (7 - 5);
+        |    }
+        |    var6[2] = input;
+        |  }
+        |  output var12.JjAdAZdRmn;
+        |  var18[3] = var6[4];
+        |  while (input) {
+        |    if (!input) {
+        |      while ((input * [-1,8,2,-1,-1,-1][0])) {
+        |        var7 = [5,4,2,3,6][2];
+        |        output input;
+        |        output var18[4];
+        |        output input;
+        |        output input;
+        |      }
+        |      output (input * [3,-1,3,1,0,-1][2]);
+        |      if (var12.JjAdAZdRmn) {
+        |        output (var1 * !input);
+        |        var18 = var6;
+        |        var18 = var18;
+        |        output var12.JjAdAZdRmn;
+        |      } else {
+        |        var5 = input;
+        |        output input;
+        |        output var1;
+        |        var6 = var6;
+        |        var13 = alloc 4;
+        |      }
+        |    } else {
+        |      output !input;
+        |      output input;
+        |      if (input) {
+        |        output var8;
+        |        output input;
+        |        var3 = &var8;
+        |      } else {
+        |        output (((([3,8,1,2,7,7][2] * !3) * (var12.JjAdAZdRmn + !6)) * !var6[2]) * !input);
+        |        var3 = &var2;
+        |        output var6[2];
+        |        output var2;
+        |      }
+        |      if (input) {
+        |        var18 = var6;
+        |        var1 = !1;
+        |        var5 = var4.dDqnONreXn;
+        |      } else {
+        |        output (!var8 + input);
+        |        var4 = var4;
+        |        var7 = input;
+        |      }
+        |      var6[1] = !var2;
+        |    }
+        |    if ((input + var18[3])) {
+        |      output (input + (6 * 5));
+        |      while (var8) {
+        |        output (input - var18[3]);
+        |        var9 = input;
+        |        output !var18[2];
+        |        output !var6[1];
+        |      }
+        |      var16 = input;
+        |      var5 = var0.FrbkUriwKD;
+        |      var5 = var0.FrbkUriwKD;
+        |    } else {
+        |      if (input) {
+        |        var11 = &var8;
+        |        var4 = var4;
+        |        output (var12.JjAdAZdRmn * (input * !var4.dDqnONreXn));
+        |      } else {
+        |        var4 = var4;
+        |        output !var18[4];
+        |        output var12.JjAdAZdRmn;
+        |        var13 = &var1;
+        |        var4 = var4;
+        |      }
+        |      output ([-1,6,5,2,4,7][4] + var16);
+        |      output (var14 - input);
+        |      var6[4] = var4.dDqnONreXn;
+        |      while (input) {
+        |        var14 = (3 - 5);
+        |        var10 = alloc 7;
+        |        output (input - var12.JjAdAZdRmn);
+        |        output (input - input);
+        |        var18 = var18;
+        |      }
+        |    }
+        |    while (!!input) {
+        |      if ((!8 + [4,-1,8,7,-1,-1][0])) {
+        |        var11 = &var7;
+        |        output var16;
+        |        output input;
+        |        output var18[2];
+        |      } else {
+        |        output (input * var4.ZpXlPyHmHH);
+        |        output input;
+        |        var12 = var12;
+        |        output input;
+        |        output var18[1];
+        |      }
+        |      var5 = var2;
+        |      if (input) {
+        |        output var12.JjAdAZdRmn;
+        |        var15 = !5;
+        |        var16 = [6,5,1,1,7,-1,0][0];
+        |        var10 = alloc 1;
+        |        output var4.dDqnONreXn;
+        |      } else {
+        |        output !!input;
+        |        var8 = var4.ZpXlPyHmHH;
+        |        output var14;
+        |      }
+        |    }
+        |  }
+        |  output input;
+        |  if (!var0.FrbkUriwKD) {
+        |    output !input;
+        |    var8 = var2;
+        |    output input;
+        |    if (input) {
+        |      while (var6[3]) {
+        |        output !(var2 - var8);
+        |        output var9;
+        |        output var16;
+        |        output !(var4.dDqnONreXn * var16);
+        |        var18 = var18;
+        |      }
+        |      var17 = &var5;
+        |      while (var0.FrbkUriwKD) {
+        |        output (var0.FrbkUriwKD * (input + !!input));
+        |        var10 = alloc 5;
+        |        output input;
+        |        var16 = (5 - 7);
+        |        var12 = var12;
+        |      }
+        |      while (var12.JjAdAZdRmn) {
+        |        var11 = var10;
+        |        output input;
+        |        var3 = &var5;
+        |        var13 = alloc 5;
+        |      }
+        |      var6[0] = var12.JjAdAZdRmn;
+        |    } else {
+        |      while (var18[1]) {
+        |        var4 = var4;
+        |        output input;
+        |        output var6[0];
+        |        var9 = [4,8,5,7,5,4][4];
+        |        var7 = var14;
+        |      }
+        |      while (!input) {
+        |        output var6[2];
+        |        output var18[1];
+        |        output var5;
+        |        var9 = input;
+        |      }
+        |      output var6[4];
+        |      output input;
+        |    }
+        |  } else {
+        |    var18[2] = var18[4];
+        |    output var4.dDqnONreXn;
+        |    var10 = var17;
+        |    while (var4.dDqnONreXn) {
+        |      if (var1) {
+        |        output !((var4.ZpXlPyHmHH + var4.ZpXlPyHmHH) + var6[1]);
+        |        var14 = var9;
+        |        output input;
+        |        output (var4.ZpXlPyHmHH + var18[3]);
+        |        var4 = var4;
+        |      } else {
+        |        output !input;
+        |        var2 = !5;
+        |        var18 = var6;
+        |        output var4.ZpXlPyHmHH;
+        |      }
+        |      output var12.JjAdAZdRmn;
+        |      if ((input * !6)) {
+        |        var16 = var4.dDqnONreXn;
+        |        output input;
+        |        output var5;
+        |      } else {
+        |        var12 = var12;
+        |        var18 = var6;
+        |        var16 = input;
+        |        var12 = var12;
+        |      }
+        |      var6[4] = var12.JjAdAZdRmn;
+        |      while (var18[3]) {
+        |        output var8;
+        |        var1 = var14;
+        |        output input;
+        |        var6 = var6;
+        |        output var14;
+        |      }
+        |    }
+        |  }
+        |  output input;
+        |  var18[2] = (input - input);
+        |  output input;
+        |  return var12.JjAdAZdRmn;
+        |}
+        |""".stripMargin;
+    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+    val ctx = new Context()
+    val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx), ctx)), ctx, new DFSSearchStrategy());
+    val res = executor.run()
   }
 
 }

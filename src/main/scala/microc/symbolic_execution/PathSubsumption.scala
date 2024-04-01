@@ -106,11 +106,11 @@ class PathSubsumption(constraintSolver: ConstraintSolver, ctx: Context) {
       val expr =
         BinaryOp(
         AndAnd,
-        symbolicState.pathCondition.expr,
+        symbolicState.pathCondition,
         Not(anotation, CodeLoc(0, 0)),
         CodeLoc(0, 0)
       )
-      val constraint = constraintSolver.getCondition(constraintSolver.createConstraintWithState(expr, symbolicState))
+      val constraint = ConstraintSolver.getCondition(ctx, constraintSolver.createConstraintWithState(expr, symbolicState))
       solver.add(constraint)
       solver.check() match {
         case Status.UNSATISFIABLE =>

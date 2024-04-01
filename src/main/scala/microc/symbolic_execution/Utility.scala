@@ -12,6 +12,14 @@ object Utility {
     !(name.length > 2 && name(0) == '_' && (name(1) == 't' || name(1) == 'l'))
   }
 
+  def getName(expr: Expr): String = {
+    expr match {
+      case Identifier(name, _) => name
+      case ArrayAccess(array, index, loc) => getName(array)
+      case FieldAccess(record, field, loc) => getName(record)
+    }
+  }
+
   def isSubsumptionVar(name: String): Boolean = {
     name.length > 2 && name(0) == '_' && name(1) == 'l'
   }
@@ -213,12 +221,6 @@ object Utility {
     }
   }
 
-  def removePossibleUnnecessarySymbolicExpr(v: Val): Val = {
-    v match {
-      case s: SymbolicExpr => removeUnnecessarySymbolicExpr(s)
-      case _ => v
-    }
-  }
 
   def replaceExpr(expr: Expr, toReplace: Expr, newValue: Expr): Expr = {
     expr match {

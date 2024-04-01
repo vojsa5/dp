@@ -12,7 +12,7 @@ import scala.collection.mutable
 
 class SymbolicState(
                      var nextStatement: CfgNode,
-                     var pathCondition: PathCondition,
+                     var pathCondition: Expr,
                      var symbolicStore: SymbolicStore,
                      var callStack: List[(CfgNode, List[IdentifierDecl])] = List.empty,
                      var variableDecls: List[IdentifierDecl] = List.empty
@@ -113,7 +113,7 @@ class SymbolicState(
     symbolicStore.getValOfPtr(ptr)
   }
 
-  def getSymbolicVal(name: String, loc: Loc, allowReturnNonInitialized: Boolean = false): Val = {
+  def getSymbolicVal(name: String, loc: Loc = CodeLoc(0, 0), allowReturnNonInitialized: Boolean = false): Val = {
     val res = symbolicStore.getVal(name, loc, this, allowReturnNonInitialized)
     if (allowReturnNonInitialized) {
       res match {
@@ -125,7 +125,7 @@ class SymbolicState(
   }
 
   def addedLoopTrace(trace: (Expr, mutable.HashMap[Expr, Expr => Expr])): SymbolicState = {
-    new SymbolicState(nextStatement.succ.maxBy(node => node.id), new PathCondition(None, BinaryOp(AndAnd, pathCondition.expr, trace._1, CodeLoc(0, 0))), symbolicStore, callStack, variableDecls)
+    new SymbolicState(nextStatement.succ.maxBy(node => node.id), BinaryOp(AndAnd, pathCondition, trace._1, CodeLoc(0, 0)), symbolicStore, callStack, variableDecls)
   }
 
   def loadVariablesToExpr(expr: Expr): Expr = {
@@ -145,55 +145,83 @@ class SymbolicState(
     }
   }
 
-  def addToPathCondition(expr: Expr): PathCondition = {
+  def addToPathCondition(expr: Expr): Expr = {
     val pathConditionNewExpr = loadVariablesToExpr(expr)
-    new PathCondition(Some(pathCondition), BinaryOp(AndAnd, pathCondition.expr, pathConditionNewExpr, expr.loc))
+    BinaryOp(AndAnd, pathCondition, pathConditionNewExpr, expr.loc)
   }
 
   def getIfTrueState(): SymbolicState = {
     val ast = nextStatement.ast;
-    nextStatement.succ.foreach(
-      node => {
-        ast match {
-          case IfStmt(guard, thenBranch, _, _) =>
-            if (thenBranch.asInstanceOf[NestedBlockStmt].body.isEmpty) {//no statements - go to a statement after else
-                return new SymbolicState(nextStatement.succ.maxBy(node => node.id), addToPathCondition(guard), symbolicStore.deepCopy(), copyCallStack(callStack), variableDecls)
-            }
-            if (thenBranch.asInstanceOf[NestedBlockStmt].body.head == node.ast) {
-              return new SymbolicState(node, addToPathCondition(guard), symbolicStore.deepCopy(), copyCallStack(callStack), variableDecls)
-            }
-          case WhileStmt(guard, block, _) =>
-            if (block.asInstanceOf[NestedBlockStmt].body.head == node.ast) {
-              return new SymbolicState(node, addToPathCondition(guard), symbolicStore.deepCopy(), copyCallStack(callStack), variableDecls)
-            }
-          //return new SymbolicState(node, pathCondition, symbolicStore.deepCopy(), callStack.map(identity))//TODO not sure if this is correct
-          case _ =>
+    ast match {
+      case WhileStmt(guard, thenBranch, loc) =>
+        val next = if (thenBranch.asInstanceOf[NestedBlockStmt].body.isEmpty) {
+          nextStatement.succ.head
         }
-      }
-    )
-    throw new Exception("This should not happen")
+        else {
+          val firstThenStatement = thenBranch.asInstanceOf[NestedBlockStmt].body.head
+          nextStatement.succ.find(s => s.ast == firstThenStatement).get
+        }
+        new SymbolicState(next, addToPathCondition(guard), symbolicStore.deepCopy(), copyCallStack(callStack), variableDecls)
+      case IfStmt(guard, thenBranch, None, loc) =>
+        val next = if (thenBranch.asInstanceOf[NestedBlockStmt].body.isEmpty) {
+          nextStatement.succ.head
+        }
+        else {
+          val firstThenStatement = thenBranch.asInstanceOf[NestedBlockStmt].body.head
+          nextStatement.succ.find(s => s.ast == firstThenStatement).get
+        }
+        new SymbolicState(next, addToPathCondition(guard), symbolicStore.deepCopy(), copyCallStack(callStack), variableDecls)
+      case IfStmt(guard, thenBranch, Some(NestedBlockStmt(elseBranch, loc)), _) =>
+        if (elseBranch.isEmpty) {
+          val next = if (thenBranch.asInstanceOf[NestedBlockStmt].body.isEmpty) {
+            nextStatement.succ.head
+          }
+          else {
+            val firstThenStatement = thenBranch.asInstanceOf[NestedBlockStmt].body.head
+            nextStatement.succ.find(s => s.ast == firstThenStatement).get
+          }
+          return new SymbolicState(next, addToPathCondition(guard), symbolicStore.deepCopy(), copyCallStack(callStack), variableDecls)
+        }
+        val next = nextStatement.succ.find(s => s.ast != elseBranch.head).get
+        new SymbolicState(next, addToPathCondition(guard), symbolicStore.deepCopy(), copyCallStack(callStack), variableDecls)
+    }
   }
 
   def getIfFalseState(): SymbolicState = {
     val ast = nextStatement.ast;
     ast match {
-      case WhileStmt(guard, _, loc) =>
-        return new SymbolicState(nextStatement.succ.maxBy(node => node.id), addToPathCondition(Not(guard, loc)), symbolicStore.deepCopy(), copyCallStack(callStack), variableDecls)//TODO add to path condition
-      case IfStmt(guard, _, None, loc) =>
-        return new SymbolicState(nextStatement.succ.maxBy(node => node.id), addToPathCondition(Not(guard, loc)), symbolicStore.deepCopy(), copyCallStack(callStack), variableDecls)
-      case IfStmt(guard, _, Some(NestedBlockStmt(elseBranch, loc)), _) =>
-        nextStatement.succ.foreach(
-          node => {
-            if (elseBranch.isEmpty) {//TODO this should maybe be andled by the parser
-              return new SymbolicState(nextStatement.succ.maxBy(node => node.id), addToPathCondition(Not(guard, loc)), symbolicStore.deepCopy(), copyCallStack(callStack), variableDecls)
-            }
-            if (elseBranch.head == node.ast) {
-              return new SymbolicState(node, addToPathCondition(Not(guard, loc)), symbolicStore.deepCopy(), copyCallStack(callStack), variableDecls)
-            }
+      case WhileStmt(guard, thenBranch, loc) =>
+        val next = if (thenBranch.asInstanceOf[NestedBlockStmt].body.isEmpty) {
+          nextStatement.succ.head
+        }
+        else {
+          val firstThenStatement = thenBranch.asInstanceOf[NestedBlockStmt].body.head
+          nextStatement.succ.find(s => s.ast != firstThenStatement).get
+        }
+        new SymbolicState(next, addToPathCondition(Not(guard, loc)), symbolicStore.deepCopy(), copyCallStack(callStack), variableDecls)
+      case IfStmt(guard, thenBranch, None, loc) =>
+        val next = if (thenBranch.asInstanceOf[NestedBlockStmt].body.isEmpty) {
+          nextStatement.succ.head
+        }
+        else {
+          val firstThenStatement = thenBranch.asInstanceOf[NestedBlockStmt].body.head
+          nextStatement.succ.find(s => s.ast != firstThenStatement).get
+        }
+        new SymbolicState(next, addToPathCondition(Not(guard, loc)), symbolicStore.deepCopy(), copyCallStack(callStack), variableDecls)
+      case IfStmt(guard, thenBranch, Some(NestedBlockStmt(elseBranch, loc)), _) =>
+        if (elseBranch.isEmpty) {
+          val next = if (thenBranch.asInstanceOf[NestedBlockStmt].body.isEmpty) {
+            nextStatement.succ.head
           }
-        )
+          else {
+            val firstThenStatement = thenBranch.asInstanceOf[NestedBlockStmt].body.head
+            nextStatement.succ.find(s => s.ast != firstThenStatement).get
+          }
+          return new SymbolicState(next, addToPathCondition(Not(guard, loc)), symbolicStore.deepCopy(), copyCallStack(callStack), variableDecls)
+        }
+        val next = nextStatement.succ.find(s => s.ast == elseBranch.head).get
+        new SymbolicState(next, addToPathCondition(Not(guard, loc)), symbolicStore.deepCopy(), copyCallStack(callStack), variableDecls)
     }
-    throw new Exception("This should not happen")
   }
 
   def applyChanges(changes: mutable.HashMap[String, Expr => Val]): SymbolicState = {
@@ -209,8 +237,10 @@ class SymbolicState(
     this
   }
 
-  def applyChange(varibale: String, change: Expr => Expr): SymbolicState = {
-    addedVar(varibale, SymbolicExpr(change.apply(getSymbolicVal(varibale, CodeLoc(0, 0)).asInstanceOf[Symbolic]), CodeLoc(0, 0)))
+  def applyChange(memoryLoc: Expr, change: Expr => Expr): SymbolicState = {
+    val ptr = getMemoryLoc(memoryLoc)
+    val v = symbolicStore.getValOfPtr(ptr).get
+    addToMemoryLocation(ptr, Utility.removeUnnecessarySymbolicExpr(SymbolicExpr(change.apply(v.asInstanceOf[Symbolic]), CodeLoc(0, 0))))
     this
   }
 
@@ -221,7 +251,7 @@ class SymbolicState(
   def mergeStates(other: SymbolicState): SymbolicState = {
     new SymbolicState(
       nextStatement,
-      new PathCondition(None, BinaryOp(OrOr, this.pathCondition.expr, other.pathCondition.expr, CodeLoc(0, 0))),
+      BinaryOp(OrOr, this.pathCondition, other.pathCondition, CodeLoc(0, 0)),
       symbolicStore = symbolicStore.mergeStores(other.symbolicStore, pathCondition).get,
       callStack = this.callStack,
       variableDecls = this.variableDecls

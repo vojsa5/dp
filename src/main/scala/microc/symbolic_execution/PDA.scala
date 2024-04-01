@@ -1,8 +1,8 @@
 package microc.symbolic_execution
 
 import com.microsoft.z3.Status
-import microc.ast.{AndAnd, ArrayAccess, BinaryOp, BinaryOperator, CodeLoc, Expr, FieldAccess, GreaterEqual, Identifier, IdentifierDecl, Not, Number, OrOr, Plus, Program, WhileStmt}
-import microc.symbolic_execution.Value.{Symbolic, SymbolicExpr, SymbolicVal}
+import microc.ast.{AndAnd, ArrayAccess, BinaryOp, BinaryOperator, CodeLoc, Expr, FieldAccess, GreaterEqual, Identifier, IdentifierDecl, Not, Number, OrOr, Plus, Program, VarRef, WhileStmt}
+import microc.symbolic_execution.Value.{ArrVal, PointerVal, Symbolic, SymbolicExpr, SymbolicVal}
 
 import scala.collection.mutable
 
@@ -26,15 +26,21 @@ case class PDA(loopSummary: LoopSummary, vertices: List[Vertex], variables: List
         change._1 match {
           case Identifier(name, _) =>
             if (!Utility.varIsFromOriginalProgram(name) && !newState.containsVar(name)) {
-              newState = newState.addedVar(name, SymbolicExpr(change._2.apply(Number(1, CodeLoc(0, 0))).apply(Number(1, CodeLoc(0, 0))), CodeLoc(0, 0)))
+              newState = newState.addedVar(name, Utility.removeUnnecessarySymbolicExpr(
+                SymbolicExpr(change._2.apply(Number(1, CodeLoc(0, 0))).apply(Number(1, CodeLoc(0, 0))), CodeLoc(0, 0)))
+              )
             }
           case a@ArrayAccess(_, _, _) =>
-            newState.addToMemoryLocation(newState.getMemoryLoc(a), SymbolicExpr(change._2.apply(Number(1, CodeLoc(0, 0))).apply(Number(1, CodeLoc(0, 0))), CodeLoc(0, 0)))
+            newState.addToMemoryLocation(newState.getMemoryLoc(a), Utility.removeUnnecessarySymbolicExpr(
+              SymbolicExpr(change._2.apply(Number(1, CodeLoc(0, 0))).apply(Number(1, CodeLoc(0, 0))), CodeLoc(0, 0)))
+            )
           case f@FieldAccess(_, _, _) =>
-            newState.addToMemoryLocation(newState.getMemoryLoc(f), SymbolicExpr(change._2.apply(Number(1, CodeLoc(0, 0))).apply(Number(1, CodeLoc(0, 0))), CodeLoc(0, 0)))
+            newState.addToMemoryLocation(newState.getMemoryLoc(f), Utility.removeUnnecessarySymbolicExpr(
+              SymbolicExpr(change._2.apply(Number(1, CodeLoc(0, 0))).apply(Number(1, CodeLoc(0, 0))), CodeLoc(0, 0)))
+            )
         }
       }
-      solver.solveConstraint(solver.createConstraintWithState(BinaryOp(AndAnd, vertex.condition, newState.pathCondition.expr, CodeLoc(0, 0)), newState, true)) match {
+      solver.solveConstraint(solver.createConstraintWithState(BinaryOp(AndAnd, vertex.condition, newState.pathCondition, CodeLoc(0, 0)), newState, true)) match {
         case Status.SATISFIABLE =>
           entryStates.add(vertex)
         case _ =>
@@ -117,6 +123,9 @@ case class PDA(loopSummary: LoopSummary, vertices: List[Vertex], variables: List
           v
         }
       case SymbolicExpr(expr, _) => applyIterationsCount(expr, iterations, count)
+      case p@PointerVal(_) => p
+      case r@VarRef(id, _) => applyIterationsCount(id, iterations, count)
+      case a@ArrVal(_) => a
     }
   }
 
@@ -204,9 +213,8 @@ case class Trace() {
     else {
       var res: (Expr, mutable.HashMap[String, Expr => Expr]) = (Number(1, CodeLoc(0, 0)), new mutable.HashMap[String, Expr => Expr]())
       for (edge <- pda.edges(currPath.path)) {
-        val k = Utility.applyTheState(edge.condition, symbolicState)
         var newState = symbolicState.deepCopy()
-        val condition = Utility.simplifyArithExpr(BinaryOp(AndAnd, traceCondition, Utility.applyTheState(edge.condition, symbolicState), edge.condition.loc))
+        val condition = Utility.simplifyArithExpr(BinaryOp(AndAnd, traceCondition, Utility.applyTheState(edge.condition, symbolicState, true), edge.condition.loc))
         //val condition = Utility.simplifyArithExpr(BinaryOp(AndAnd, traceCondition, edge.condition, edge.condition.loc))
         pda.solver.solveConstraint(pda.solver.createConstraintWithState(condition, symbolicState, true)) match {
           case Status.SATISFIABLE =>
@@ -225,7 +233,9 @@ case class Trace() {
               }
               else {
                 newUpdatedVariables.put(update._1, update._2)
-                newState.addToMemoryLocation(symbolicState.getMemoryLoc(update._1), SymbolicExpr(update._2.apply(symbolicState.getValAtMemoryLoc(update._1, true).asInstanceOf[Symbolic]), CodeLoc(0, 0)))
+                newState.addToMemoryLocation(symbolicState.getMemoryLoc(update._1), Utility.removeUnnecessarySymbolicExpr(
+                  SymbolicExpr(update._2.apply(symbolicState.getValAtMemoryLoc(update._1, true).asInstanceOf[Symbolic]), CodeLoc(0, 0)))
+                )
               }
             }
             nrec.put(currPath, (ncond, edge.change))
@@ -246,9 +256,7 @@ case class Trace() {
     for (r <- rec) {
       initialConstraint = BinaryOp(AndAnd, initialConstraint, r._2._1, initialConstraint.loc)
       for (update <- r._2._2) {
-        val name = update._1 match {
-          case Identifier(name, _) => name
-        }
+        val name = Utility.getName(update._1)
         if (newUpdatedVariables.contains(update._1) && Utility.varIsFromOriginalProgram(name)) {
           val prev = newUpdatedVariables(update._1)
           newUpdatedVariables.put(update._1, variable => BinaryOp(OrOr, update._2.apply(variable), prev.apply(variable), CodeLoc(0, 0)))
@@ -263,8 +271,8 @@ case class Trace() {
     for (update <- newUpdatedVariables) {
       val tmp: Expr => Expr = variable => {
         val expr = update._2.apply(variable)
-        if (LoopSummary.getSymbolicValsFromExpr(expr).nonEmpty) {
-          pda.applyIterationsCount(expr, LoopSummary.getSymbolicValsFromExpr(expr).head, iterations)
+        if (LoopSummary.getSymbolicValsFromExpr(expr, pda.symbolicState).nonEmpty) {
+          pda.applyIterationsCount(expr, LoopSummary.getSymbolicValsFromExpr(expr, pda.symbolicState).head, iterations)
         }
         else {
           expr

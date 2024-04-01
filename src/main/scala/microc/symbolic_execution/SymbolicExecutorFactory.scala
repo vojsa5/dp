@@ -47,7 +47,7 @@ class SymbolicExecutorFactory(useSummarizaiton: Boolean, useSubsumption: Boolean
         new HeuristicBasedStateMerging(new BFSSearchStrategy, variableCosts, 3)
       }
       case Some("tmp") => {
-        val tmp = new TMP()(new SemanticAnalysis().analyze(program))
+        val tmp = new RecursionBasedAnalyses()(new SemanticAnalysis().analyze(program))
         tmp.tmp2(programCfg)
         new HeuristicBasedStateMerging(new BFSSearchStrategy, tmp.mapping, 3)
       }

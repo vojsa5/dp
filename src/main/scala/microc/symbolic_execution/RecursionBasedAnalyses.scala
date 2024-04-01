@@ -6,7 +6,7 @@ import microc.cfg.{CfgNode, ProgramCfg}
 
 import scala.collection.mutable
 
-class TMP(implicit declarations: Declarations, beta: Double = 0.7, kappa: Double = 1.0) {
+class RecursionBasedAnalyses(implicit declarations: Declarations, beta: Double = 0.7, kappa: Double = 1.0) {
 
   val mapping = new mutable.HashMap[CfgNode, mutable.HashMap[String, Double]]
 

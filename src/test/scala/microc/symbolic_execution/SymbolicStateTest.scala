@@ -12,7 +12,7 @@ class SymbolicStateTest extends FunSuite with MicrocSupport with Examples {
   test("test ite constraints") {
     var state = new SymbolicState(
       new CfgStmtNode(0, AssignStmt(Identifier("a", CodeLoc(0, 0)), Null(CodeLoc(0, 0)), CodeLoc(0, 0))),
-      new PathCondition(None, BinaryOp(Equal, Identifier("x", CodeLoc(0, 0)), Number(1, CodeLoc(0, 0)), CodeLoc(0, 0))),
+      BinaryOp(Equal, Identifier("x", CodeLoc(0, 0)), Number(1, CodeLoc(0, 0)), CodeLoc(0, 0)),
       new SymbolicStore(Map.empty)
     )
 
@@ -32,7 +32,7 @@ class SymbolicStateTest extends FunSuite with MicrocSupport with Examples {
     )
 
     val solver = new ConstraintSolver(new Context())
-    var constraint = solver.createConstraintWithState(state.pathCondition.expr, state)
+    var constraint = solver.createConstraintWithState(state.pathCondition, state)
     solver.solveConstraint(constraint) match {
       case Status.SATISFIABLE =>
       case _ => assert(false)
@@ -44,7 +44,7 @@ class SymbolicStateTest extends FunSuite with MicrocSupport with Examples {
 
     state = new SymbolicState(
       new CfgStmtNode(0, AssignStmt(Identifier("a", CodeLoc(0, 0)), Null(CodeLoc(0, 0)), CodeLoc(0, 0))),
-      new PathCondition(None, BinaryOp(Equal, Identifier("x", CodeLoc(0, 0)), Number(1, CodeLoc(0, 0)), CodeLoc(0, 0))),
+      BinaryOp(Equal, Identifier("x", CodeLoc(0, 0)), Number(1, CodeLoc(0, 0)), CodeLoc(0, 0)),
       new SymbolicStore(Map.empty)
     )
 
@@ -63,7 +63,7 @@ class SymbolicStateTest extends FunSuite with MicrocSupport with Examples {
       Number(1, CodeLoc(0, 0))
     )
 
-    constraint = solver.createConstraintWithState(state.pathCondition.expr, state)
+    constraint = solver.createConstraintWithState(state.pathCondition, state)
     solver.solveConstraint(constraint) match {
       case Status.SATISFIABLE =>
       case _ => assert(false)
@@ -77,7 +77,7 @@ class SymbolicStateTest extends FunSuite with MicrocSupport with Examples {
 
     state = new SymbolicState(
       new CfgStmtNode(0, AssignStmt(Identifier("a", CodeLoc(0, 0)), Null(CodeLoc(0, 0)), CodeLoc(0, 0))),
-      new PathCondition(None, BinaryOp(Equal, Identifier("x", CodeLoc(0, 0)), Number(1, CodeLoc(0, 0)), CodeLoc(0, 0))),
+      BinaryOp(Equal, Identifier("x", CodeLoc(0, 0)), Number(1, CodeLoc(0, 0)), CodeLoc(0, 0)),
       new SymbolicStore(Map.empty)
     )
 
@@ -96,7 +96,7 @@ class SymbolicStateTest extends FunSuite with MicrocSupport with Examples {
       Number(5, CodeLoc(0, 0))
     )
 
-    constraint = solver.createConstraintWithState(state.pathCondition.expr, state)
+    constraint = solver.createConstraintWithState(state.pathCondition, state)
     solver.solveConstraint(constraint) match {
       case Status.UNSATISFIABLE =>
       case _ => assert(false)

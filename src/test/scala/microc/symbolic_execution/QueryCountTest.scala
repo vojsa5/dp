@@ -448,7 +448,7 @@ class QueryCountTest extends FunSuite with MicrocSupport with Examples {
 
         val program = parseUnsafe(code)
         val cfg = new IntraproceduralCfgFactory().fromProgram(program);
-        val tmp = new TMP()(new SemanticAnalysis().analyze(program))
+        val tmp = new RecursionBasedAnalyses()(new SemanticAnalysis().analyze(program))
 
         tmp.tmp2(cfg)
 
@@ -614,7 +614,7 @@ class QueryCountTest extends FunSuite with MicrocSupport with Examples {
 
         val program = parseUnsafe(code)
         val cfg = new IntraproceduralCfgFactory().fromProgram(program);
-        val tmp = new TMP()(new SemanticAnalysis().analyze(program), 1.0, 1.0)
+        val tmp = new RecursionBasedAnalyses()(new SemanticAnalysis().analyze(program), 1.0, 1.0)
 
         tmp.tmp2(cfg)
 
@@ -803,7 +803,7 @@ class QueryCountTest extends FunSuite with MicrocSupport with Examples {
 
         val program = parseUnsafe(code)
         val cfg = new IntraproceduralCfgFactory().fromProgram(program);
-        val tmp = new TMP()(new SemanticAnalysis().analyze(program))
+        val tmp = new RecursionBasedAnalyses()(new SemanticAnalysis().analyze(program))
 
         tmp.tmp2(cfg)
 

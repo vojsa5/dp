@@ -38,7 +38,7 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
       stmt = stmt.succ.head
     }
     val summary = new LoopSummary(cfg).computeVariableChange(stmt.ast.asInstanceOf[WhileStmt].block.asInstanceOf[NestedBlockStmt].body,
-      new SymbolicState(null, PathCondition.initial(), new SymbolicStore(Map.empty)))
+      new SymbolicState(null, Number(1, CodeLoc(0, 0)), new SymbolicStore(Map.empty)))
     assert(summary("k").apply(Number(10, CodeLoc(0, 0))).apply(Number(0, CodeLoc(0, 0))).asInstanceOf[Number].value == 50)
     assert(summary("i").apply(Number(10, CodeLoc(0, 0))).apply(Number(0, CodeLoc(0, 0))).asInstanceOf[Number].value == 20)
 
@@ -65,7 +65,7 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
         |""".stripMargin;
     val ctx = new Context()
     val constraintSolver = new ConstraintSolver(ctx)
-    var symbolicState = new SymbolicState(null, PathCondition.initial(), new SymbolicStore(Map.empty))
+    var symbolicState = new SymbolicState(null, Number(1, CodeLoc(0, 0)), new SymbolicStore(Map.empty))
     val program = parseUnsafe(code)
     val cfg = new IntraproceduralCfgFactory().fromProgram(program);
     val loopSummary = new LoopSummary(cfg)
@@ -79,7 +79,8 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
     symbolicState = symbolicState.addedVar("i", Number(0, CodeLoc(0, 0)))
     symbolicState = symbolicState.addedVar("_t1", SymbolicExpr(BinaryOp(LowerThan, Identifier("n", CodeLoc(0, 0)), Identifier("m", CodeLoc(0, 0)), CodeLoc(0, 0)), CodeLoc(0, 0)))//normalized condition
     val pathsOpt = loopSummary.getAllPathsInALoop(stmt, symbolicState,
-      loopSummary.getMemoryCellsFromConditions(loopSummary.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy())))
+      loopSummary.getMemoryCellsFromConditions(loopSummary.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy())),
+      mutable.HashSet[Expr]())
     assert(pathsOpt.nonEmpty)
     val paths = pathsOpt.get
     assert(paths.size == 2)
@@ -150,7 +151,7 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
         |""".stripMargin;
     val ctx = new Context()
     val constraintSolver = new ConstraintSolver(ctx)
-    var symbolicState = new SymbolicState(null, PathCondition.initial(), new SymbolicStore(Map.empty))
+    var symbolicState = new SymbolicState(null, Number(1, CodeLoc(0, 0)), new SymbolicStore(Map.empty))
     symbolicState = symbolicState.addedVar("n", SymbolicVal(CodeLoc(1, 0)))
     symbolicState = symbolicState.addedVar("x", SymbolicVal(CodeLoc(2, 0)))
     symbolicState = symbolicState.addedVar("z", SymbolicVal(CodeLoc(3, 0)))
@@ -164,7 +165,8 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
     }
     val executor = new LoopSummary(cfg)
     val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState,
-      executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy())))
+      executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy())),
+      mutable.HashSet[Expr]())
     assert(pathsOpt.nonEmpty)
     val paths = pathsOpt.get
     assert(paths.size == 3)
@@ -272,7 +274,7 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
         |""".stripMargin;
     val ctx = new Context()
     val constraintSolver = new ConstraintSolver(ctx)
-    var symbolicState = new SymbolicState(null, PathCondition.initial(), new SymbolicStore(Map.empty))
+    var symbolicState = new SymbolicState(null, Number(1, CodeLoc(0, 0)), new SymbolicStore(Map.empty))
     symbolicState = symbolicState.addedVar("a", SymbolicVal(CodeLoc(1, 0)))
     symbolicState = symbolicState.addedVar("i", SymbolicVal(CodeLoc(2, 0)))
     symbolicState = symbolicState.addedVar("j", SymbolicVal(CodeLoc(3, 0)))
@@ -286,7 +288,8 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
     }
     val executor = new LoopSummary(cfg)
     val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState,
-      executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy())))
+      executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy())),
+      mutable.HashSet[Expr]())
     assert(pathsOpt.nonEmpty)
     val paths = pathsOpt.get
     assert(paths.size == 5)
@@ -375,7 +378,7 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
 //    var stmt: CfgNode = cfg.getFce("main")
 //    val main = stmt
 //
-//    val symbolicState = new SymbolicState(null, PathCondition.initial(), new SymbolicStore(Map.empty))
+//    val symbolicState = new SymbolicState(null, Number(1, CodeLoc(0, 0)), new SymbolicStore(Map.empty))
 //
 //    val decls = main.ast.asInstanceOf[FunDecl].block.vars.flatMap(_.decls)
 //    for (decl <- decls) {
@@ -478,7 +481,7 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
 //    var stmt: CfgNode = cfg.getFce("main")
 //    val main = stmt
 //
-//    val symbolicState = new SymbolicState(null, PathCondition.initial(), new SymbolicStore(Map.empty))
+//    val symbolicState = new SymbolicState(null, Number(1, CodeLoc(0, 0)), new SymbolicStore(Map.empty))
 //
 //    symbolicState.addedVar("x", Number(3, CodeLoc(0, 0)))
 //    symbolicState.addedVar("n", Number(4, CodeLoc(0, 0)))
@@ -561,7 +564,7 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
 //    var stmt: CfgNode = cfg.getFce("main")
 //    val main = stmt
 //
-//    val symbolicState = new SymbolicState(null, PathCondition.initial(), new SymbolicStore(Map.empty))
+//    val symbolicState = new SymbolicState(null, Number(1, CodeLoc(0, 0)), new SymbolicStore(Map.empty))
 //
 //    symbolicState.addedVar("x", Number(4, CodeLoc(0, 0)))
 //    symbolicState.addedVar("n", Number(3, CodeLoc(0, 0)))
@@ -652,7 +655,7 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
 //    val executor = new LoopSummary(cfg)
 //    val decls = main.ast.asInstanceOf[FunDecl].block.vars.flatMap(_.decls)
 //    val paths = executor.getAllPathsInALoop(stmt)
-//    val symbolicState = new SymbolicState(null, PathCondition.initial(), new SymbolicStore(Map.empty))
+//    val symbolicState = new SymbolicState(null, Number(1, CodeLoc(0, 0)), new SymbolicStore(Map.empty))
 //    for (decl <- decls) {
 //      symbolicState.addedVar(decl.name, SymbolicVal(decl.loc))
 //    }
@@ -750,7 +753,7 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
 //    val executor = new LoopSummary(cfg)
 //    val decls = main.ast.asInstanceOf[FunDecl].block.vars.flatMap(_.decls)
 //    val paths = executor.getAllPathsInALoop(stmt)
-//    val symbolicState = new SymbolicState(null, PathCondition.initial(), new SymbolicStore(Map.empty))
+//    val symbolicState = new SymbolicState(null, Number(1, CodeLoc(0, 0)), new SymbolicStore(Map.empty))
 //    for (decl <- decls) {
 //      symbolicState.addedVar(decl.name, SymbolicVal(decl.loc))
 //    }
@@ -852,7 +855,7 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
 //    val executor = new LoopSummary(cfg)
 //    val decls = main.ast.asInstanceOf[FunDecl].block.vars.flatMap(_.decls)
 //    val paths = executor.getAllPathsInALoop(stmt)
-//    val symbolicState = new SymbolicState(null, PathCondition.initial(), new SymbolicStore(Map.empty))
+//    val symbolicState = new SymbolicState(null, Number(1, CodeLoc(0, 0)), new SymbolicStore(Map.empty))
 //    for (decl <- decls) {
 //      symbolicState.addedVar(decl.name, SymbolicVal(decl.loc))
 //    }
@@ -943,12 +946,13 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
     }
     val executor = new LoopSummary(cfg)
     val decls = main.ast.asInstanceOf[FunDecl].block.vars.flatMap(_.decls)
-    val symbolicState = new SymbolicState(null, PathCondition.initial(), new SymbolicStore(Map.empty))
+    val symbolicState = new SymbolicState(null, Number(1, CodeLoc(0, 0)), new SymbolicStore(Map.empty))
     for (decl <- decls) {
       symbolicState.addedVar(decl.name, SymbolicVal(decl.loc))
     }
     val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState,
-      executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy())))
+      executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy())),
+      mutable.HashSet[Expr]())
     assert(pathsOpt.nonEmpty)
     val paths = pathsOpt.get
     var vertices :List[Vertex] = List()
@@ -972,7 +976,7 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
             val change: Expr => Expr = trace._2.find  { case (Identifier(name, loc), _) => name == "x" }.get._2
             change.apply(Number(initialX, CodeLoc(0, 0))) match {
               case expr => {
-                var v = LoopSummary.getSymbolicValsFromExpr(expr)
+                var v = LoopSummary.getSymbolicValsFromExpr(expr, symbolicState)
                 assert(v.nonEmpty)
                 val applied = pda.applyIterationsCount(expr, v.head, Number(initialIterationCount, CodeLoc(0, 0)))
                 if (v.size >= 2) {
@@ -1006,7 +1010,7 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
               change.apply(Number(initialX, CodeLoc(0, 0))) match {
                 case expr => {
                   println(expr)
-                  val v = LoopSummary.getSymbolicValsFromExpr(expr)
+                  val v = LoopSummary.getSymbolicValsFromExpr(expr, symbolicState)
                   assert(v.nonEmpty)
                   if (v.size >= 2) {
                     Utility.simplifyArithExpr(pda.applyIterationsCount(expr, v.head, lastIterCount)) match {
@@ -1068,12 +1072,13 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
     }
     val executor = new LoopSummary(cfg)
     val decls = main.ast.asInstanceOf[FunDecl].block.vars.flatMap(_.decls)
-    val symbolicState = new SymbolicState(null, PathCondition.initial(), new SymbolicStore(Map.empty))
+    val symbolicState = new SymbolicState(null, Number(1, CodeLoc(0, 0)), new SymbolicStore(Map.empty))
     for (decl <- decls) {
       symbolicState.addedVar(decl.name, SymbolicVal(decl.loc))
     }
     val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState,
-      executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy())))
+      executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy())),
+      mutable.HashSet[Expr]())
     assert(pathsOpt.nonEmpty)
     val paths = pathsOpt.get
     var vertices :List[Vertex] = List()
@@ -1097,7 +1102,7 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
             val change: Expr => Expr = trace._2.find  { case (Identifier(name, loc), _) => name == "x" }.get._2
             change.apply(Number(initialX, CodeLoc(0, 0))) match {
               case expr => {
-                var v = LoopSummary.getSymbolicValsFromExpr(expr)
+                var v = LoopSummary.getSymbolicValsFromExpr(expr, symbolicState)
                 assert(v.nonEmpty)
                 val applied = pda.applyIterationsCount(expr, v.head, Number(initialIterationCount, CodeLoc(0, 0)))
                 if (v.size >= 2) {
@@ -1130,7 +1135,7 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
               change.apply(Number(initialX, CodeLoc(0, 0))) match {
                 case expr => {
                   println(expr)
-                  val v = LoopSummary.getSymbolicValsFromExpr(expr)
+                  val v = LoopSummary.getSymbolicValsFromExpr(expr, symbolicState)
                   assert(v.nonEmpty)
                   if (v.size >= 2) {
                     Utility.simplifyArithExpr(pda.applyIterationsCount(expr, v.head, lastIterCount)) match {
@@ -1193,12 +1198,13 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
     }
     val executor = new LoopSummary(cfg)
     val decls = main.ast.asInstanceOf[FunDecl].block.vars.flatMap(_.decls)
-    val symbolicState = new SymbolicState(null, PathCondition.initial(), new SymbolicStore(Map.empty))
+    val symbolicState = new SymbolicState(null, Number(1, CodeLoc(0, 0)), new SymbolicStore(Map.empty))
     for (decl <- decls) {
       symbolicState.addedVar(decl.name, SymbolicVal(decl.loc))
     }
     val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState,
-      executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy())))
+      executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy())),
+      mutable.HashSet[Expr]())
     assert(pathsOpt.nonEmpty)
     val paths = pathsOpt.get
     var vertices :List[Vertex] = List()
@@ -1222,7 +1228,7 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
             val change: Expr => Expr = trace._2.find  { case (Identifier(name, loc), _) => name == "x" }.get._2
             change.apply(Number(initialX, CodeLoc(0, 0))) match {
               case expr => {
-                var v = LoopSummary.getSymbolicValsFromExpr(expr)
+                var v = LoopSummary.getSymbolicValsFromExpr(expr, symbolicState)
                 assert(v.nonEmpty)
                 val applied = pda.applyIterationsCount(expr, v.head, Number(initialIterationCount, CodeLoc(0, 0)))
                 if (v.size >= 2) {
@@ -1255,7 +1261,7 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
               change.apply(Number(initialX, CodeLoc(0, 0))) match {
                 case expr => {
                   println(expr)
-                  val v = LoopSummary.getSymbolicValsFromExpr(expr)
+                  val v = LoopSummary.getSymbolicValsFromExpr(expr, symbolicState)
                   assert(v.nonEmpty)
                   if (v.size >= 2) {
                     Utility.simplifyArithExpr(pda.applyIterationsCount(expr, v.head, lastIterCount)) match {
@@ -1318,12 +1324,13 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
     }
     val executor = new LoopSummary(cfg)
     val decls = main.ast.asInstanceOf[FunDecl].block.vars.flatMap(_.decls)
-    val symbolicState = new SymbolicState(null, PathCondition.initial(), new SymbolicStore(Map.empty))
+    val symbolicState = new SymbolicState(null, Number(1, CodeLoc(0, 0)), new SymbolicStore(Map.empty))
     for (decl <- decls) {
       symbolicState.addedVar(decl.name, SymbolicVal(decl.loc))
     }
     val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState,
-      executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy())))
+      executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy())),
+      mutable.HashSet[Expr]())
     assert(pathsOpt.nonEmpty)
     val paths = pathsOpt.get
     var vertices :List[Vertex] = List()
@@ -1347,7 +1354,7 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
             val change: Expr => Expr = trace._2.find  { case (Identifier(name, loc), _) => name == "x" }.get._2
             change.apply(Number(initialX, CodeLoc(0, 0))) match {
               case expr => {
-                var v = LoopSummary.getSymbolicValsFromExpr(expr)
+                var v = LoopSummary.getSymbolicValsFromExpr(expr, symbolicState)
                 assert(v.nonEmpty)
                 val applied = pda.applyIterationsCount(expr, v.head, Number(initialIterationCount, CodeLoc(0, 0)))
                 if (v.size >= 2) {
@@ -1380,7 +1387,7 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
               change.apply(Number(initialX, CodeLoc(0, 0))) match {
                 case expr => {
                   println(expr)
-                  val v = LoopSummary.getSymbolicValsFromExpr(expr)
+                  val v = LoopSummary.getSymbolicValsFromExpr(expr, symbolicState)
                   assert(v.nonEmpty)
                   if (v.size >= 2) {
                     Utility.simplifyArithExpr(pda.applyIterationsCount(expr, v.head, lastIterCount)) match {
@@ -1443,12 +1450,13 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
     }
     val executor = new LoopSummary(cfg)
     val decls = main.ast.asInstanceOf[FunDecl].block.vars.flatMap(_.decls)
-    val symbolicState = new SymbolicState(null, PathCondition.initial(), new SymbolicStore(Map.empty))
+    val symbolicState = new SymbolicState(null, Number(1, CodeLoc(0, 0)), new SymbolicStore(Map.empty))
     for (decl <- decls) {
       symbolicState.addedVar(decl.name, SymbolicVal(decl.loc))
     }
     val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState,
-      executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy())))
+      executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy())),
+      mutable.HashSet[Expr]())
     assert(pathsOpt.nonEmpty)
     val paths = pathsOpt.get
     var vertices :List[Vertex] = List()
@@ -1472,7 +1480,7 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
             val change: Expr => Expr = trace._2.find  { case (Identifier(name, loc), _) => name == "x" }.get._2
             change.apply(Number(initialX, CodeLoc(0, 0))) match {
               case expr => {
-                var v = LoopSummary.getSymbolicValsFromExpr(expr)
+                var v = LoopSummary.getSymbolicValsFromExpr(expr, symbolicState)
                 assert(v.nonEmpty)
                 val applied = pda.applyIterationsCount(expr, v.head, Number(initialIterationCount, CodeLoc(0, 0)))
                 if (v.size >= 2) {
@@ -1506,7 +1514,7 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
               change.apply(Number(initialX, CodeLoc(0, 0))) match {
                 case expr => {
                   println(expr)
-                  val v = LoopSummary.getSymbolicValsFromExpr(expr)
+                  val v = LoopSummary.getSymbolicValsFromExpr(expr, symbolicState)
                   assert(v.nonEmpty)
                   if (v.size >= 2) {
                     Utility.simplifyArithExpr(pda.applyIterationsCount(expr, v.head, lastIterCount)) match {
@@ -1571,12 +1579,13 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
     }
     val executor = new LoopSummary(cfg)
     val decls = main.ast.asInstanceOf[FunDecl].block.vars.flatMap(_.decls)
-    val symbolicState = new SymbolicState(null, PathCondition.initial(), new SymbolicStore(Map.empty))
+    val symbolicState = new SymbolicState(null, Number(1, CodeLoc(0, 0)), new SymbolicStore(Map.empty))
     for (decl <- decls) {
       symbolicState.addedVar(decl.name, SymbolicVal(decl.loc))
     }
     val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState,
-      executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy())))
+      executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy())),
+      mutable.HashSet[Expr]())
     assert(pathsOpt.nonEmpty)
     val paths = pathsOpt.get
     var vertices :List[Vertex] = List()
@@ -1600,7 +1609,7 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
             val change: Expr => Expr = trace._2.find  { case (Identifier(name, loc), _) => name == "x" }.get._2
             change.apply(Number(initialX, CodeLoc(0, 0))) match {
               case expr => {
-                var v = LoopSummary.getSymbolicValsFromExpr(expr)
+                var v = LoopSummary.getSymbolicValsFromExpr(expr, symbolicState)
                 assert(v.nonEmpty)
                 val applied = pda.applyIterationsCount(expr, v.head, Number(initialIterationCount, CodeLoc(0, 0)))
                 if (v.size >= 2) {
@@ -1634,7 +1643,7 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
               change.apply(Number(initialX, CodeLoc(0, 0))) match {
                 case expr => {
                   println(expr)
-                  val v = LoopSummary.getSymbolicValsFromExpr(expr)
+                  val v = LoopSummary.getSymbolicValsFromExpr(expr, symbolicState)
                   assert(v.nonEmpty)
                   if (v.size >= 2) {
                     Utility.simplifyArithExpr(pda.applyIterationsCount(expr, v.head, lastIterCount)) match {
@@ -1696,7 +1705,7 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
     }
     val executor = new LoopSummary(cfg)
     val decls = main.ast.asInstanceOf[FunDecl].block.vars.flatMap(_.decls)
-    val symbolicState = new SymbolicState(null, PathCondition.initial(), new SymbolicStore(Map.empty))
+    val symbolicState = new SymbolicState(null, Number(1, CodeLoc(0, 0)), new SymbolicStore(Map.empty))
     for (decl <- decls) {
       symbolicState.addedVar(decl.name, SymbolicVal(decl.loc))
       if (decl.name == "x" || decl.name == "z") {
@@ -1704,7 +1713,8 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
       }
     }
     val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState.deepCopy(),
-      executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy())))
+      executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy())),
+      mutable.HashSet[Expr]())
     assert(pathsOpt.nonEmpty)
     val paths = pathsOpt.get
     var vertices :List[Vertex] = List()
@@ -1731,7 +1741,7 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
             }.get._2
             change.apply(Number(initialX, CodeLoc(0, 0))) match {
               case expr => {
-                var v = LoopSummary.getSymbolicValsFromExpr(expr)
+                var v = LoopSummary.getSymbolicValsFromExpr(expr, symbolicState)
                 assert(v.nonEmpty)
                 val applied = pda.applyIterationsCount(expr, v.head, Number(initialIterationCount, CodeLoc(0, 0)))
                 if (v.size >= 2) {
@@ -1771,7 +1781,7 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
               change.apply(Number(initialX, CodeLoc(0, 0))) match {
                 case expr => {
                   println(expr)
-                  val v = LoopSummary.getSymbolicValsFromExpr(expr)
+                  val v = LoopSummary.getSymbolicValsFromExpr(expr, symbolicState)
                   assert(v.nonEmpty)
                   if (v.size >= 2) {
                     Utility.simplifyArithExpr(pda.applyIterationsCount(expr, v.head, lastIterCount)) match {
@@ -1834,7 +1844,7 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
     }
     val executor = new LoopSummary(cfg)
     val decls = main.ast.asInstanceOf[FunDecl].block.vars.flatMap(_.decls)
-    val symbolicState = new SymbolicState(null, PathCondition.initial(), new SymbolicStore(Map.empty))
+    val symbolicState = new SymbolicState(null, Number(1, CodeLoc(0, 0)), new SymbolicStore(Map.empty))
     for (decl <- decls) {
       symbolicState.addedVar(decl.name, SymbolicVal(decl.loc))
       if (decl.name == "x" || decl.name == "z") {
@@ -1844,7 +1854,8 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
       }
     }
     val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState.deepCopy(),
-      executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy())))
+      executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy())),
+      mutable.HashSet[Expr]())
     assert(pathsOpt.nonEmpty)
     val paths = pathsOpt.get
     var vertices :List[Vertex] = List()
@@ -1871,7 +1882,7 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
             }.get._2
             change.apply(Number(initialX, CodeLoc(0, 0))) match {
               case expr => {
-                var v = LoopSummary.getSymbolicValsFromExpr(expr)
+                var v = LoopSummary.getSymbolicValsFromExpr(expr, symbolicState)
                 assert(v.nonEmpty)
                 val applied = pda.applyIterationsCount(expr, v.head, Number(initialIterationCount, CodeLoc(0, 0)))
                 if (v.size >= 2) {
@@ -1911,7 +1922,7 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
               change.apply(Number(initialX, CodeLoc(0, 0))) match {
                 case expr => {
                   println(expr)
-                  val v = LoopSummary.getSymbolicValsFromExpr(expr)
+                  val v = LoopSummary.getSymbolicValsFromExpr(expr, symbolicState)
                   assert(v.nonEmpty)
                   if (v.size >= 2) {
                     Utility.simplifyArithExpr(pda.applyIterationsCount(expr, v.head, lastIterCount)) match {
@@ -1993,7 +2004,7 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
 
     val executor = new LoopSummary(cfg)
     val decls = main.ast.asInstanceOf[FunDecl].block.vars.flatMap(_.decls)
-    val symbolicState = new SymbolicState(stmt, PathCondition.initial(), new SymbolicStore(Map.empty))
+    val symbolicState = new SymbolicState(stmt, Number(1, CodeLoc(0, 0)), new SymbolicStore(Map.empty))
     for (decl <- decls) {
       symbolicState.addedVar(decl.name, SymbolicVal(decl.loc))
     }
@@ -2055,7 +2066,7 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
       stmt = stmt.succ.head
     }
 
-    var symbolicState = new SymbolicState(null, PathCondition.initial(), new SymbolicStore(Map.empty))
+    var symbolicState = new SymbolicState(null, Number(1, CodeLoc(0, 0)), new SymbolicStore(Map.empty))
     symbolicState = symbolicState.addedVar("i", Number(0, CodeLoc(0, 0)))
     symbolicState = symbolicState.addedVar("k", SymbolicVal(CodeLoc(0, 0)))
     symbolicState = symbolicState.addedVar("n", SymbolicVal(CodeLoc(0, 0)))
@@ -2064,7 +2075,8 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
 
     val executor = new LoopSummary(cfg)
     val paths = executor.getAllPathsInALoop(stmt, symbolicState,
-      executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy())))
+      executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy())),
+      mutable.HashSet[Expr]())
 
     assert(paths.nonEmpty)
     for (path <- paths.get) {
@@ -2106,7 +2118,7 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
       stmt = stmt.succ.head
     }
 
-    var symbolicState = new SymbolicState(null, PathCondition.initial(), new SymbolicStore(Map.empty))
+    var symbolicState = new SymbolicState(null, Number(1, CodeLoc(0, 0)), new SymbolicStore(Map.empty))
     symbolicState = symbolicState.addedVar("j", Number(1, CodeLoc(0, 0)))
     symbolicState = symbolicState.addedVar("i", Number(0, CodeLoc(0, 0)))
     symbolicState = symbolicState.addedVar("k", SymbolicVal(CodeLoc(0, 0)))
@@ -2114,7 +2126,8 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
 
     val executor = new LoopSummary(cfg)
     val paths = new LoopSummary(cfg).getAllPathsInALoop(stmt, symbolicState,
-      executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy())))
+      executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy())),
+      mutable.HashSet[Expr]())
     assert(paths.isEmpty)
   }
 
@@ -2156,12 +2169,13 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
     }
     val executor = new LoopSummary(cfg)
     val decls = main.ast.asInstanceOf[FunDecl].block.vars.flatMap(_.decls)
-    val symbolicState = new SymbolicState(null, PathCondition.initial(), new SymbolicStore(Map.empty))
+    val symbolicState = new SymbolicState(null, Number(1, CodeLoc(0, 0)), new SymbolicStore(Map.empty))
     for (decl <- decls) {
       symbolicState.addedVar(decl.name, SymbolicVal(decl.loc))
     }
     val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState,
-      executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy())))
+      executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy())),
+      mutable.HashSet[Expr]())
     assert(pathsOpt.nonEmpty)
     val paths = pathsOpt.get
     var vertices :List[Vertex] = List()
@@ -2212,12 +2226,13 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
     }
     val executor = new LoopSummary(cfg)
     val decls = main.ast.asInstanceOf[FunDecl].block.vars.flatMap(_.decls)
-    val symbolicState = new SymbolicState(null, PathCondition.initial(), new SymbolicStore(Map.empty))
+    val symbolicState = new SymbolicState(null, Number(1, CodeLoc(0, 0)), new SymbolicStore(Map.empty))
     for (decl <- decls) {
       symbolicState.addedVar(decl.name, SymbolicVal(decl.loc))
     }
     val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState,
-      executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy())))
+      executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy())),
+      mutable.HashSet[Expr]())
     assert(pathsOpt.isEmpty)
   }
 
@@ -2253,7 +2268,7 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
     }
     val executor = new LoopSummary(cfg)
     val decls = main.ast.asInstanceOf[FunDecl].block.vars.flatMap(_.decls)
-    val symbolicState = new SymbolicState(null, PathCondition.initial(), new SymbolicStore(Map.empty))
+    val symbolicState = new SymbolicState(null, Number(1, CodeLoc(0, 0)), new SymbolicStore(Map.empty))
     for (decl <- decls) {
       symbolicState.addedVar(decl.name, SymbolicVal(decl.loc))
       if (decl.name == "i" || decl.name == "k" || decl.name == "n") {
@@ -2261,7 +2276,8 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
       }
     }
     val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState,
-      executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy())))
+      executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy())),
+      mutable.HashSet[Expr]())
     assert(pathsOpt.isEmpty)
   }
 
@@ -2297,7 +2313,7 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
     }
     val executor = new LoopSummary(cfg)
     val decls = main.ast.asInstanceOf[FunDecl].block.vars.flatMap(_.decls)
-    val symbolicState = new SymbolicState(null, PathCondition.initial(), new SymbolicStore(Map.empty))
+    val symbolicState = new SymbolicState(null, Number(1, CodeLoc(0, 0)), new SymbolicStore(Map.empty))
     for (decl <- decls) {
       symbolicState.addedVar(decl.name, SymbolicVal(decl.loc))
       if (decl.name == "i" || decl.name == "k" || decl.name == "n") {
@@ -2306,8 +2322,67 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
       }
     }
     val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState,
-      executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy())))
+      executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy())),
+      mutable.HashSet[Expr]())
     assert(pathsOpt.isEmpty)
+  }
+
+
+  test("change identity function") {
+    val code =
+      """
+        |main() {
+        |  var i, j, k, n;
+        |  i = input;
+        |  k = 1;
+        |  n = input;
+        |  while (i < n) {
+        |     k = k;
+        |     j = k;
+        |     i = i + 1;
+        |  }
+        |  return k;
+        |}
+        |""".stripMargin;
+
+
+    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+    var stmt: CfgNode = cfg.getFce("main")
+    val main = stmt
+
+    while (!stmt.ast.isInstanceOf[WhileStmt]) {
+      stmt = stmt.succ.head
+    }
+    val executor = new LoopSummary(cfg)
+    val decls = main.ast.asInstanceOf[FunDecl].block.vars.flatMap(_.decls)
+    val symbolicState = new SymbolicState(null, Number(1, CodeLoc(0, 0)), new SymbolicStore(Map.empty))
+    for (decl <- decls) {
+      symbolicState.addedVar(decl.name, SymbolicVal(decl.loc))
+    }
+    symbolicState.addedVar("k", Number(1, CodeLoc(0, 0)))
+    val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState,
+      executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy())),
+      mutable.HashSet[Expr]())
+    assert(pathsOpt.nonEmpty)
+    val paths = pathsOpt.get
+    for (path <- paths) {
+      if (path.changes.nonEmpty) {
+        val j = path.changes.find(ch => ch._1.asInstanceOf[Identifier].name == "j").get._2.apply(Number(1, CodeLoc(0, 0))).apply(Number(1, CodeLoc(0, 0)))
+        j match {
+          case Number(value, _) =>
+            assert(value == 1)
+          case _ =>
+            assert(false)
+        }
+        val k = path.changes.find(ch => ch._1.asInstanceOf[Identifier].name == "k").get._2.apply(Number(1, CodeLoc(0, 0))).apply(Number(1, CodeLoc(0, 0)))
+        k match {
+          case Number(value, _) =>
+            assert(value == 1)
+          case _ =>
+            assert(false)
+        }
+      }
+    }
   }
 
 

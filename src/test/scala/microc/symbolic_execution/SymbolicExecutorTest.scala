@@ -1075,14 +1075,14 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
         |  x = {field: input};
         |  z = {field: input};
         |  while (x.field < n) {
-        |   if (z.field > x.field]) {
+        |   if (z.field > x.field) {
         |     x.field = x.field + 1;
         |   }
         |   else {
         |     z.field = z.field + 1;
         |   }
         |  }
-        |  return 1 / (x.field - n.field);
+        |  return 1 / (x.field - n);
         |}
         |""".stripMargin;
 
@@ -1347,6 +1347,44 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
   }
 
 
+  test("basic nested summarization array") {
+    var code =
+      """
+        |main() {
+        |    var i, j, sum, res, n;
+        |    i = 0;
+        |    sum = [0];
+        |    n = input;
+        |    if (n <= 0) {
+        |       n = 1;
+        |    }
+        |
+        |    while (i < n) {
+        |        j = 0;
+        |        while (j < n) {
+        |            sum[0] = sum[0] + 1;
+        |            j = j + 1;
+        |        }
+        |        i = i + 1;
+        |    }
+        |
+        |    if (sum[0] == n * n) {
+        |       res = 1;
+        |    }
+        |    else {
+        |       res = 0;
+        |    }
+        |
+        |    return 1 / res;
+        |}
+        |""".stripMargin;
+
+    var cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+    var executor = new LoopSummary(cfg)
+    assert(executor.run() == 1)
+  }
+
+
   test("basic nested nested summarization") {
     var code =
       """
@@ -1373,6 +1411,48 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
         |    }
         |
         |    if (sum == n * n * n) {
+        |       res = 1;
+        |    }
+        |    else {
+        |       res = 0;
+        |    }
+        |
+        |    return 1 / res;
+        |}
+        |""".stripMargin;
+
+    var cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+    var executor = new LoopSummary(cfg)
+    assert(executor.run() == 1)
+  }
+
+
+  test("basic nested nested summarization arrays") {
+    var code =
+      """
+        |main() {
+        |    var i, j, k, sum, res, n;
+        |    i = 0;
+        |    sum = [0];
+        |    n = input;
+        |    if (n <= 0) {
+        |       n = 1;
+        |    }
+        |
+        |    while (i < n) {
+        |        j = 0;
+        |        while (j < n) {
+        |            k = 0;
+        |            while (k < n) {
+        |               sum[0] = sum[0] + 1;
+        |               k = k + 1;
+        |            }
+        |            j = j + 1;
+        |        }
+        |        i = i + 1;
+        |    }
+        |
+        |    if (sum[0] == n * n * n) {
         |       res = 1;
         |    }
         |    else {
@@ -1858,5 +1938,958 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
       case _: TimeoutException => println("Test terminated due to timeout")
       case NonFatal(e) => println(s"Test failed due to an unexpected error: ${e.getMessage}")
     }
+  }
+
+
+  test("random generated test finishes with no error") {
+    val code =
+      """
+        |main() {
+        |  var var0,var1,var2,var3,var4,var5,var6,var7,var8,var9,var10,var11,var12,var13,var14,var15,var16,var17,var18,var19,var20,var21,var22,var23,var24,var25,var26;
+        |  var0 = {gNqMDLMcfy:0,zkxbIeqIBW:6,LTCEjwyJEu:8,GyWGiMqije:3};
+        |  var1 = 2;
+        |  var2 = 1;
+        |  var3 = 6;
+        |  var4 = alloc 1;
+        |  var5 = 0;
+        |  var6 = 2;
+        |  var7 = {cNlnxMBeVn:alloc 4};
+        |  var8 = {kcruHvbwQz:[-1,3,3,6,2,2,-1]};
+        |  var9 = 5;
+        |  var10 = [alloc 1,alloc -1,alloc 8,alloc 8,alloc 3];
+        |  var11 = {qydKuolMGM:alloc 2,TgjjsYmndd:4,wcMiswESVf:4,DSlZrnKtYQ:0,vbsdVOXOvy:4};
+        |  var12 = 1;
+        |  var13 = -1;
+        |  var14 = 8;
+        |  var15 = alloc 8;
+        |  var16 = alloc 0;
+        |  var17 = 4;
+        |  var18 = alloc 7;
+        |  var19 = alloc 7;
+        |  var20 = {tojgCSrbms:3,IcDhEgNJjW:alloc alloc -1,KvINJvcTrN:alloc 6};
+        |  var21 = -1;
+        |  var22 = 1;
+        |  var23 = 8;
+        |  var24 = alloc [alloc 2,alloc 8,alloc 0,alloc 8,alloc 4,alloc -1,alloc 0];
+        |  var25 = {LLeokGTSoT:-1,AwGowRpTnD:3,nQZdwKgDsM:alloc alloc 7,vPnoyKPxck:alloc alloc 5,LdXKjFBXat:alloc alloc 2};
+        |  var26 = [0,5,-1,-1,8,1];
+        |  output input;
+        |  var26[0] = 4;
+        |  output (((!1 + var25.AwGowRpTnD) + (input * (-1 - 2))) - 2);
+        |  var26[3] = var25.LLeokGTSoT;
+        |  if (input) {
+        |    output var21;
+        |    output var12;
+        |    var15 = alloc input;
+        |    var25 = var25;
+        |  } else {
+        |    if (var0.LTCEjwyJEu) {
+        |      var10[2] = var16;
+        |      output !var22;
+        |      output !(8 - 3);
+        |      output input;
+        |    } else {
+        |      if (var3) {
+        |        output input;
+        |        output input;
+        |        output 0;
+        |        output !var2;
+        |        var3 = (8 - 2);
+        |      } else {
+        |        output input;
+        |        output 4;
+        |        output var13;
+        |      }
+        |      var13 = ((8 - 3) - !4);
+        |      var14 = !(2 * 2);
+        |      if (var0.zkxbIeqIBW) {
+        |        output !var11.TgjjsYmndd;
+        |        output !var11.wcMiswESVf;
+        |        output var9;
+        |        output (9 - 9);
+        |      } else {
+        |        var16 = alloc 8;
+        |        var20 = var20;
+        |        output input;
+        |        output input;
+        |        output !(8 * var0.LTCEjwyJEu);
+        |      }
+        |      var17 = input;
+        |    }
+        |    var26[2] = 8;
+        |    if (var20.tojgCSrbms) {
+        |      output !var0.gNqMDLMcfy;
+        |      var3 = input;
+        |      output 6;
+        |      var3 = input;
+        |      while (!0) {
+        |        var17 = var20.tojgCSrbms;
+        |        output var9;
+        |        var6 = !4;
+        |        output var21;
+        |        var16 = var15;
+        |      }
+        |    } else {
+        |      var24 = var24;
+        |      output 7;
+        |      var26[1] = var0.gNqMDLMcfy;
+        |      var24 = &var10;
+        |      if (1) {
+        |        var2 = input;
+        |        output 4;
+        |        var26 = var26;
+        |        output input;
+        |        var16 = alloc 7;
+        |      } else {
+        |        output input;
+        |        var1 = input;
+        |        output (var17 * input);
+        |      }
+        |    }
+        |    if (2) {
+        |      var14 = var11.DSlZrnKtYQ;
+        |      while (5) {
+        |        output input;
+        |        var0 = var0;
+        |        var6 = (1 + 6);
+        |        var17 = !4;
+        |        output (!!input + (input + var6));
+        |      }
+        |      var26[2] = 0;
+        |      var26[0] = !(2 * 3);
+        |      output input;
+        |    } else {
+        |      while ((var23 - input)) {
+        |        var12 = !0;
+        |        var13 = (1 + 1);
+        |        var24 = &var10;
+        |      }
+        |      if (input) {
+        |        var9 = !2;
+        |        output var0.LTCEjwyJEu;
+        |        output 8;
+        |        var20 = var20;
+        |      } else {
+        |        var14 = input;
+        |        var1 = (4 + 8);
+        |        output (!var22 * (input - var11.vbsdVOXOvy));
+        |        var0 = var0;
+        |        output var3;
+        |      }
+        |      var1 = input;
+        |      var10[4] = alloc !7;
+        |      output var21;
+        |    }
+        |    output !1;
+        |  }
+        |  if (input) {
+        |    var10[3] = alloc !input;
+        |    var12 = input;
+        |    while (!8) {
+        |      while (!input) {
+        |        output var2;
+        |        var10 = var10;
+        |        output var20.tojgCSrbms;
+        |        output var9;
+        |      }
+        |      while (input) {
+        |        output !var11.vbsdVOXOvy;
+        |        output input;
+        |        var24 = alloc [alloc 4,alloc 4,alloc 6,alloc 3,alloc 2,alloc 1,alloc 2,alloc 3];
+        |      }
+        |      output var17;
+        |      var10[3] = &var2;
+        |      var7 = var7;
+        |    }
+        |  } else {
+        |    output var22;
+        |    var10[3] = alloc !input;
+        |    var26[4] = var20.tojgCSrbms;
+        |  }
+        |  output !var11.TgjjsYmndd;
+        |  while (4) {
+        |    while (input) {
+        |      if (8) {
+        |        output !var11.wcMiswESVf;
+        |        output input;
+        |        var14 = (8 - 4);
+        |        output var20.tojgCSrbms;
+        |        var14 = 3;
+        |      } else {
+        |        var15 = &var9;
+        |        output !var6;
+        |        var12 = input;
+        |        output var11.TgjjsYmndd;
+        |        output var11.vbsdVOXOvy;
+        |      }
+        |      while (input) {
+        |        var17 = !3;
+        |        var19 = &var17;
+        |        output !input;
+        |      }
+        |      var17 = var12;
+        |      var26[0] = var0.gNqMDLMcfy;
+        |      var5 = 7;
+        |    }
+        |    output (input * (!2 * 5));
+        |    var10[0] = &var14;
+        |    output 8;
+        |    output input;
+        |  }
+        |  var4 = alloc input;
+        |  return 3;
+        |}
+        |""".stripMargin
+
+    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code))
+    val executor = new LoopSummary(cfg)
+    executor.run()
+  }
+
+
+  test("random generated test finishes with no error 2") {
+    val code =
+      """
+        |main() {
+        |    var var0,var1,var2,var3,var4,var5,var6,var7,var8,var9,var10,var11,var12,var13,var14,var15,var16;
+        |    var0 = 2;
+        |    var1 = 0;
+        |    var2 = alloc 2;
+        |    var3 = alloc 3;
+        |    var4 = {lnLBXVaSFe:alloc alloc -1,kjLXcdwndq:alloc alloc 2};
+        |    var5 = -1;
+        |    var6 = {kKBxNeHCeP:[-1,0,8,1,3,-1,8,2,3],FogZIoHFdb:0,GivSRKSzdu:alloc alloc 4,devBFpwYca:alloc 6};
+        |    var7 = alloc -1;
+        |    var8 = {LiJZrwrJao:3,IHvSjdwuoP:[5,7,2,1,4,6]};
+        |    var9 = alloc 2;
+        |    var10 = 3;
+        |    var11 = {eEfZxCrfzu:alloc 0,xVvQireolI:3,pGdVKqXrhK:5,SmMKAWgdIg:alloc 3,OpjTwGZRMd:alloc 2};
+        |    var12 = 0;
+        |    var13 = 8;
+        |    var14 = 7;
+        |    var15 = {TaAZUNQfde:alloc alloc 4};
+        |    var16 = [7,7,5,5,2];
+        |    output ((input * !input) * (var10 + (var13 * !7)));
+        |    while (!6) {
+        |      output (!(5 - 0) - !var13);
+        |      var16[2] = input;
+        |      while (input) {
+        |        if (var1) {
+        |          output input;
+        |          var11 = var11;
+        |          output var11.xVvQireolI;
+        |          output (var8.LiJZrwrJao - !!var0);
+        |        } else {
+        |          output input;
+        |          output 2;
+        |          var12 = !6;
+        |        }
+        |        if (var5) {
+        |          var7 = var9;
+        |          output var13;
+        |          output input;
+        |          var12 = input;
+        |        } else {
+        |          var2 = var9;
+        |          output !(!var10 - var14);
+        |          var8 = var8;
+        |        }
+        |        if (0) {
+        |          output !((!9 + (input + input)) * 1);
+        |          var13 = input;
+        |          output input;
+        |        } else {
+        |          var7 = var9;
+        |          output input;
+        |          var0 = input;
+        |        }
+        |        output var1;
+        |      }
+        |      var11 = var11;
+        |    }
+        |    var12 = 1;
+        |    var12 = input;
+        |    while (var0) {
+        |      while (input) {
+        |        output (2 + input);
+        |        if (!var14) {
+        |          var4 = var4;
+        |          var12 = 9;
+        |          output var8.LiJZrwrJao;
+        |        } else {
+        |          output var1;
+        |          output input;
+        |          output 2;
+        |        }
+        |        output var11.xVvQireolI;
+        |        var16[2] = input;
+        |        var2 = var7;
+        |      }
+        |      var0 = input;
+        |      output var11.xVvQireolI;
+        |    }
+        |    var6 = var6;
+        |    var15 = var15;
+        |    if (5) {
+        |      var10 = 9;
+        |      var16[4] = 3;
+        |      output var10;
+        |      var16[3] = var8.LiJZrwrJao;
+        |    } else {
+        |      if (input) {
+        |        while (input) {
+        |          output var14;
+        |          var14 = 7;
+        |          var11 = var11;
+        |        }
+        |        var3 = var9;
+        |        var16[0] = input;
+        |      } else {
+        |        output input;
+        |        if (var8.LiJZrwrJao) {
+        |          var13 = input;
+        |          output 7;
+        |          output var8.LiJZrwrJao;
+        |          var3 = alloc 1;
+        |          var4 = var4;
+        |        } else {
+        |          output var6.FogZIoHFdb;
+        |          output (input - input);
+        |          var15 = var15;
+        |          var14 = input;
+        |          var16 = var16;
+        |        }
+        |        var16[0] = var6.FogZIoHFdb;
+        |        var16[2] = !input;
+        |        if (var11.pGdVKqXrhK) {
+        |          output var11.pGdVKqXrhK;
+        |          var8 = var8;
+        |          var0 = (1 - 6);
+        |        } else {
+        |          output (!!7 - input);
+        |          output var11.xVvQireolI;
+        |          var2 = &var1;
+        |          output 4;
+        |        }
+        |      }
+        |      var14 = !input;
+        |      while (!input) {
+        |        var10 = (3 + 1);
+        |        output var11.xVvQireolI;
+        |        output (4 + 5);
+        |        var3 = alloc !2;
+        |        var16[4] = 6;
+        |      }
+        |    }
+        |    var16[4] = var11.pGdVKqXrhK;
+        |    return input;
+        |  }
+        |""".stripMargin
+
+    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code))
+    val executor = new LoopSummary(cfg)
+    executor.run()
+  }
+
+
+
+  test("random generated test finishes with no error 3") {
+    val code =
+      """
+        |main() {
+        |  var var0,var1,var2,var3,var4,var5,var6,var7,var8,var9,var10,var11,var12,var13,var14,var15,var16,var17,var18,var19;
+        |  var0 = 0;
+        |  var1 = -1;
+        |  var2 = [3,4,5,0,2,5,8,2,7];
+        |  var3 = {zdWwCzijUg:[[2,-1,5,0,8],[7,-1,5,7,2,-1],[6,1,5,7,7,4],[7,6,0,4,6,2,3,1,0],[4,3,8,-1,6,0]],BoAmvMovVm:alloc 5,WtQRzqkGJp:1};
+        |  var4 = alloc 6;
+        |  var5 = 7;
+        |  var6 = alloc 1;
+        |  var7 = [0,8,3,1,0,7,1,0];
+        |  var8 = 3;
+        |  var9 = 6;
+        |  var10 = 2;
+        |  var11 = {XhXQvqWFDQ:4};
+        |  var12 = 0;
+        |  var13 = 8;
+        |  var14 = 0;
+        |  var15 = alloc [3,0,8,0,0,0];
+        |  var16 = 4;
+        |  var17 = 6;
+        |  var18 = 2;
+        |  var19 = [5,4,1,2,5,6,8];
+        |  while (input) {
+        |    while (var2[8]) {
+        |      var15 = &var19;
+        |      while (var3.WtQRzqkGJp) {
+        |        var15 = &var7;
+        |        output var18;
+        |        output !input;
+        |      }
+        |      if (var2[7]) {
+        |        var5 = input;
+        |        var2 = var2;
+        |        output (input - var19[2]);
+        |      } else {
+        |        output !var11.XhXQvqWFDQ;
+        |        var14 = var11.XhXQvqWFDQ;
+        |        var12 = [1,3,-1,0,8,0,1][0];
+        |        output input;
+        |        output (var12 - var3.WtQRzqkGJp);
+        |      }
+        |    }
+        |    while ((input * var3.WtQRzqkGJp)) {
+        |      if (input) {
+        |        var9 = var1;
+        |        output (var3.WtQRzqkGJp * var11.XhXQvqWFDQ);
+        |        var0 = (4 - 4);
+        |        output input;
+        |        output var19[2];
+        |      } else {
+        |        var12 = input;
+        |        output !(input + var0);
+        |        output input;
+        |        var7 = var7;
+        |        output var11.XhXQvqWFDQ;
+        |      }
+        |      var7[4] = var2[6];
+        |      while (!!7) {
+        |        output var10;
+        |        var11 = var11;
+        |        output var3.WtQRzqkGJp;
+        |        output input;
+        |      }
+        |      output !input;
+        |    }
+        |    var3 = var3;
+        |    output input;
+        |    var5 = var11.XhXQvqWFDQ;
+        |  }
+        |  output var11.XhXQvqWFDQ;
+        |  while (!(var3.WtQRzqkGJp - input)) {
+        |    while (!!input) {
+        |      if (input) {
+        |        output var14;
+        |        var8 = input;
+        |        output input;
+        |        var16 = !6;
+        |        output var0;
+        |      } else {
+        |        var15 = &var7;
+        |        output var19[6];
+        |        var13 = input;
+        |        output (var2[3] - var19[6]);
+        |      }
+        |      var14 = var19[0];
+        |      if (input) {
+        |        output var1;
+        |        output var3.WtQRzqkGJp;
+        |        var9 = input;
+        |      } else {
+        |        output input;
+        |        output input;
+        |        output input;
+        |      }
+        |      if (!var14) {
+        |        var4 = &var17;
+        |        var16 = var3.WtQRzqkGJp;
+        |        var17 = var3.WtQRzqkGJp;
+        |        output var2[5];
+        |      } else {
+        |        output input;
+        |        var5 = input;
+        |        var7 = var7;
+        |        output input;
+        |      }
+        |      var1 = var18;
+        |    }
+        |    if (var3.WtQRzqkGJp) {
+        |      output !!-1;
+        |      while (var14) {
+        |        var8 = var11.XhXQvqWFDQ;
+        |        var5 = input;
+        |        output var3.WtQRzqkGJp;
+        |      }
+        |      var2[8] = var11.XhXQvqWFDQ;
+        |      if (![-1,0,-1,-1,0,7,3,-1][0]) {
+        |        output input;
+        |        var0 = var9;
+        |        var12 = (2 + 8);
+        |      } else {
+        |        var9 = (0 + -1);
+        |        var19 = var19;
+        |        output var3.WtQRzqkGJp;
+        |        output input;
+        |        var8 = var3.WtQRzqkGJp;
+        |      }
+        |    } else {
+        |      if (var2[2]) {
+        |        output input;
+        |        var2 = var2;
+        |        output var0;
+        |      } else {
+        |        output var1;
+        |        output var3.WtQRzqkGJp;
+        |        var7 = var7;
+        |        output var7[6];
+        |      }
+        |      output input;
+        |      var2[4] = var12;
+        |    }
+        |    while ((var19[2] + input)) {
+        |      if (var14) {
+        |        output var2[1];
+        |        output var0;
+        |        output var3.WtQRzqkGJp;
+        |        output var3.WtQRzqkGJp;
+        |      } else {
+        |        var3 = var3;
+        |        var5 = [5,6,0,5,7][3];
+        |        var12 = [4,3,6,7,5,5,0,2][3];
+        |      }
+        |      while (var9) {
+        |        output !(var18 + input);
+        |        output var2[0];
+        |        var6 = alloc -1;
+        |        var10 = var5;
+        |        var0 = var3.WtQRzqkGJp;
+        |      }
+        |      var7[1] = var3.WtQRzqkGJp;
+        |    }
+        |    while (var7[3]) {
+        |      var5 = (input - input);
+        |      var2 = var2;
+        |      var19 = var19;
+        |    }
+        |    if ((var16 * var3.WtQRzqkGJp)) {
+        |      output var3.WtQRzqkGJp;
+        |      while (var11.XhXQvqWFDQ) {
+        |        output (!!input * var2[1]);
+        |        output input;
+        |        output input;
+        |      }
+        |      var2[5] = !input;
+        |      while (var3.WtQRzqkGJp) {
+        |        output input;
+        |        var11 = var11;
+        |        output input;
+        |        var18 = var5;
+        |        output var3.WtQRzqkGJp;
+        |      }
+        |    } else {
+        |      if ((var11.XhXQvqWFDQ * [5,7,0,1,0][2])) {
+        |        var15 = &var7;
+        |        var2 = var2;
+        |        var19 = var19;
+        |      } else {
+        |        output var2[6];
+        |        var3 = var3;
+        |        var10 = [1,8,6,8,0][3];
+        |        var5 = (3 + 5);
+        |        output !!var5;
+        |      }
+        |      var3 = var3;
+        |      if (var7[4]) {
+        |        var17 = [-1,0,0,8,8,5][2];
+        |        output input;
+        |        output input;
+        |        output !(input - var7[7]);
+        |      } else {
+        |        var5 = [0,0,7,6,2,6][4];
+        |        var12 = [-1,6,3,2,1,4,5,4][2];
+        |        output var9;
+        |      }
+        |    }
+        |  }
+        |  var7 = var7;
+        |  var2[7] = var10;
+        |  var17 = var2[2];
+        |  return ([5,8,5,5,8,5,4,5][3] + var13);
+        |}
+        |""".stripMargin
+
+    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code))
+    val executor = new LoopSummary(cfg)
+    executor.run()
+  }
+
+
+  test("random generated test finishes with no error 4") {
+    val code =
+      """
+        |main() {
+        |  var var0,var1,var2,var3,var4,var5,var6,var7,var8,var9,var10,var11,var12,var13,var14,var15,var16,var17,var18,var19,var20,var21,var22,var23,var24,var25;
+        |  var0 = 5;
+        |  var1 = alloc 7;
+        |  var2 = 8;
+        |  var3 = alloc 7;
+        |  var4 = 6;
+        |  var5 = alloc 3;
+        |  var6 = alloc alloc 2;
+        |  var7 = {TzupoNltYb:alloc -1,qZYPJZVWSM:0};
+        |  var8 = {GdLArBolNe:6,aeAGtJJzVj:-1,zRxEDpFWqe:7,FQGXaOuEFB:alloc 0};
+        |  var9 = 5;
+        |  var10 = 2;
+        |  var11 = 3;
+        |  var12 = 4;
+        |  var13 = 4;
+        |  var14 = alloc 0;
+        |  var15 = alloc -1;
+        |  var16 = alloc alloc 7;
+        |  var17 = [1,8,5,-1,8,5];
+        |  var18 = [7,3,2,7,8,-1];
+        |  var19 = -1;
+        |  var20 = 1;
+        |  var21 = 7;
+        |  var22 = [alloc -1,alloc 5,alloc 6,alloc 1,alloc 6];
+        |  var23 = [8,3,0,2,6,2,5,0,-1];
+        |  var24 = alloc [3,7,1,8,-1,0,8,3,8];
+        |  var25 = [6,8,3,1,2,0,1];
+        |  var23 = var23;
+        |  while (input) {
+        |    var17[0] = (!(2 * 1) * ([8,4,7,5,4,6,-1,7,4][2] - input));
+        |    output input;
+        |    output var7.qZYPJZVWSM;
+        |    while (input) {
+        |      var18[3] = input;
+        |      while (![3,2,8,4,1,6,1][3]) {
+        |        var5 = &var9;
+        |        output input;
+        |        output var25[3];
+        |        output input;
+        |        output var17[2];
+        |      }
+        |      output input;
+        |      while (input) {
+        |        var11 = (7 - 3);
+        |        var17 = var18;
+        |        output var8.zRxEDpFWqe;
+        |        var9 = [5,2,5,-1,6,4,0,5,4][4];
+        |      }
+        |      output input;
+        |    }
+        |    output (var4 - var21);
+        |  }
+        |  var8 = var8;
+        |  var14 = &var13;
+        |  while (var4) {
+        |    var12 = !var23[3];
+        |    var18 = var17;
+        |    while (input) {
+        |      while (input) {
+        |        var21 = !4;
+        |        var2 = !2;
+        |        output input;
+        |      }
+        |      if (input) {
+        |        var2 = (7 - 3);
+        |        output var17[1];
+        |        var23 = var23;
+        |      } else {
+        |        var5 = alloc 7;
+        |        output input;
+        |        var17 = var18;
+        |        output var17[5];
+        |      }
+        |      var18[2] = var7.qZYPJZVWSM;
+        |    }
+        |  }
+        |  if (var23[7]) {
+        |    while (input) {
+        |      var17 = var17;
+        |      output var20;
+        |      var22[3] = &var9;
+        |    }
+        |    if (!var10) {
+        |      if (!var21) {
+        |        var4 = var8.zRxEDpFWqe;
+        |        output var8.zRxEDpFWqe;
+        |        output var0;
+        |      } else {
+        |        var22 = var22;
+        |        var15 = &var9;
+        |        output var13;
+        |        var20 = var8.aeAGtJJzVj;
+        |      }
+        |      while (input) {
+        |        output input;
+        |        var13 = input;
+        |        output var18[5];
+        |        var19 = input;
+        |        output var8.zRxEDpFWqe;
+        |      }
+        |      var6 = var16;
+        |      var22 = var22;
+        |      var15 = &var19;
+        |    } else {
+        |      var17 = var17;
+        |      var17[1] = input;
+        |      if (var8.zRxEDpFWqe) {
+        |        output input;
+        |        output input;
+        |        output var8.zRxEDpFWqe;
+        |        var19 = [3,6,1,4,2,5][1];
+        |      } else {
+        |        var8 = var8;
+        |        output var17[4];
+        |        var14 = var5;
+        |        output !!var18[2];
+        |      }
+        |      if (var18[3]) {
+        |        var13 = [0,5,5,6,4,5][2];
+        |        var16 = alloc alloc 8;
+        |        var16 = alloc alloc 8;
+        |      } else {
+        |        output var8.aeAGtJJzVj;
+        |        var11 = (7 - 6);
+        |        var24 = alloc [0,1,7,8,8];
+        |        output !var23[2];
+        |      }
+        |      var22[4] = var1;
+        |    }
+        |    var22[2] = alloc !(1 + 3);
+        |    var23[3] = input;
+        |    if (input) {
+        |      while (input) {
+        |        var6 = var6;
+        |        output input;
+        |        var7 = var7;
+        |        output input;
+        |      }
+        |      while (!(4 - 6)) {
+        |        output var2;
+        |        var14 = alloc 4;
+        |        var16 = &var15;
+        |      }
+        |      while (input) {
+        |        output (var10 * var11);
+        |        output var8.zRxEDpFWqe;
+        |        output var18[4];
+        |        output !input;
+        |      }
+        |      while (var7.qZYPJZVWSM) {
+        |        output var19;
+        |        var15 = alloc 7;
+        |        output input;
+        |        output var2;
+        |      }
+        |      output input;
+        |    } else {
+        |      var25[5] = var17[2];
+        |      var18[3] = input;
+        |      while (!var19) {
+        |        var5 = &var10;
+        |        var18 = var18;
+        |        output var10;
+        |      }
+        |    }
+        |  } else {
+        |    if (var2) {
+        |      var14 = var15;
+        |      while (input) {
+        |        var21 = (7 * 5);
+        |        output var25[5];
+        |        output var8.aeAGtJJzVj;
+        |      }
+        |      while ((var8.zRxEDpFWqe - [-1,0,6,2,8,5][5])) {
+        |        var12 = (4 + 5);
+        |        var22 = var22;
+        |        output !var17[5];
+        |        output var20;
+        |        var8 = var8;
+        |      }
+        |    } else {
+        |      var22 = var22;
+        |      var8 = var8;
+        |      while (var17[5]) {
+        |        var1 = &var4;
+        |        var12 = !0;
+        |        output input;
+        |      }
+        |      if (((3 - 6) * [3,0,1,3,4][4])) {
+        |        output (!input + var18[2]);
+        |        output input;
+        |        var19 = input;
+        |      } else {
+        |        output !var8.zRxEDpFWqe;
+        |        output input;
+        |        var3 = alloc 4;
+        |      }
+        |      var23[3] = var25[6];
+        |    }
+        |    var3 = &var2;
+        |    var15 = &var12;
+        |  }
+        |  var25[5] = var8.GdLArBolNe;
+        |  if (input) {
+        |    while (var17[3]) {
+        |      var3 = var1;
+        |      var18[0] = var2;
+        |      var23 = var23;
+        |      if ((var8.zRxEDpFWqe * [7,2,6,8,0,1,4][0])) {
+        |        var4 = var8.aeAGtJJzVj;
+        |        output var8.zRxEDpFWqe;
+        |        var15 = &var0;
+        |      } else {
+        |        var21 = !1;
+        |        output var8.aeAGtJJzVj;
+        |        output !var8.aeAGtJJzVj;
+        |        var5 = &var9;
+        |        output input;
+        |      }
+        |      if (var18[1]) {
+        |        output var8.GdLArBolNe;
+        |        var3 = &var9;
+        |        var5 = var3;
+        |      } else {
+        |        var14 = alloc 7;
+        |        var9 = [4,4,4,3,1,4,4,1,6][4];
+        |        output var23[3];
+        |      }
+        |    }
+        |    while (!var13) {
+        |      if (!input) {
+        |        var20 = var8.zRxEDpFWqe;
+        |        output input;
+        |        var24 = &var17;
+        |      } else {
+        |        var0 = !2;
+        |        var21 = var0;
+        |        var4 = var8.aeAGtJJzVj;
+        |        var4 = var20;
+        |        var10 = input;
+        |      }
+        |      output var8.GdLArBolNe;
+        |      while (input) {
+        |        output !!input;
+        |        var17 = var17;
+        |        output var25[2];
+        |      }
+        |      var2 = !var9;
+        |      var25[6] = var20;
+        |    }
+        |    while (input) {
+        |      var1 = alloc [1,2,2,-1,0,7,7,1][1];
+        |      if (var11) {
+        |        output var8.aeAGtJJzVj;
+        |        output (!var8.zRxEDpFWqe - input);
+        |        var2 = var7.qZYPJZVWSM;
+        |        output (input - input);
+        |      } else {
+        |        var24 = var24;
+        |        var5 = &var20;
+        |        output var8.GdLArBolNe;
+        |      }
+        |      if (input) {
+        |        var4 = input;
+        |        var17 = var17;
+        |        output var8.aeAGtJJzVj;
+        |        output !input;
+        |        output var18[4];
+        |      } else {
+        |        var21 = (8 - 5);
+        |        var25 = var25;
+        |        var2 = var20;
+        |        output ((var18[3] * var17[4]) * var17[5]);
+        |        var18 = var17;
+        |      }
+        |      output input;
+        |      var23[4] = !(6 + 8);
+        |    }
+        |  } else {
+        |    var6 = alloc alloc input;
+        |    var21 = input;
+        |    var18[2] = var4;
+        |    output input;
+        |  }
+        |  return var7.qZYPJZVWSM;
+        |}
+        |""".stripMargin
+
+    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code))
+    val executor = new SymbolicExecutor(cfg)
+    executor.run()
+  }
+
+
+  test("random generated test finishes with no error 5") {
+    val code =
+      """
+        |main() {
+        |  var var0,var1,var2,var3,var4,var5,var6,var7,var8,var9,var10,var11,var12,var13,var14,var15,var16,var17,var18,var19,var20,var21,var22,var23,var24,var25,var26,var27;
+        |  var0 = 6;
+        |  var1 = {iXZFxOoiyJ:[-1,3,5,0,3,6,-1]};
+        |  var2 = [5,8,7,-1,8,2,3];
+        |  var3 = alloc 8;
+        |  var4 = {hjdhooBgOc:alloc 1,yQZOcCuZOL:7};
+        |  var5 = {xAnTWDKxZD:alloc -1,RuVtielovZ:0,xgfKipxRPP:alloc 8,aGrGpkmVRQ:alloc alloc 4,sxVrQHTbkO:8};
+        |  var6 = [[5,4,6,0,1,7],[5,3,8,3,6,2,5,0,8],[3,1,4,1,1,2,2,0,0],[-1,8,-1,8,1,7],[1,2,2,2,8,7,5],[2,4,7,2,3],[3,8,7,4,1,7,8],[7,0,7,1,8],[0,-1,4,6,1]];
+        |  var7 = alloc 5;
+        |  var8 = alloc alloc 8;
+        |  var9 = 7;
+        |  var10 = 4;
+        |  var11 = -1;
+        |  var12 = {ICabtmJOkg:8};
+        |  var13 = [-1,6,5,6,5,4,5,-1];
+        |  var14 = [3,6,4,2,7,2,6,4,8];
+        |  var15 = {jDdRKyKnue:alloc 4,DEcoNCylTA:alloc alloc 2,JrzumWmHkI:[alloc 7,alloc 8,alloc 6,alloc 8,alloc 1,alloc 8,alloc 8,alloc 8]};
+        |  var16 = 6;
+        |  var17 = {gJkmjNKoji:alloc [-1,4,8,3,-1,-1,-1,-1],RkSTnfQvho:1};
+        |  var18 = 5;
+        |  var19 = 3;
+        |  var20 = [alloc 2,alloc 0,alloc 0,alloc 3,alloc 7,alloc 2];
+        |  var21 = alloc 3;
+        |  var22 = 2;
+        |  var23 = 5;
+        |  var24 = 6;
+        |  var25 = alloc 5;
+        |  var26 = 6;
+        |  var27 = [3,1,1,-1,2,2,7,8];
+        |  var20[2] = &var10;
+        |  var2[1] = input;
+        |  while ((!input - !input)) {
+        |    var13[4] = var13[4];
+        |    var13[1] = var14[8];
+        |    if (var19) {
+        |      if (input) {
+        |        output (!!input - input);
+        |        output var17.RkSTnfQvho;
+        |        output (input * var12.ICabtmJOkg);
+        |      } else {
+        |        var22 = var10;
+        |        output var4.yQZOcCuZOL;
+        |        output !var14[5];
+        |      }
+        |      output (!6 - input);
+        |      if (var19) {
+        |        output var5.sxVrQHTbkO;
+        |        output input;
+        |        var4 = var4;
+        |        var3 = var21;
+        |      } else {
+        |        output var5.RuVtielovZ;
+        |        var17 = var17;
+        |        output input;
+        |        output (var13[2] - input);
+        |        var16 = !0;
+        |      }
+        |    } else {
+        |      output !var0;
+        |      var2[4] = input;
+        |      var13[4] = (var12.ICabtmJOkg - [5,1,7,-1,-1,4][5]);
+        |      var14[4] = input;
+        |      var14[3] = input;
+        |    }
+        |    var17 = var17;
+        |  }
+        |  output (input - var5.sxVrQHTbkO);
+        |  var2[5] = var4.yQZOcCuZOL;
+        |  return var14[7];
+        |}
+        |""".stripMargin
+
+    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code))
+    val executor = new SymbolicExecutor(cfg)
+    executor.run()
   }
 }

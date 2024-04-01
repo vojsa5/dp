@@ -6,19 +6,33 @@ import microc.symbolic_execution.Value.{ArrVal, IteVal, NullRef, PointerVal, Rec
 
 import scala.collection.mutable
 
+object ConstraintSolver {
+
+  def getCondition(ctx: Context, expr: com.microsoft.z3.Expr[_]): BoolExpr = {
+    expr match {
+      case op: BoolExpr => op
+      case op: IntExpr => ctx.mkNot(ctx.mkEq(op, ctx.mkInt(0)))
+      case op: IntNum =>
+        ctx.mkNot(ctx.mkEq(op, ctx.mkInt(0)))
+    }
+  }
+
+}
+
 class ConstraintSolver(val ctx: Context) {
 
 
   def solveCondition(pathCondition: Expr, guard: Expr, symbolicState: SymbolicState): Status = {
     val ifPathCondition = BinaryOp(AndAnd, pathCondition, guard, guard.loc)
     val ifConstraint = createConstraintWithState(ifPathCondition, symbolicState)
+    //println(ifConstraint)
     solveConstraint(ifConstraint)
   }
 
 
   def solveConstraint(constraint: com.microsoft.z3.Expr[_]): Status = {
     val solver = ctx.mkSolver()
-    solver.add(getCondition(constraint))
+    solver.add(ConstraintSolver.getCondition(ctx, constraint))
     solver.check()
   }
 
@@ -81,9 +95,9 @@ class ConstraintSolver(val ctx: Context) {
               createConstraint(right).asInstanceOf[ArithExpr[ArithSort]]
             )
           case AndAnd =>
-            ctx.mkAnd(getCondition(createConstraint(left)), getCondition(createConstraint(right)))
+            ctx.mkAnd(ConstraintSolver.getCondition(ctx, createConstraint(left)), ConstraintSolver.getCondition(ctx, createConstraint(right)))
           case OrOr =>
-            ctx.mkOr(getCondition(createConstraint(left)), getCondition(createConstraint(right)))
+            ctx.mkOr(ConstraintSolver.getCondition(ctx, createConstraint(left)), ConstraintSolver.getCondition(ctx, createConstraint(right)))
         }
       case Identifier(name, loc) => ctx.mkIntConst(name)
       case Number(value, _) => ctx.mkInt(value)
@@ -94,7 +108,7 @@ class ConstraintSolver(val ctx: Context) {
   }
 
 
-  def valToExpr(v: Val, state: SymbolicState, allowNonInitializedVals: Boolean = false): com.microsoft.z3.Expr[_] = {
+  private def valToExpr(v: Val, state: SymbolicState, allowNonInitializedVals: Boolean = false): com.microsoft.z3.Expr[_] = {
     v match {
       case Number(value, _) =>
         ctx.mkInt(value)
@@ -104,7 +118,7 @@ class ConstraintSolver(val ctx: Context) {
         createConstraintWithState(expr, state, allowNonInitializedVals)
       case IteVal(val1, val2, cond, _) =>
         ctx.mkITE(
-          getCondition(createConstraintWithState(cond, state, allowNonInitializedVals)),
+          ConstraintSolver.getCondition(ctx, createConstraintWithState(cond, state, allowNonInitializedVals)),
           valToExpr(val1, state, allowNonInitializedVals),
           valToExpr(val2, state, allowNonInitializedVals)
         )
@@ -183,13 +197,13 @@ class ConstraintSolver(val ctx: Context) {
             )
           case AndAnd =>
             ctx.mkAnd(
-              getCondition(createConstraintWithState(left, state, allowNonInitializedVals)),
-              getCondition(createConstraintWithState(right, state, allowNonInitializedVals))
+              ConstraintSolver.getCondition(ctx, createConstraintWithState(left, state, allowNonInitializedVals)),
+              ConstraintSolver.getCondition(ctx, createConstraintWithState(right, state, allowNonInitializedVals))
             )
           case OrOr =>
             ctx.mkOr(
-              getCondition(createConstraintWithState(left, state, allowNonInitializedVals)),
-              getCondition(createConstraintWithState(right, state, allowNonInitializedVals))
+              ConstraintSolver.getCondition(ctx, createConstraintWithState(left, state, allowNonInitializedVals)),
+              ConstraintSolver.getCondition(ctx, createConstraintWithState(right, state, allowNonInitializedVals))
             )
         }
       case Identifier(name, loc) =>
@@ -200,7 +214,7 @@ class ConstraintSolver(val ctx: Context) {
       case Null(_) => ctx.mkInt(0)
       case IteVal(trueState, falseState, expr, _) =>
         ctx.mkITE(
-          getCondition(createConstraintWithState(expr, state, allowNonInitializedVals)),
+          ConstraintSolver.getCondition(ctx, createConstraintWithState(expr, state, allowNonInitializedVals)),
           valToExpr(trueState, state, allowNonInitializedVals),
           valToExpr(falseState, state, allowNonInitializedVals)
         )
@@ -254,9 +268,10 @@ class ConstraintSolver(val ctx: Context) {
                 symbolicState.getVal(elems(value)).get.asInstanceOf[Symbolic]
               case _ =>
                 throw new Exception("IMPLEMENT")
+            }
           case _ =>
             throw new Exception("IMPLEMENT")
-            }
+
         }
       case Deref(pointer, loc) =>
         getTargetInner(pointer, symbolicState) match {
@@ -273,7 +288,7 @@ class ConstraintSolver(val ctx: Context) {
 
 
 
-  def applyTheStateOnce(expr: Expr, state: SymbolicState, allowReturnNonInitialized: Boolean = false): Expr = {
+  private def applyTheStateOnce(expr: Expr, state: SymbolicState, allowReturnNonInitialized: Boolean = false): Expr = {
     expr match {
       case Not(expr, loc) =>
         Not(applyTheStateOnce(expr, state, allowReturnNonInitialized), loc)
@@ -292,7 +307,7 @@ class ConstraintSolver(val ctx: Context) {
     }
   }
 
-  def applyTheStateWithChangesAsFunctions(expr: Expr, symbolicState: SymbolicState, changes: mutable.HashMap[String, Expr => Expr]): Expr = {
+  private def applyTheStateWithChangesAsFunctions(expr: Expr, symbolicState: SymbolicState, changes: mutable.HashMap[String, Expr => Expr]): Expr = {
     var res = expr match {
       case Not(expr, loc) =>
         Not(applyTheStateWithChangesAsFunctions(expr, symbolicState, changes), loc)
@@ -317,15 +332,6 @@ class ConstraintSolver(val ctx: Context) {
       res = applyTheStateWithChangesAsFunctions(res, symbolicState, changes)
     }
     res
-  }
-
-  def getCondition(expr: com.microsoft.z3.Expr[_]): BoolExpr = {
-    expr match {
-      case op: BoolExpr => op
-      case op: IntExpr => ctx.mkNot(ctx.mkEq(op, ctx.mkInt(0)))
-      case op: IntNum =>
-        ctx.mkNot(ctx.mkEq(op, ctx.mkInt(0)))
-    }
   }
 
 }

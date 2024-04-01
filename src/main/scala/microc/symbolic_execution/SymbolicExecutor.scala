@@ -114,7 +114,7 @@ class SymbolicExecutor(program: ProgramCfg,
 
 
   def run(): Int = {
-    val initialState = new SymbolicState(program.getFce("main"), PathCondition.initial(), new SymbolicStore(functionDeclarations))
+    val initialState = new SymbolicState(program.getFce("main"), Number(1, CodeLoc(0, 0)), new SymbolicStore(functionDeclarations))
     stateHistory match {
       case Some(history) =>
         history.initial = initialState
@@ -224,7 +224,7 @@ class SymbolicExecutor(program: ProgramCfg,
       if (!loops.contains(loop)) {
         val loopIter = createSubsumptionLoopVar()
         loops.put(loop, loopIter)
-        solver.solveCondition(symbolicState.pathCondition.expr, loopAst.guard, symbolicState) match {
+        solver.solveCondition(symbolicState.pathCondition, loopAst.guard, symbolicState) match {
           case Status.SATISFIABLE | Status.UNKNOWN =>
             val nextState = symbolicState.getIfTrueState()
             var goOutOfSubsumptionIteration = false
@@ -300,10 +300,9 @@ class SymbolicExecutor(program: ProgramCfg,
       }
     }
     var whileLeavingState: Option[SymbolicState] = None
-    solver.solveCondition(symbolicState.pathCondition.expr, Not(loopAst.guard, loopAst.guard.loc), symbolicState) match {
+    solver.solveCondition(symbolicState.pathCondition, Not(loopAst.guard, loopAst.guard.loc), symbolicState) match {
       case Status.SATISFIABLE | Status.UNKNOWN =>
         val nextState = symbolicState.getIfFalseState()
-        //searchStrategy.addState(nextState)
         if (stateHistory.nonEmpty) {
           stateHistory.get.addNode(symbolicState, nextState)
         }
@@ -313,7 +312,7 @@ class SymbolicExecutor(program: ProgramCfg,
         currentPathStopped = true
     }
     if (subsumption.isEmpty) {
-      solver.solveCondition(symbolicState.pathCondition.expr, loopAst.guard, symbolicState) match {
+      solver.solveCondition(symbolicState.pathCondition, loopAst.guard, symbolicState) match {
         case Status.SATISFIABLE | Status.UNKNOWN =>
           val nextState = symbolicState.getIfTrueState()
           //        if (inSubsumptionIteration) {
@@ -333,7 +332,7 @@ class SymbolicExecutor(program: ProgramCfg,
       subsumption.get.computeAnnotation(symbolicState.nextStatement)
     }
     if (whileLeavingState.nonEmpty) {
-      symbolicState.pathCondition = whileLeavingState.get.pathCondition.prev.get
+      symbolicState.pathCondition = whileLeavingState.get.pathCondition
       symbolicState.returnValue = whileLeavingState.get.returnValue
       symbolicState.symbolicStore = whileLeavingState.get.symbolicStore
     }
@@ -345,7 +344,6 @@ class SymbolicExecutor(program: ProgramCfg,
     }
     val statement = symbolicState.nextStatement
     val ast = symbolicState.nextStatement.ast
-    println(statement)
     if (subsumption.nonEmpty) {
       if (subsumption.get.checkSubsumption(symbolicState)) {
         statistics.stoppedWithSubsumption += 1
@@ -389,7 +387,7 @@ class SymbolicExecutor(program: ProgramCfg,
         stepOnAssign(a, symbolicState)
       case IfStmt(guard, _, _, _) =>
         var ifState: Option[SymbolicState] = None
-        solver.solveCondition(symbolicState.pathCondition.expr, guard, symbolicState) match {
+        solver.solveCondition(symbolicState.pathCondition, guard, symbolicState) match {
           case Status.SATISFIABLE | Status.UNKNOWN =>
             val nextState = symbolicState.getIfTrueState()
             if (stateHistory.nonEmpty) {
@@ -401,7 +399,7 @@ class SymbolicExecutor(program: ProgramCfg,
             currentPathStopped = true
         }
 
-        solver.solveCondition(symbolicState.pathCondition.expr, Not(guard, guard.loc), symbolicState) match {
+        solver.solveCondition(symbolicState.pathCondition, Not(guard, guard.loc), symbolicState) match {
           case Status.SATISFIABLE | Status.UNKNOWN =>
             val path = symbolicState.getIfFalseState()
             if (stateHistory.nonEmpty) {
@@ -423,7 +421,6 @@ class SymbolicExecutor(program: ProgramCfg,
         }
         if (ifState.nonEmpty) {
           symbolicState.pathCondition = ifState.get.pathCondition
-          //symbolicState.pathCondition = ifState.get.pathCondition.prev.get
           symbolicState.returnValue = ifState.get.returnValue
           symbolicState.symbolicStore = ifState.get.symbolicStore
         }
@@ -468,19 +465,19 @@ class SymbolicExecutor(program: ProgramCfg,
 
       case (e1: Symbolic, e2: Symbolic) =>
         operator match {
-          case Plus => SymbolicExpr(BinaryOp(Plus, e1, e2, loc), loc)
-          case Minus => SymbolicExpr(BinaryOp(Minus, e1, e2, loc), loc)
-          case Times => SymbolicExpr(BinaryOp(Times, e1, e2, loc), loc)
+          case Plus => Utility.removeUnnecessarySymbolicExpr(SymbolicExpr(BinaryOp(Plus, e1, e2, loc), loc))
+          case Minus => Utility.removeUnnecessarySymbolicExpr(SymbolicExpr(BinaryOp(Minus, e1, e2, loc), loc))
+          case Times => Utility.removeUnnecessarySymbolicExpr(SymbolicExpr(BinaryOp(Times, e1, e2, loc), loc))
           case Divide => {
             e2 match {
               case Number(v, _) =>
                 if (v == 0) {
                   throw errorDivByZero(loc, symbolicState)
                 }
-                SymbolicExpr(BinaryOp(Divide, e1, e2, loc), loc)
+                Utility.removeUnnecessarySymbolicExpr(SymbolicExpr(BinaryOp(Divide, e1, e2, loc), loc))
               case _ =>
                 solver.solveConstraint(
-                  solver.createConstraintWithState(BinaryOp(AndAnd, BinaryOp(Equal, e2, Number(0, loc), loc), symbolicState.pathCondition.expr, loc), symbolicState)) match {
+                  solver.createConstraintWithState(BinaryOp(AndAnd, BinaryOp(Equal, e2, Number(0, loc), loc), symbolicState.pathCondition, loc), symbolicState)) match {
                   case Status.SATISFIABLE =>
                     throw errorDivByZero(loc, symbolicState)
                   case Status.UNSATISFIABLE => SymbolicExpr(BinaryOp(Divide, e1, e2, loc), loc)
@@ -489,15 +486,14 @@ class SymbolicExecutor(program: ProgramCfg,
             }
 
           }
-          case Equal =>
-            SymbolicExpr(BinaryOp(Equal, e1, e2, loc), loc)
-          case NotEqual => SymbolicExpr(BinaryOp(NotEqual, e1, e2, loc), loc)
-          case GreaterThan => SymbolicExpr(BinaryOp(GreaterThan, e1, e2, loc), loc)
-          case GreaterEqual => SymbolicExpr(BinaryOp(GreaterEqual, e1, e2, loc), loc)
-          case LowerThan => SymbolicExpr(BinaryOp(LowerThan, e1, e2, loc), loc)
-          case LowerEqual => SymbolicExpr(BinaryOp(LowerEqual, e1, e2, loc), loc)
-          case AndAnd => SymbolicExpr(BinaryOp(AndAnd, e1, e2, loc), loc)
-          case OrOr => SymbolicExpr(BinaryOp(OrOr, e1, e2, loc), loc)
+          case Equal => Utility.removeUnnecessarySymbolicExpr(SymbolicExpr(BinaryOp(Equal, e1, e2, loc), loc))
+          case NotEqual => Utility.removeUnnecessarySymbolicExpr(SymbolicExpr(BinaryOp(NotEqual, e1, e2, loc), loc))
+          case GreaterThan => Utility.removeUnnecessarySymbolicExpr(SymbolicExpr(BinaryOp(GreaterThan, e1, e2, loc), loc))
+          case GreaterEqual => Utility.removeUnnecessarySymbolicExpr(SymbolicExpr(BinaryOp(GreaterEqual, e1, e2, loc), loc))
+          case LowerThan => Utility.removeUnnecessarySymbolicExpr(SymbolicExpr(BinaryOp(LowerThan, e1, e2, loc), loc))
+          case LowerEqual => Utility.removeUnnecessarySymbolicExpr(SymbolicExpr(BinaryOp(LowerEqual, e1, e2, loc), loc))
+          case AndAnd => Utility.removeUnnecessarySymbolicExpr(SymbolicExpr(BinaryOp(AndAnd, e1, e2, loc), loc))
+          case OrOr => Utility.removeUnnecessarySymbolicExpr(SymbolicExpr(BinaryOp(OrOr, e1, e2, loc), loc))
         }
       case (NullRef, NullRef) => Number(1, loc)
       case (PointerVal(address1), PointerVal(address2)) => if (address1 == address2) Number(1, loc) else Number(0, loc)
@@ -611,8 +607,8 @@ class SymbolicExecutor(program: ProgramCfg,
                   solver.createConstraintWithState(
                     BinaryOp(
                       OrOr,
-                      BinaryOp(AndAnd, BinaryOp(LowerThan, s, Number(0, loc), loc), symbolicState.pathCondition.expr, loc),
-                      BinaryOp(AndAnd, BinaryOp(GreaterEqual, s, Number(elems.length, loc), loc), symbolicState.pathCondition.expr, loc),
+                      BinaryOp(AndAnd, BinaryOp(LowerThan, s, Number(0, loc), loc), symbolicState.pathCondition, loc),
+                      BinaryOp(AndAnd, BinaryOp(GreaterEqual, s, Number(elems.length, loc), loc), symbolicState.pathCondition, loc),
                       loc)
                     , symbolicState)) match {
                   case Status.SATISFIABLE =>
@@ -720,8 +716,8 @@ class SymbolicExecutor(program: ProgramCfg,
                   solver.createConstraintWithState(
                     BinaryOp(
                       OrOr,
-                      BinaryOp(AndAnd, BinaryOp(LowerThan, s, Number(0, loc), loc), symbolicState.pathCondition.expr, loc),
-                      BinaryOp(AndAnd, BinaryOp(GreaterEqual, s, Number(elems.length, loc), loc), symbolicState.pathCondition.expr, loc),
+                      BinaryOp(AndAnd, BinaryOp(LowerThan, s, Number(0, loc), loc), symbolicState.pathCondition, loc),
+                      BinaryOp(AndAnd, BinaryOp(GreaterEqual, s, Number(elems.length, loc), loc), symbolicState.pathCondition, loc),
                       loc),
                     symbolicState)) match {
                   case Status.SATISFIABLE =>
@@ -752,7 +748,8 @@ class SymbolicExecutor(program: ProgramCfg,
                 }
               case _ => throw errorNonIntArithmetics(loc, symbolicState)
             }
-          case _ => throw errorNonArrayAccess(loc, evaluate(array, symbolicState).toString, symbolicState)
+          case _ =>
+            throw errorNonArrayAccess(loc, evaluate(array, symbolicState).toString, symbolicState)
         }
       case e =>
         throw errorNotAssignableExpression(e, symbolicState)

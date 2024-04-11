@@ -3,6 +3,7 @@ package microc.cli
 import mainargs._
 import microc.ast.Program
 import microc.cfg.ProgramCfg
+import microc.symbolic_execution.SearchStrategy
 import microc.util.CharacterSets.NL
 
 import java.io._
@@ -16,6 +17,36 @@ object Main {
     0
   }
  */
+
+  @main(doc = "Symbolicly execute uc program")
+  def symboliclyExecute(program: String,
+                        @arg(name = "search-strategy", doc = "choose a seach strategy (optional string argument)")
+                        searchStrategy: Option[String] = None,
+                        @arg(name = "smart-merging", doc = "Enable smart merging strategy (optional string argument)")
+                        smartMerging: Option[String] = None,
+                        @arg(name = "smart-merging-cost", doc = "smart merging cost (optional int argument)")
+                        smartMergingCost: Option[Int] = None,
+                        @arg(name = "summarization", doc = "Enable loop summarization (optional bool argument)")
+                        summarization: Option[Boolean] = None,
+                        @arg(name = "subsumption", doc = "Enable path subsumption (optional bool argument)")
+                        subsumption: Option[Boolean] = None,
+                        @arg(name = "timeout", doc = "Timeout for the program is s (optional int argument)")
+                        timeout: Option[Int] = None,
+                        @arg(name = "output", doc = "Output file (optional string argument)")
+                        outputFile: Option[String] = None): Int = {
+    val programInput = new FileInputStream(program)
+    val output = outputFile match {
+      case Some(file) => new FileOutputStream(file)
+      case None => System.out
+    }
+    new SymbolicExecuteAction(programInput, searchStrategy, smartMerging, smartMergingCost, summarization, summarization, timeout, output).run()
+  }
+
+  @main(doc = "Generate program")
+  def generateProgram(file: String): Int = {
+    new GenerateProgramAction(file).run()
+  }
+
 
   @main(doc = "Export uc program AST as JSON")
   def export(

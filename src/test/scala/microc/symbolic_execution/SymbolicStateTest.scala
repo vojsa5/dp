@@ -19,8 +19,8 @@ class SymbolicStateTest extends FunSuite with MicrocSupport with Examples {
     state = state.addedVar(
       "x",
       IteVal(
-        Number(1, CodeLoc(0, 0)),
-        Number(0, CodeLoc(0, 0)),
+        state.addedAlloc(Number(1, CodeLoc(0, 0))),
+        state.addedAlloc(Number(0, CodeLoc(0, 0))),
         BinaryOp(GreaterThan, Identifier("y", CodeLoc(0, 0)), Number(3, CodeLoc(0, 0)), CodeLoc(0, 0)),
         CodeLoc(0, 0)
       )
@@ -51,8 +51,8 @@ class SymbolicStateTest extends FunSuite with MicrocSupport with Examples {
     state = state.addedVar(
       "x",
       IteVal(
-        Number(1, CodeLoc(0, 0)),
-        Number(0, CodeLoc(0, 0)),
+        state.addedAlloc(Number(1, CodeLoc(0, 0))),
+          state.addedAlloc(Number(0, CodeLoc(0, 0))),
         BinaryOp(LowerThan, Identifier("y", CodeLoc(0, 0)), Number(3, CodeLoc(0, 0)), CodeLoc(0, 0)),
         CodeLoc(0, 0)
       )
@@ -84,8 +84,8 @@ class SymbolicStateTest extends FunSuite with MicrocSupport with Examples {
     state = state.addedVar(
       "x",
       IteVal(
-        Number(1, CodeLoc(0, 0)),
-        Number(0, CodeLoc(0, 0)),
+        state.addedAlloc(Number(1, CodeLoc(0, 0))),
+        state.addedAlloc(Number(0, CodeLoc(0, 0))),
         BinaryOp(LowerThan, Identifier("y", CodeLoc(0, 0)), Number(3, CodeLoc(0, 0)), CodeLoc(0, 0)),
         CodeLoc(0, 0)
       )

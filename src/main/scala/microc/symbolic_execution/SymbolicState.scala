@@ -1,6 +1,6 @@
 package microc.symbolic_execution
 
-import microc.ast.{AndAnd, ArrayAccess, BinaryOp, CodeLoc, Decl, Equal, Expr, FieldAccess, Identifier, IdentifierDecl, IfStmt, Loc, NestedBlockStmt, Not, Null, Number, OrOr, WhileStmt}
+import microc.ast.{AndAnd, ArrayAccess, BinaryOp, CodeLoc, Decl, Equal, Expr, FieldAccess, Identifier, IdentifierDecl, IfStmt, Input, Loc, NestedBlockStmt, Not, Null, Number, OrOr, RecordField, WhileStmt}
 import microc.cfg.CfgNode
 import microc.symbolic_execution.Value.{ArrVal, NullRef, PointerVal, RecVal, Symbolic, SymbolicExpr, SymbolicVal, UninitializedRef, Val}
 
@@ -50,7 +50,7 @@ class SymbolicState(
     ptr
   }
 
-  def addToMemoryLocation(location: PointerVal, v: Val): Unit = {
+  def setMemoryLocation(location: PointerVal, v: Val): Unit = {
     symbolicStore.storage.addVal(location, v)
   }
 
@@ -125,7 +125,9 @@ class SymbolicState(
   }
 
   def addedLoopTrace(trace: (Expr, mutable.HashMap[Expr, Expr => Expr])): SymbolicState = {
-    new SymbolicState(nextStatement.succ.maxBy(node => node.id), BinaryOp(AndAnd, pathCondition, trace._1, CodeLoc(0, 0)), symbolicStore, callStack, variableDecls)
+    nextStatement = nextStatement.succ.maxBy(node => node.id)
+    pathCondition = BinaryOp(AndAnd, pathCondition, trace._1, CodeLoc(0, 0))
+    this
   }
 
   def loadVariablesToExpr(expr: Expr): Expr = {
@@ -140,7 +142,19 @@ class SymbolicState(
       case BinaryOp(operator, left, right, loc) =>
         BinaryOp(operator, loadVariablesToExpr(left), loadVariablesToExpr(right), loc)
       case n@Number(_, _) => n
+      case in@Input(_) => in
+      case f@FieldAccess(_, _, _) =>
+        getValAtMemoryLoc(f) match {
+          case v: Expr => v
+          case _ => throw new Exception("This should not happen")
+        }
+      case a@ArrayAccess(_, _, _) =>
+        getValAtMemoryLoc(a) match {
+          case v: Expr => v
+          case _ => throw new Exception("This should not happen")
+        }
       case _ =>
+        println(expr)
         throw new Exception("This should not happen")
     }
   }
@@ -149,6 +163,7 @@ class SymbolicState(
     val pathConditionNewExpr = loadVariablesToExpr(expr)
     BinaryOp(AndAnd, pathCondition, pathConditionNewExpr, expr.loc)
   }
+
 
   def getIfTrueState(): SymbolicState = {
     val ast = nextStatement.ast;
@@ -237,10 +252,10 @@ class SymbolicState(
     this
   }
 
-  def applyChange(memoryLoc: Expr, change: Expr => Expr): SymbolicState = {
+  def applyChange(memoryLoc: Expr, change: Expr => Expr, mapping: mutable.HashMap[Val, Expr]): SymbolicState = {
     val ptr = getMemoryLoc(memoryLoc)
-    val v = symbolicStore.getValOfPtr(ptr).get
-    addToMemoryLocation(ptr, Utility.removeUnnecessarySymbolicExpr(SymbolicExpr(change.apply(v.asInstanceOf[Symbolic]), CodeLoc(0, 0))))
+    val n = SymbolicExpr(change.apply(symbolicStore.getValOfPtr(ptr).get.asInstanceOf[Symbolic]), CodeLoc(0, 0))
+    setMemoryLocation(ptr, Utility.removeUnnecessarySymbolicExpr(SymbolicExpr(Utility.replaceWithMapping(n.asInstanceOf[Symbolic], mapping, this), CodeLoc(0, 0))))
     this
   }
 

@@ -200,12 +200,14 @@ class SymbolicExecutor(program: ProgramCfg,
           case RecVal(fields) if fields.contains(field) => symbolicState.updatedVar(fields(field), assigned)
           case RecVal(fields) =>
             throw errorNonExistingFieldAccess(loc, RecVal(fields).toString, field, symbolicState)
-          case IteVal(RecVal(fields1), RecVal(fields2), _, _) if fields1.contains(field) && fields2.contains(field) => {
-            symbolicState.updatedVar(fields1(field), assigned)
-            symbolicState.updatedVar(fields2(field), assigned)
-          }
-          case _ =>
-            throw errorNotAssignableExpression(record, symbolicState: SymbolicState)
+          case IteVal(ptrRec1, ptrRec2, _, _) =>
+            (symbolicState.getVal(ptrRec1), symbolicState.getVal(ptrRec2)) match {
+              case (Some(RecVal(fields1)), Some(RecVal(fields2))) if fields1.contains(field) && fields2.contains(field) =>
+                symbolicState.updatedVar(fields1(field), assigned)
+                symbolicState.updatedVar(fields2(field), assigned)
+              case _ =>
+                throw errorNotAssignableExpression(record, symbolicState: SymbolicState)
+            }
         }
       case AssignStmt(lhs, rhs, _) =>
         getTarget(lhs, symbolicState) match {
@@ -501,15 +503,15 @@ class SymbolicExecutor(program: ProgramCfg,
       case (NullRef, PointerVal(_)) => Number(0, loc)
       case (IteVal(trueState, falseState, expr, loc), other) =>
         IteVal(
-          compareValues(operator, trueState, other, symbolicState, loc),
-          compareValues(operator, falseState, other, symbolicState, loc),
+          symbolicState.addedAlloc(compareValues(operator, symbolicState.getVal(trueState).get, other, symbolicState, loc)),
+          symbolicState.addedAlloc(compareValues(operator, symbolicState.getVal(falseState).get, other, symbolicState, loc)),
           expr,
           loc
         )
       case (other, IteVal(trueState, falseState, expr, loc)) =>
         IteVal(
-          compareValues(operator, trueState, other, symbolicState, loc),
-          compareValues(operator, falseState, other, symbolicState, loc),
+          symbolicState.addedAlloc(compareValues(operator, symbolicState.getVal(trueState).get, other, symbolicState, loc)),
+          symbolicState.addedAlloc(compareValues(operator, symbolicState.getVal(falseState).get, other, symbolicState, loc)),
           expr,
           loc
         )
@@ -581,8 +583,8 @@ class SymbolicExecutor(program: ProgramCfg,
           case NullRef =>
             throw errorNullDereference(loc, symbolicState)
           case IteVal(trueState: PointerVal, falseState: PointerVal, expr, loc) =>
-            IteVal(symbolicState.getVal(trueState).get, symbolicState.getVal(falseState).get, expr, loc)
-          case IteVal(trueState, falseState, expr, loc) if falseState == NullRef || trueState == NullRef =>
+            IteVal(symbolicState.addedAlloc(symbolicState.getVal(trueState).get), symbolicState.addedAlloc(symbolicState.getVal(falseState).get), expr, loc)
+          case IteVal(trueState, falseState, expr, loc) if symbolicState.getVal(falseState).get == NullRef || symbolicState.getVal(trueState).get == NullRef =>
             throw errorNullDereference(loc, symbolicState)
           case e =>
             throw errorNonPointerDereference(loc, e.toString, symbolicState)
@@ -748,7 +750,9 @@ class SymbolicExecutor(program: ProgramCfg,
                 }
               case _ => throw errorNonIntArithmetics(loc, symbolicState)
             }
-          case _ =>
+          case other =>
+            val g = other
+            println(other)
             throw errorNonArrayAccess(loc, evaluate(array, symbolicState).toString, symbolicState)
         }
       case e =>

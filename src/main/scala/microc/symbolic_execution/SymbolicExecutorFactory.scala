@@ -6,10 +6,12 @@ import microc.ast.{Decl, Program}
 import microc.cfg.{CfgNode, IntraproceduralCfgFactory, ProgramCfg}
 import microc.parser.Parser
 
+import java.util
 import javax.management.InvalidApplicationException
+import scala.collection.immutable.HashSet
 import scala.collection.mutable
 
-class SymbolicExecutorFactory(useSummarizaiton: Boolean, useSubsumption: Boolean, mergingStrategyType: Option[String], searchStrategyType: String) {
+class SymbolicExecutorFactory(useSummarizaiton: Boolean, useSubsumption: Boolean, mergingStrategyType: Option[String], smartMergingCost: Option[Int], searchStrategyType: String) {
   def get(program: Program): SymbolicExecutor = {
     val programCfg = new IntraproceduralCfgFactory().fromProgram(program)
     val ctx = new Context()
@@ -17,6 +19,8 @@ class SymbolicExecutorFactory(useSummarizaiton: Boolean, useSubsumption: Boolean
     if (useSubsumption) {
       pathSubsumption = Some(new PathSubsumption(new ConstraintSolver(ctx), ctx))
     }
+    var stateHistory: Option[StateHistory] = None
+    var covered: Option[mutable.HashSet[CfgNode]] = None
 
     val searchStrategy = searchStrategyType match {
       case "bfs" =>
@@ -25,12 +29,24 @@ class SymbolicExecutorFactory(useSummarizaiton: Boolean, useSubsumption: Boolean
         new DFSSearchStrategy()
       case "random" =>
         new RandomSearchStrategy()
+      case "random-path" =>
+        stateHistory = Some(new StateHistory())
+        new RandomPathSelectionStrategy(stateHistory.get)
+      case "coverage" =>
+        covered = Some(new mutable.HashSet[CfgNode]())
+        new CoverageSearchStrategy(covered.get)
+      case "klee" =>
+        stateHistory = Some(new StateHistory())
+        covered = Some(new mutable.HashSet[CfgNode]())
+        new KleeSearchStrategy(stateHistory.get, covered.get)
       case _ =>
         throw new InvalidApplicationException()
     }
 
     val possiblyMergingSearchStrategy = mergingStrategyType match {
       case None =>
+        searchStrategy
+      case Some("none") =>
         searchStrategy
       case Some("aggresive") =>
         new AgressiveStateMerging(searchStrategy)
@@ -44,12 +60,12 @@ class SymbolicExecutorFactory(useSummarizaiton: Boolean, useSubsumption: Boolean
           }
           variableCosts.put(node._1, nodeCosts)
         }
-        new HeuristicBasedStateMerging(new BFSSearchStrategy, variableCosts, 3)
+        new HeuristicBasedStateMerging(new BFSSearchStrategy, variableCosts, smartMergingCost.get)
       }
       case Some("tmp") => {
         val tmp = new RecursionBasedAnalyses()(new SemanticAnalysis().analyze(program))
         tmp.tmp2(programCfg)
-        new HeuristicBasedStateMerging(new BFSSearchStrategy, tmp.mapping, 3)
+        new HeuristicBasedStateMerging(new BFSSearchStrategy, tmp.mapping, smartMergingCost.get)
       }
       case Some(_) =>
         throw new InvalidApplicationException()
@@ -57,10 +73,10 @@ class SymbolicExecutorFactory(useSummarizaiton: Boolean, useSubsumption: Boolean
 
 
     if (useSummarizaiton) {
-      new LoopSummary(programCfg, pathSubsumption, ctx, possiblyMergingSearchStrategy)
+      new LoopSummary(programCfg, pathSubsumption, ctx, possiblyMergingSearchStrategy, stateHistory, covered, printStats = false)
     }
     else {
-      new SymbolicExecutor(programCfg, pathSubsumption, ctx, possiblyMergingSearchStrategy)
+      new SymbolicExecutor(programCfg, pathSubsumption, ctx, possiblyMergingSearchStrategy, stateHistory, covered, printStats = false)
     }
   }
 }

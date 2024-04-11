@@ -178,7 +178,7 @@ class ProgramGenerator() {
       }
     }
     else {
-      random.nextInt(5) match {
+      random.nextInt(6) match {
         case 0 => {
           val identifier = randomIdentifier(declaredIdentifiers)
           val size = declaredIdentifiers(identifier.name) match {
@@ -225,6 +225,15 @@ class ProgramGenerator() {
           randomLoc()
         )
         case 4 =>
+          var block = NestedBlockStmt((1 to random.nextInt(3) + 3).map(_ => randomStmt(depth + 1, declaredIdentifiers)).toList, randomLoc())
+          val it = randomIdentifierOfType(NumType(), declaredIdentifiers)
+          block = NestedBlockStmt(block.body.appended(AssignStmt(it, BinaryOp(Plus, it, Number(1, randomLoc()), randomLoc()), randomLoc())), randomLoc())
+          WhileStmt(
+            BinaryOp(LowerThan, it, randomIdentifierOfType(NumType(), declaredIdentifiers), randomLoc()),
+            block,
+          randomLoc()
+        )
+        case 5 =>
           OutputStmt(randomExpr(NumType(), depth + 1, declaredIdentifiers), randomLoc())
       }
     }
@@ -330,7 +339,7 @@ class ProgramGenerator() {
     AssignStmt(Identifier(varName, randomLoc()), expr, randomLoc())
   }
 
-  def generateRandomProgram(): Program = {
+  def generateRandomProgram(printProgram: Boolean = true): Program = {
     val additionalFuns = List.fill(random.nextInt(3) + 1) {
       val funName = s"fun${random.nextInt(100)}"
       functionNames ::= funName
@@ -340,7 +349,9 @@ class ProgramGenerator() {
 //      funDecls = funDecls :+ (randomFunDecl(func))
 //    }
     funDecls = funDecls :+ (randomFunDecl("main"))
-    funDecls.foreach(fce => println(new AstPrinter().print(fce)))
+    if (printProgram) {
+      funDecls.foreach(fce => println(new AstPrinter().print(fce)))
+    }
     Program(funDecls, randomLoc())
   }
 

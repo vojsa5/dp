@@ -168,11 +168,11 @@ object Utility {
       case PointerVal(addr) => PointerVal(addr)
       case SymbolicExpr(expr, _) => applyTheState(expr, state, allowReturnNonInitialized)
       case IteVal(val1, val2, cond, loc) =>
-        (applyVal(val1, state), applyVal(val2, state)) match {
-          case (a: Symbolic, b: Symbolic) => IteVal(a, b, applyTheState(cond, state, allowReturnNonInitialized), loc)
-          case (a: Symbolic, b) => IteVal(a, SymbolicExpr(b, loc), applyTheState(cond, state, allowReturnNonInitialized), loc)
-          case (a, b: Symbolic) => IteVal(SymbolicExpr(a, loc), b, applyTheState(cond, state, allowReturnNonInitialized), loc)
-          case (a, b) => IteVal(SymbolicExpr(a, loc), SymbolicExpr(b, loc), applyTheState(cond, state, allowReturnNonInitialized), loc)
+        (applyVal(state.getVal(val1).get, state), applyVal(state.getVal(val2).get, state)) match {
+          case (a: Symbolic, b: Symbolic) => IteVal(state.addedAlloc(a), state.addedAlloc(b), applyTheState(cond, state, allowReturnNonInitialized), loc)
+          case (a: Symbolic, b) => IteVal(state.addedAlloc(a), state.addedAlloc(SymbolicExpr(b, loc)), applyTheState(cond, state, allowReturnNonInitialized), loc)
+          case (a, b: Symbolic) => IteVal(state.addedAlloc(SymbolicExpr(a, loc)), state.addedAlloc(b), applyTheState(cond, state, allowReturnNonInitialized), loc)
+          case (a, b) => IteVal(state.addedAlloc(SymbolicExpr(a, loc)), state.addedAlloc(SymbolicExpr(b, loc)), applyTheState(cond, state, allowReturnNonInitialized), loc)
         }
       case r@RecVal(fields) => r
       //RecVal(fields.map(field => (field._1, SymbolicExpr(applyVal(field._2, state, allowReturnNonInitialized), CodeLoc(0, 0)))))
@@ -244,6 +244,28 @@ object Utility {
       case Alloc(expr, loc) => Alloc(replaceExpr(expr, toReplace, newValue), loc)
       case _ =>
         throw new Exception("IMPLEMENT")
+    }
+  }
+
+  def replaceWithMapping(expr: Expr, mapping: mutable.HashMap[Val, Expr], symbolicState: SymbolicState): Expr = {
+    expr match {
+      case BinaryOp(operator, left, right, loc) =>
+        BinaryOp(operator, replaceWithMapping(left, mapping, symbolicState), replaceWithMapping(right, mapping, symbolicState), loc)
+      case Not(expr, loc) =>
+        Not(replaceWithMapping(expr, mapping, symbolicState), loc)
+      case SymbolicExpr(expr, loc) =>
+        SymbolicExpr(replaceWithMapping(expr, mapping, symbolicState), loc)
+      case ArrayAccess(array, index, loc) =>
+        ArrayAccess(replaceWithMapping(array, mapping, symbolicState), replaceWithMapping(index, mapping, symbolicState), loc)
+//      case ArrayNode(elems, loc) => ???
+//      case Deref
+//      case VarRef
+//      case FieldAccess(record, field, loc)
+//      case Record
+//      case Alloc(expr, loc)
+      case v@SymbolicVal(_) if mapping.contains(v) =>
+        symbolicState.getValAtMemoryLoc(mapping(v)).asInstanceOf[Symbolic]
+      case e => e
     }
   }
 

@@ -9,56 +9,85 @@ class MergedSymbolicState(
                            pathCondition: Expr,
                            symbolicStore: SymbolicStore,
                            callStack: List[(CfgNode, List[IdentifierDecl])] = List.empty,
+                           variableDecls: List[IdentifierDecl] = List.empty,
                            var subStates: (SymbolicState, SymbolicState))
-  extends SymbolicState(nextStatement, pathCondition, symbolicStore, callStack) {
+  extends SymbolicState(nextStatement, pathCondition, symbolicStore, callStack, variableDecls) {
 
   override def nextState(): SymbolicState = {
-    new MergedSymbolicState(nextStatement.succ.head, pathCondition, symbolicStore, callStack, subStates)
+    new MergedSymbolicState(nextStatement.succ.head, pathCondition, symbolicStore, callStack, variableDecls, subStates)
   }
 
   override def getIfTrueState(): SymbolicState = {
     val ast = nextStatement.ast;
-    nextStatement.succ.foreach(
-      node => {
-        ast match {
-          case IfStmt(guard, thenBranch, _, _) =>
-            if (thenBranch.asInstanceOf[NestedBlockStmt].body.isEmpty) {//no statements - go to a statement after else
-              return new MergedSymbolicState(nextStatement.succ.maxBy(node => node.id), addToPathCondition(guard), symbolicStore.deepCopy(), callStack.map(identity), subStates)
-            }
-            if (thenBranch.asInstanceOf[NestedBlockStmt].body.head == node.ast) {
-              return new MergedSymbolicState(node, addToPathCondition(guard), symbolicStore.deepCopy(), callStack.map(identity), subStates)
-            }
-          case WhileStmt(guard, block, _) =>
-            if (block.asInstanceOf[NestedBlockStmt].body.head == node.ast) {
-              return new MergedSymbolicState(node, addToPathCondition(guard), symbolicStore.deepCopy(), callStack.map(identity), subStates)
-            }
-          //return new SymbolicState(node, pathCondition, symbolicStore.deepCopy(), callStack.map(identity))//TODO not sure if this is correct
-          case _ =>
+    ast match {
+      case WhileStmt(guard, thenBranch, loc) =>
+        val next = if (thenBranch.asInstanceOf[NestedBlockStmt].body.isEmpty) {
+          nextStatement.succ.head
         }
-      }
-    )
-    throw new Exception("This should not happen")
+        else {
+          val firstThenStatement = thenBranch.asInstanceOf[NestedBlockStmt].body.head
+          nextStatement.succ.find(s => s.ast == firstThenStatement).get
+        }
+        new MergedSymbolicState(next, addToPathCondition(guard), symbolicStore.deepCopy(), copyCallStack(callStack), variableDecls, subStates)
+      case IfStmt(guard, thenBranch, None, loc) =>
+        val next = if (thenBranch.asInstanceOf[NestedBlockStmt].body.isEmpty) {
+          nextStatement.succ.head
+        }
+        else {
+          val firstThenStatement = thenBranch.asInstanceOf[NestedBlockStmt].body.head
+          nextStatement.succ.find(s => s.ast == firstThenStatement).get
+        }
+        new MergedSymbolicState(next, addToPathCondition(guard), symbolicStore.deepCopy(), copyCallStack(callStack), variableDecls, subStates)
+      case IfStmt(guard, thenBranch, Some(NestedBlockStmt(elseBranch, loc)), _) =>
+        if (elseBranch.isEmpty) {
+          val next = if (thenBranch.asInstanceOf[NestedBlockStmt].body.isEmpty) {
+            nextStatement.succ.head
+          }
+          else {
+            val firstThenStatement = thenBranch.asInstanceOf[NestedBlockStmt].body.head
+            nextStatement.succ.find(s => s.ast == firstThenStatement).get
+          }
+          return new MergedSymbolicState(next, addToPathCondition(guard), symbolicStore.deepCopy(), copyCallStack(callStack), variableDecls, subStates)
+        }
+        val next = nextStatement.succ.find(s => s.ast != elseBranch.head).get
+        new MergedSymbolicState(next, addToPathCondition(guard), symbolicStore.deepCopy(), copyCallStack(callStack), variableDecls, subStates)
+    }
   }
 
   override def getIfFalseState(): SymbolicState = {
     val ast = nextStatement.ast;
     ast match {
-      case WhileStmt(guard, _, loc) =>
-        return new MergedSymbolicState(nextStatement.succ.maxBy(node => node.id), addToPathCondition(Not(guard, loc)), symbolicStore.deepCopy(), callStack.map(identity), subStates)//TODO add to path condition
-      case IfStmt(guard, _, None, loc) =>
-        return new MergedSymbolicState(nextStatement.succ.maxBy(node => node.id), addToPathCondition(Not(guard, loc)), symbolicStore.deepCopy(), callStack.map(identity), subStates)
-      case IfStmt(guard, _, Some(NestedBlockStmt(elseBranch, loc)), _) =>
-        nextStatement.succ.foreach(
-          node => {
-            if (elseBranch.isEmpty) {//TODO this should maybe be andled by the parser
-              return new MergedSymbolicState(nextStatement.succ.maxBy(node => node.id), addToPathCondition(Not(guard, loc)), symbolicStore.deepCopy(), callStack.map(identity), subStates)
-            }
-            if (elseBranch.head == node.ast) {
-              return new MergedSymbolicState(node, addToPathCondition(Not(guard, loc)), symbolicStore.deepCopy(), callStack.map(identity), subStates)
-            }
+      case WhileStmt(guard, thenBranch, loc) =>
+        val next = if (thenBranch.asInstanceOf[NestedBlockStmt].body.isEmpty) {
+          nextStatement.succ.head
+        }
+        else {
+          val firstThenStatement = thenBranch.asInstanceOf[NestedBlockStmt].body.head
+          nextStatement.succ.find(s => s.ast != firstThenStatement).get
+        }
+        new MergedSymbolicState(next, addToPathCondition(Not(guard, loc)), symbolicStore.deepCopy(), copyCallStack(callStack), variableDecls, subStates)//TODO add to path condition
+      case IfStmt(guard, thenBranch, None, loc) =>
+        val next = if (thenBranch.asInstanceOf[NestedBlockStmt].body.isEmpty) {
+          nextStatement.succ.head
+        }
+        else {
+          val firstThenStatement = thenBranch.asInstanceOf[NestedBlockStmt].body.head
+          nextStatement.succ.find(s => s.ast != firstThenStatement).get
+        }
+        new MergedSymbolicState(next, addToPathCondition(guard), symbolicStore.deepCopy(), copyCallStack(callStack), variableDecls, subStates)
+      case IfStmt(guard, thenBranch, Some(NestedBlockStmt(elseBranch, loc)), _) =>
+        if (elseBranch.isEmpty) {
+          val next = if (thenBranch.asInstanceOf[NestedBlockStmt].body.isEmpty) {
+            nextStatement.succ.head
           }
-        )
+          else {
+            val firstThenStatement = thenBranch.asInstanceOf[NestedBlockStmt].body.head
+            nextStatement.succ.find(s => s.ast != firstThenStatement).get
+          }
+          return new MergedSymbolicState(next, addToPathCondition(Not(guard, loc)), symbolicStore.deepCopy(), copyCallStack(callStack), variableDecls, subStates)
+        }
+        val next = nextStatement.succ.find(s => s.ast == elseBranch.head).get
+        new MergedSymbolicState(next, addToPathCondition(Not(guard, loc)), symbolicStore.deepCopy(), copyCallStack(callStack), variableDecls, subStates)
     }
-    throw new Exception("This should not happen")
   }
 }

@@ -28,35 +28,41 @@ import scala.collection.mutable
 //}
 
 
-class Path(val statements: List[Stmt], var condition: Expr, var changes: List[(Expr, (Expr) => ((Expr) => Expr))]) {
+class Path(var statements: List[Stmt], var condition: Expr, var changes: List[(Expr, (Expr) => ((Expr) => Expr))]) {
 
   val iterations = SymbolicVal(CodeLoc(0, 0))
 
   def addedCondition(expr: Expr): Path = {
-    val res = new Path(statements, BinaryOp(AndAnd, condition, expr, condition.loc), changes)
-    new Path(statements, BinaryOp(AndAnd, condition, expr, condition.loc), changes)
+    condition = BinaryOp(AndAnd, condition, expr, condition.loc)
+    this
   }
 
   def appendedStatement(stmt: Stmt): Path = {
-    new Path(statements.appended(stmt), condition, changes)
+    statements = statements.appended(stmt)
+    this
   }
 
   def appendedAsPath(path: Path): Path = {
     var newChanges = List[(Expr, (Expr) => ((Expr) => Expr))]()
     newChanges = newChanges.appendedAll(changes)
     newChanges = newChanges.appendedAll(path.changes)
+//    changes = newChanges
+//    condition = BinaryOp(AndAnd, condition, path.condition, condition.loc)
+//    statements = statements.appendedAll(path.statements)
+//    this
     new Path(statements.appendedAll(path.statements), BinaryOp(AndAnd, condition, path.condition, condition.loc), newChanges)
   }
 
   def simplifiedCondition(): Path = {
-    new Path(statements, Utility.simplifyArithExpr(condition), changes)
+    condition = Utility.simplifyArithExpr(condition)
+    this
   }
 
   def updatedChanges(name: Expr, change: (Expr) => ((Expr) => Expr)): Path = {
-    var newChanges = List[(Expr, (Expr) => ((Expr) => Expr))]()
-    newChanges = newChanges.appendedAll(changes)
-    newChanges = newChanges.appended(name, change)
-    new Path(statements, Utility.simplifyArithExpr(condition), newChanges)
+    changes = changes.filter(change => !change._1.equals(name))
+    changes = changes.appended(name, change)
+    condition = Utility.simplifyArithExpr(condition)
+    this
   }
 
 }

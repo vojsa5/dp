@@ -26,7 +26,14 @@ class SymbolicStoreTest extends FunSuite with MicrocSupport with Examples {
     store1.updateRef(ptr, PointerVal(1))
 
     ptr = store1.addNewVar("v")
-    store1.updateRef(ptr, IteVal(Number(1, CodeLoc(0, 0)), Number(2, CodeLoc(0, 0)), BinaryOp(GreaterThan, Identifier("a", CodeLoc(0, 0)), Number(0, CodeLoc(0, 0)), CodeLoc(0, 0)), CodeLoc(0, 0)))
+    store1.updateRef(ptr,
+      IteVal(
+        store1.storage.addNewVal(Number(1, CodeLoc(0, 0))),
+        store1.storage.addNewVal(Number(2, CodeLoc(0, 0))),
+        BinaryOp(GreaterThan, Identifier("a", CodeLoc(0, 0)), Number(0, CodeLoc(0, 0)), CodeLoc(0, 0)),
+        CodeLoc(0, 0)
+      )
+    )
 
     ptr = store2.addNewVar("x")
     store2.updateRef(ptr, Number(1, CodeLoc(0, 0)))
@@ -42,7 +49,14 @@ class SymbolicStoreTest extends FunSuite with MicrocSupport with Examples {
 
 
     ptr = store2.addNewVar("v")
-    store2.updateRef(ptr, IteVal(Number(1, CodeLoc(0, 0)), Number(2, CodeLoc(0, 0)), BinaryOp(GreaterThan, Identifier("a", CodeLoc(0, 0)), Number(0, CodeLoc(0, 0)), CodeLoc(0, 0)), CodeLoc(0, 0)))
+    store2.updateRef(ptr,
+      IteVal(
+        store2.storage.addNewVal(Number(1, CodeLoc(0, 0))),
+        store2.storage.addNewVal(Number(2, CodeLoc(0, 0))),
+        BinaryOp(GreaterThan, Identifier("a", CodeLoc(0, 0)), Number(0, CodeLoc(0, 0)), CodeLoc(0, 0)),
+        CodeLoc(0, 0)
+      )
+    )
 
     assert(store1.storeEquals(store2))
     assert(store2.storeEquals(store1))
@@ -63,7 +77,14 @@ class SymbolicStoreTest extends FunSuite with MicrocSupport with Examples {
     store1.updateRef(ptr, PointerVal(1))
 
     ptr = store1.addNewVar("v")
-    store1.updateRef(ptr, IteVal(Number(1, CodeLoc(0, 0)), Number(2, CodeLoc(0, 0)), BinaryOp(GreaterThan, Identifier("a", CodeLoc(0, 0)), Number(0, CodeLoc(0, 0)), CodeLoc(0, 0)), CodeLoc(0, 0)))
+    store1.updateRef(ptr,
+      IteVal(
+        store1.storage.addNewVal(Number(1, CodeLoc(0, 0))),
+        store1.storage.addNewVal(Number(2, CodeLoc(0, 0))),
+        BinaryOp(GreaterThan, Identifier("a", CodeLoc(0, 0)), Number(0, CodeLoc(0, 0)), CodeLoc(0, 0)),
+        CodeLoc(0, 0)
+      )
+    )
 
     ptr = store2.addNewVar("x")
     store2.updateRef(ptr, Number(2, CodeLoc(0, 0)))
@@ -78,7 +99,14 @@ class SymbolicStoreTest extends FunSuite with MicrocSupport with Examples {
     store2.updateRef(ptr, PointerVal(1))
 
     ptr = store2.addNewVar("v")
-    store2.updateRef(ptr, IteVal(Number(1, CodeLoc(0, 0)), Number(2, CodeLoc(0, 0)), BinaryOp(GreaterThan, Identifier("a", CodeLoc(0, 0)), Number(0, CodeLoc(0, 0)), CodeLoc(0, 0)), CodeLoc(0, 0)))
+    store2.updateRef(ptr,
+      IteVal(
+        store2.storage.addNewVal(Number(1, CodeLoc(0, 0))),
+        store2.storage.addNewVal(Number(2, CodeLoc(0, 0))),
+        BinaryOp(GreaterThan, Identifier("a", CodeLoc(0, 0)), Number(0, CodeLoc(0, 0)), CodeLoc(0, 0)),
+        CodeLoc(0, 0)
+      )
+    )
 
     assert(!store1.storeEquals(store2))
     assert(!store2.storeEquals(store1))
@@ -99,7 +127,14 @@ class SymbolicStoreTest extends FunSuite with MicrocSupport with Examples {
     store1.updateRef(ptr, PointerVal(1))
 
     ptr = store1.addNewVar("v")
-    store1.updateRef(ptr, IteVal(Number(1, CodeLoc(0, 0)), Number(2, CodeLoc(0, 0)), BinaryOp(GreaterThan, Identifier("a", CodeLoc(0, 0)), Number(0, CodeLoc(0, 0)), CodeLoc(0, 0)), CodeLoc(0, 0)))
+    store1.updateRef(ptr,
+      IteVal(
+        store2.storage.addNewVal(Number(1, CodeLoc(0, 0))),
+        store2.storage.addNewVal(Number(2, CodeLoc(0, 0))),
+        BinaryOp(GreaterThan, Identifier("a", CodeLoc(0, 0)), Number(0, CodeLoc(0, 0)), CodeLoc(0, 0)),
+        CodeLoc(0, 0)
+      )
+    )
 
     ptr = store2.addNewVar("x")
     store2.updateRef(ptr, Number(1, CodeLoc(0, 0)))
@@ -114,7 +149,13 @@ class SymbolicStoreTest extends FunSuite with MicrocSupport with Examples {
     store2.updateRef(ptr, PointerVal(1))
 
     ptr = store2.addNewVar("v")
-    store2.updateRef(ptr, IteVal(Number(1, CodeLoc(0, 0)), Number(2, CodeLoc(0, 0)), BinaryOp(GreaterThan, Identifier("a", CodeLoc(0, 0)), Number(0, CodeLoc(0, 0)), CodeLoc(0, 0)), CodeLoc(0, 0)))
+    store2.updateRef(ptr,
+      IteVal(
+        store2.storage.addNewVal(Number(1, CodeLoc(0, 0))),
+        store2.storage.addNewVal(Number(2, CodeLoc(0, 0))),
+        BinaryOp(GreaterThan, Identifier("a", CodeLoc(0, 0)), Number(0, CodeLoc(0, 0)), CodeLoc(0, 0)), CodeLoc(0, 0)
+      )
+    )
 
     assert(!store1.storeEquals(store2))
     assert(!store2.storeEquals(store1))
@@ -135,7 +176,14 @@ class SymbolicStoreTest extends FunSuite with MicrocSupport with Examples {
     store1.updateRef(ptr, PointerVal(1))
 
     ptr = store1.addNewVar("v")
-    store1.updateRef(ptr, IteVal(Number(1, CodeLoc(0, 0)), Number(2, CodeLoc(0, 0)), BinaryOp(GreaterThan, Identifier("a", CodeLoc(0, 0)), Number(0, CodeLoc(0, 0)), CodeLoc(0, 0)), CodeLoc(0, 0)))
+    store1.updateRef(ptr,
+      IteVal(
+        store1.storage.addNewVal(Number(1, CodeLoc(0, 0))),
+        store1.storage.addNewVal(Number(2, CodeLoc(0, 0))),
+        BinaryOp(GreaterThan, Identifier("a", CodeLoc(0, 0)), Number(0, CodeLoc(0, 0)), CodeLoc(0, 0)),
+        CodeLoc(0, 0)
+      )
+    )
 
     ptr = store2.addNewVar("x")
     store2.updateRef(ptr, Number(1, CodeLoc(0, 0)))
@@ -150,7 +198,14 @@ class SymbolicStoreTest extends FunSuite with MicrocSupport with Examples {
     store2.updateRef(ptr, PointerVal(2))
 
     ptr = store2.addNewVar("v")
-    store2.updateRef(ptr, IteVal(Number(1, CodeLoc(0, 0)), Number(2, CodeLoc(0, 0)), BinaryOp(GreaterThan, Identifier("a", CodeLoc(0, 0)), Number(0, CodeLoc(0, 0)), CodeLoc(0, 0)), CodeLoc(0, 0)))
+    store2.updateRef(ptr,
+      IteVal(
+        store2.storage.addNewVal(Number(1, CodeLoc(0, 0))),
+        store2.storage.addNewVal(Number(2, CodeLoc(0, 0))),
+        BinaryOp(GreaterThan, Identifier("a", CodeLoc(0, 0)), Number(0, CodeLoc(0, 0)), CodeLoc(0, 0)),
+        CodeLoc(0, 0)
+      )
+    )
 
     assert(!store1.storeEquals(store2))
     assert(!store2.storeEquals(store1))
@@ -171,7 +226,14 @@ class SymbolicStoreTest extends FunSuite with MicrocSupport with Examples {
     store1.updateRef(ptr, PointerVal(1))
 
     ptr = store1.addNewVar("v")
-    store1.updateRef(ptr, IteVal(Number(1, CodeLoc(0, 0)), Number(2, CodeLoc(0, 0)), BinaryOp(GreaterThan, Identifier("a", CodeLoc(0, 0)), Number(0, CodeLoc(0, 0)), CodeLoc(0, 0)), CodeLoc(0, 0)))
+    store1.updateRef(ptr,
+      IteVal(
+        store1.storage.addNewVal(Number(1, CodeLoc(0, 0))),
+        store1.storage.addNewVal(Number(2, CodeLoc(0, 0))),
+        BinaryOp(GreaterThan, Identifier("a", CodeLoc(0, 0)), Number(0, CodeLoc(0, 0)), CodeLoc(0, 0)),
+        CodeLoc(0, 0)
+      )
+    )
 
     ptr = store2.addNewVar("x")
     store2.updateRef(ptr, Number(1, CodeLoc(0, 0)))
@@ -183,7 +245,14 @@ class SymbolicStoreTest extends FunSuite with MicrocSupport with Examples {
     store2.updateRef(ptr, PointerVal(1))
 
     ptr = store2.addNewVar("v")
-    store2.updateRef(ptr, IteVal(Number(1, CodeLoc(0, 0)), Number(2, CodeLoc(0, 0)), BinaryOp(GreaterThan, Identifier("a", CodeLoc(0, 0)), Number(0, CodeLoc(0, 0)), CodeLoc(0, 0)), CodeLoc(0, 0)))
+    store2.updateRef(ptr,
+      IteVal(
+        store2.storage.addNewVal(Number(1, CodeLoc(0, 0))),
+        store2.storage.addNewVal(Number(2, CodeLoc(0, 0))),
+        BinaryOp(GreaterThan, Identifier("a", CodeLoc(0, 0)), Number(0, CodeLoc(0, 0)), CodeLoc(0, 0)),
+        CodeLoc(0, 0)
+      )
+    )
 
     assert(!store1.storeEquals(store2))
     assert(!store2.storeEquals(store1))
@@ -204,7 +273,14 @@ class SymbolicStoreTest extends FunSuite with MicrocSupport with Examples {
     store1.updateRef(ptr, PointerVal(1))
 
     ptr = store1.addNewVar("v")
-    store1.updateRef(ptr, IteVal(Number(1, CodeLoc(0, 0)), Number(2, CodeLoc(0, 0)), BinaryOp(GreaterThan, Identifier("a", CodeLoc(0, 0)), Number(0, CodeLoc(0, 0)), CodeLoc(0, 0)), CodeLoc(0, 0)))
+    store1.updateRef(ptr,
+      IteVal(
+        store1.storage.addNewVal(Number(1, CodeLoc(0, 0))),
+        store1.storage.addNewVal(Number(2, CodeLoc(0, 0))),
+        BinaryOp(GreaterThan, Identifier("a", CodeLoc(0, 0)), Number(0, CodeLoc(0, 0)), CodeLoc(0, 0)),
+        CodeLoc(0, 0)
+      )
+    )
 
     ptr = store2.addNewVar("x")
     store2.updateRef(ptr, Number(1, CodeLoc(0, 0)))
@@ -219,7 +295,14 @@ class SymbolicStoreTest extends FunSuite with MicrocSupport with Examples {
     store2.updateRef(ptr, PointerVal(1))
 
     ptr = store2.addNewVar("v")
-    store2.updateRef(ptr, IteVal(Number(1, CodeLoc(0, 0)), Number(3, CodeLoc(0, 0)), BinaryOp(GreaterThan, Identifier("a", CodeLoc(0, 0)), Number(0, CodeLoc(0, 0)), CodeLoc(0, 0)), CodeLoc(0, 0)))
+    store2.updateRef(ptr,
+      IteVal(
+        store2.storage.addNewVal(Number(1, CodeLoc(0, 0))),
+        store2.storage.addNewVal(Number(3, CodeLoc(0, 0))),
+        BinaryOp(GreaterThan, Identifier("a", CodeLoc(0, 0)), Number(0, CodeLoc(0, 0)), CodeLoc(0, 0)),
+        CodeLoc(0, 0)
+      )
+    )
 
     assert(!store1.storeEquals(store2))
     assert(!store2.storeEquals(store1))
@@ -242,7 +325,14 @@ class SymbolicStoreTest extends FunSuite with MicrocSupport with Examples {
     store1.updateRef(ptr, PointerVal(1))
 
     ptr = store1.addNewVar("v")
-    store1.updateRef(ptr, IteVal(Number(1, CodeLoc(0, 0)), Number(2, CodeLoc(0, 0)), BinaryOp(GreaterThan, Identifier("a", CodeLoc(0, 0)), Number(0, CodeLoc(0, 0)), CodeLoc(0, 0)), CodeLoc(0, 0)))
+    store1.updateRef(ptr,
+      IteVal(
+        store1.storage.addNewVal(Number(1, CodeLoc(0, 0))),
+        store1.storage.addNewVal(Number(2, CodeLoc(0, 0))),
+        BinaryOp(GreaterThan, Identifier("a", CodeLoc(0, 0)), Number(0, CodeLoc(0, 0)), CodeLoc(0, 0)),
+        CodeLoc(0, 0)
+      )
+    )
 
     ptr = store2.addNewVar("x")
     store2.updateRef(ptr, Number(1, CodeLoc(0, 0)))
@@ -257,7 +347,14 @@ class SymbolicStoreTest extends FunSuite with MicrocSupport with Examples {
     store2.updateRef(ptr, PointerVal(1))
 
     ptr = store2.addNewVar("v")
-    store2.updateRef(ptr, IteVal(Number(1, CodeLoc(0, 0)), Number(2, CodeLoc(0, 0)), BinaryOp(GreaterThan, Identifier("a", CodeLoc(0, 0)), Number(1, CodeLoc(0, 0)), CodeLoc(0, 0)), CodeLoc(0, 0)))
+    store2.updateRef(ptr,
+      IteVal(
+        store2.storage.addNewVal(Number(1, CodeLoc(0, 0))),
+        store2.storage.addNewVal(Number(2, CodeLoc(0, 0))),
+        BinaryOp(GreaterThan, Identifier("a", CodeLoc(0, 0)), Number(1, CodeLoc(0, 0)), CodeLoc(0, 0)),
+        CodeLoc(0, 0)
+      )
+    )
 
     assert(!store1.storeEquals(store2))
     assert(!store2.storeEquals(store1))
@@ -283,7 +380,14 @@ class SymbolicStoreTest extends FunSuite with MicrocSupport with Examples {
     store1.updateRef(ptr, PointerVal(3))
 
     ptr = store1.addNewVar("v")
-    store1.updateRef(ptr, IteVal(Number(1, CodeLoc(0, 0)), Number(2, CodeLoc(0, 0)), BinaryOp(GreaterThan, Identifier("a", CodeLoc(0, 0)), Number(0, CodeLoc(0, 0)), CodeLoc(0, 0)), CodeLoc(0, 0)))
+    store1.updateRef(ptr,
+      IteVal(
+        store1.storage.addNewVal(Number(1, CodeLoc(0, 0))),
+        store1.storage.addNewVal(Number(2, CodeLoc(0, 0))),
+        BinaryOp(GreaterThan, Identifier("a", CodeLoc(0, 0)), Number(0, CodeLoc(0, 0)), CodeLoc(0, 0)),
+        CodeLoc(0, 0)
+      )
+    )
 
     ptr = store2.addNewVar("x")
     store2.updateRef(ptr, Number(1, CodeLoc(0, 0)))
@@ -299,7 +403,14 @@ class SymbolicStoreTest extends FunSuite with MicrocSupport with Examples {
 
 
     ptr = store2.addNewVar("v")
-    store2.updateRef(ptr, IteVal(Number(1, CodeLoc(0, 0)), Number(2, CodeLoc(0, 0)), BinaryOp(GreaterThan, Identifier("a", CodeLoc(0, 0)), Number(0, CodeLoc(0, 0)), CodeLoc(0, 0)), CodeLoc(0, 0)))
+    store2.updateRef(ptr,
+      IteVal(
+        store2.storage.addNewVal(Number(1, CodeLoc(0, 0))),
+        store2.storage.addNewVal(Number(2, CodeLoc(0, 0))),
+        BinaryOp(GreaterThan, Identifier("a", CodeLoc(0, 0)), Number(0, CodeLoc(0, 0)), CodeLoc(0, 0)),
+        CodeLoc(0, 0)
+      )
+    )
 
     assert(!store1.storeEquals(store2))
     assert(!store2.storeEquals(store1))
@@ -327,7 +438,14 @@ class SymbolicStoreTest extends FunSuite with MicrocSupport with Examples {
     store1.updateRef(ptr, PointerVal(2))
 
     ptr = store1.addNewVar("v")
-    store1.updateRef(ptr, IteVal(Number(1, CodeLoc(0, 0)), Number(2, CodeLoc(0, 0)), BinaryOp(GreaterThan, Identifier("a", CodeLoc(0, 0)), Number(0, CodeLoc(0, 0)), CodeLoc(0, 0)), CodeLoc(0, 0)))
+    store1.updateRef(ptr,
+      IteVal(
+        PointerVal(0),
+        store1.storage.addNewVal(Number(2, CodeLoc(0, 0))),
+        BinaryOp(GreaterThan, Identifier("a", CodeLoc(0, 0)), Number(0, CodeLoc(0, 0)), CodeLoc(0, 0)),
+        CodeLoc(0, 0)
+      )
+    )
 
     ptr = store2.addNewVar("x")
     store2.updateRef(ptr, Number(1, CodeLoc(0, 0)))
@@ -346,11 +464,19 @@ class SymbolicStoreTest extends FunSuite with MicrocSupport with Examples {
 
 
     ptr = store2.addNewVar("v")
-    store2.updateRef(ptr, IteVal(Number(1, CodeLoc(0, 0)), Number(2, CodeLoc(0, 0)), BinaryOp(GreaterThan, Identifier("a", CodeLoc(0, 0)), Number(0, CodeLoc(0, 0)), CodeLoc(0, 0)), CodeLoc(0, 0)))
+    store2.updateRef(ptr,
+      IteVal(
+        PointerVal(0),
+        store2.storage.addNewVal(Number(2, CodeLoc(0, 0))),
+        BinaryOp(GreaterThan, Identifier("a", CodeLoc(0, 0)), Number(0, CodeLoc(0, 0)), CodeLoc(0, 0)),
+        CodeLoc(0, 0)
+      )
+    )
 
     var mergedStoreOpt = store1.mergeStores(store2, Number(1, CodeLoc(0, 0)))
     assert(mergedStoreOpt.nonEmpty)
     var mergedStore = mergedStoreOpt.get
+    mergedStore.storeEquals(store1)
     assert(mergedStore.storeEquals(store1))
     assert(mergedStore.storeEquals(store2))
     assert(store1.storeEquals(mergedStore))
@@ -381,7 +507,14 @@ class SymbolicStoreTest extends FunSuite with MicrocSupport with Examples {
     store1.updateRef(ptr, PointerVal(1))
 
     ptr = store1.addNewVar("v")
-    store1.updateRef(ptr, IteVal(Number(1, CodeLoc(0, 0)), Number(2, CodeLoc(0, 0)), BinaryOp(GreaterThan, Identifier("a", CodeLoc(0, 0)), Number(0, CodeLoc(0, 0)), CodeLoc(0, 0)), CodeLoc(0, 0)))
+    store1.updateRef(ptr,
+      IteVal(
+        store1.storage.addNewVal(Number(1, CodeLoc(0, 0))),
+        store1.storage.addNewVal(Number(2, CodeLoc(0, 0))),
+        BinaryOp(GreaterThan, Identifier("a", CodeLoc(0, 0)), Number(0, CodeLoc(0, 0)), CodeLoc(0, 0)),
+        CodeLoc(0, 0)
+      )
+    )
 
     ptr = store2.addNewVar("x")
     store2.updateRef(ptr, Number(1, CodeLoc(0, 0)))
@@ -397,7 +530,14 @@ class SymbolicStoreTest extends FunSuite with MicrocSupport with Examples {
 
 
     ptr = store2.addNewVar("v")
-    store2.updateRef(ptr, IteVal(Number(1, CodeLoc(0, 0)), Number(2, CodeLoc(0, 0)), BinaryOp(GreaterThan, Identifier("a", CodeLoc(0, 0)), Number(0, CodeLoc(0, 0)), CodeLoc(0, 0)), CodeLoc(0, 0)))
+    store2.updateRef(ptr,
+      IteVal(
+        store2.storage.addNewVal(Number(1, CodeLoc(0, 0))),
+        store2.storage.addNewVal(Number(2, CodeLoc(0, 0))),
+        BinaryOp(GreaterThan, Identifier("a", CodeLoc(0, 0)), Number(0, CodeLoc(0, 0)), CodeLoc(0, 0)),
+        CodeLoc(0, 0)
+      )
+    )
 
     mergedStoreOpt = store1.mergeStores(store2, Number(1, CodeLoc(0, 0)))
     assert(mergedStoreOpt.nonEmpty)
@@ -438,7 +578,14 @@ class SymbolicStoreTest extends FunSuite with MicrocSupport with Examples {
     store1.updateRef(ptr, PointerVal(2))
 
     ptr = store1.addNewVar("v")
-    store1.updateRef(ptr, IteVal(Number(1, CodeLoc(0, 0)), Number(2, CodeLoc(0, 0)), BinaryOp(GreaterThan, Identifier("a", CodeLoc(0, 0)), Number(0, CodeLoc(0, 0)), CodeLoc(0, 0)), CodeLoc(0, 0)))
+    store1.updateRef(ptr,
+      IteVal(
+        store1.storage.addNewVal(Number(1, CodeLoc(0, 0))),
+        store1.storage.addNewVal(Number(2, CodeLoc(0, 0))),
+        BinaryOp(GreaterThan, Identifier("a", CodeLoc(0, 0)), Number(0, CodeLoc(0, 0)), CodeLoc(0, 0)),
+        CodeLoc(0, 0)
+      )
+    )
 
     ptr = store2.addNewVar("x")
     store2.updateRef(ptr, Number(1, CodeLoc(0, 0)))
@@ -462,7 +609,14 @@ class SymbolicStoreTest extends FunSuite with MicrocSupport with Examples {
     store2.updateRef(ptr, PointerVal(2))
 
     ptr = store2.addNewVar("v")
-    store2.updateRef(ptr, IteVal(Number(1, CodeLoc(0, 0)), Number(2, CodeLoc(0, 0)), BinaryOp(GreaterThan, Identifier("a", CodeLoc(0, 0)), Number(0, CodeLoc(0, 0)), CodeLoc(0, 0)), CodeLoc(0, 0)))
+    store2.updateRef(ptr,
+      IteVal(
+        store2.storage.addNewVal(Number(1, CodeLoc(0, 0))),
+        store2.storage.addNewVal(Number(2, CodeLoc(0, 0))),
+        BinaryOp(GreaterThan, Identifier("a", CodeLoc(0, 0)), Number(0, CodeLoc(0, 0)), CodeLoc(0, 0)),
+        CodeLoc(0, 0)
+      )
+    )
 
     val mergedStoreOpt = store1.mergeStores(store2, Number(1, CodeLoc(0, 0)))
     assert(mergedStoreOpt.nonEmpty)
@@ -776,6 +930,5 @@ class SymbolicStoreTest extends FunSuite with MicrocSupport with Examples {
     assert(!mergedStore.storeEquals(store2))
     assert(!store1.storeEquals(mergedStore))
     assert(!store2.storeEquals(mergedStore))
-    assert(mergedStore.getVal("x", CodeLoc(0, 0), null).isInstanceOf[IteVal])
   }
 }

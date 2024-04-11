@@ -14,18 +14,23 @@ class StateHistory {
   var initial: SymbolicState = null
   var count = 0
   var initialRunned = false
+  var stopRemovingUnfinishedPaths = false
 
   private def getChildrenOfNodes(symbolicState: SymbolicState): SymbolicState = {
+    stopRemovingUnfinishedPaths = false
     unfinishedPaths.get(symbolicState) match {
       case None =>
         symbolicState
       case Some(states) =>
         val inner = states.toList(random.nextInt(states.size))
         val res = getChildrenOfNodes(inner)
-        if (unfinishedPaths.contains(symbolicState)) {
+        if (!stopRemovingUnfinishedPaths && unfinishedPaths.contains(symbolicState)) {
           unfinishedPaths(symbolicState).remove(inner)
           if (unfinishedPaths(symbolicState).isEmpty) {
             unfinishedPaths.remove(symbolicState)
+          }
+          else {
+            stopRemovingUnfinishedPaths = true
           }
         }
         res
@@ -59,7 +64,6 @@ class StateHistory {
     count += 1;
     addNode(parentState, newState)
     updateSubstateCounts(newState)
-    null
   }
 
   def addNode(parentState: SymbolicState, newState: SymbolicState): Unit = {

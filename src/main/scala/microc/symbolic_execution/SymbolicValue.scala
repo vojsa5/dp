@@ -217,7 +217,7 @@ object Value {
       }
   }
 
-  case class IteVal(trueState: Val, falseState: Val, expr: Expr, loc: Loc) extends Symbolic {
+  case class IteVal(trueState: PointerVal, falseState: PointerVal, expr: Expr, loc: Loc) extends Symbolic {
     override def equalsVal(other: Val): Boolean =
       other match {
         case v@IteVal(t, f, e, _) => trueState.equalsVal(t) && falseState.equalsVal(f) && expr.equals(e)

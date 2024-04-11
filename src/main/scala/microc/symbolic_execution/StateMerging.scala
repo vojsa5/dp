@@ -23,7 +23,7 @@ class HeuristicBasedStateMerging(strategy: SearchStrategy, variableSolvingCosts:
             statesToRemove.add(alreadyExisting.last)
             val merged = alreadyExisting.last.mergeStates(existingState)
             states((state.nextStatement, state.symbolicStore.framesCnt())).remove(existingState)
-            val lastState = new MergedSymbolicState(merged.nextStatement, merged.pathCondition, merged.symbolicStore, merged.callStack, (state, existingState))
+            val lastState = new MergedSymbolicState(merged.nextStatement, merged.pathCondition, merged.symbolicStore, merged.callStack, merged.variableDecls, (state, existingState))
             states.getOrElseUpdate((state.nextStatement, state.symbolicStore.framesCnt()), new mutable.HashSet[SymbolicState]()).add(lastState)
             strategy.addState(lastState)
             return
@@ -62,7 +62,7 @@ class AgressiveStateMerging(strategy: SearchStrategy) extends StateMerging {
       case Some(alreadyExisting) => {
         statesToRemove.add(alreadyExisting.last)
         val merged = alreadyExisting.last.mergeStates(state)
-        new MergedSymbolicState(merged.nextStatement, merged.pathCondition, merged.symbolicStore, merged.callStack, (alreadyExisting.last, state))
+        new MergedSymbolicState(merged.nextStatement, merged.pathCondition, merged.symbolicStore, merged.callStack, merged.variableDecls, (alreadyExisting.last, state))
       }
       case None => state
     }

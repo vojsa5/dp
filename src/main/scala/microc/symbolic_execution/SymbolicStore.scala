@@ -35,13 +35,37 @@ class SymbolicStore(functionDeclarations: Map[String, FunVal]) {
       res
     }
 
-    private def iteContainsUninitialized(iteVal: IteVal): Boolean = {
+//    private def iteContainsUninitialized(iteVal: IteVal): Boolean = {
+//      iteVal match {
+//        case IteVal(trueState, falseState, _, _) if falseState == UninitializedRef || trueState == UninitializedRef => true
+//        case IteVal(trueState: IteVal, falseState: IteVal, _, _) => iteContainsUninitialized(trueState) || iteContainsUninitialized(falseState)
+//        case IteVal(trueState: IteVal, _, _, _) => iteContainsUninitialized(trueState)
+//        case IteVal(_, falseState: IteVal, _, _) => iteContainsUninitialized(falseState)
+//        case _ => false
+//      }
+//    }
+
+    private def iteContainsUninitialized(iteVal: IteVal, store: Storage): Boolean = {
       iteVal match {
-        case IteVal(trueState, falseState, _, _) if falseState == UninitializedRef || trueState == UninitializedRef => true
-        case IteVal(trueState: IteVal, falseState: IteVal, _, _) => iteContainsUninitialized(trueState) || iteContainsUninitialized(falseState)
-        case IteVal(trueState: IteVal, _, _, _) => iteContainsUninitialized(trueState)
-        case IteVal(_, falseState: IteVal, _, _) => iteContainsUninitialized(falseState)
-        case _ => false
+        case IteVal(trueState, falseState, expr, loc) =>
+          (store.getVal(trueState, true), store.getVal(falseState, true)) match {
+            case (Some(r1), Some(r2)) =>
+              (r1, r2) match {
+                case (UninitializedRef, UninitializedRef) => true
+                case (i1: IteVal, i2: IteVal) =>
+                  iteContainsUninitialized(i1, store) || iteContainsUninitialized(i2, store)
+                case (i1: IteVal, i2) =>
+                  iteContainsUninitialized(i1, store)
+                case (i1, i2: IteVal) =>
+                  iteContainsUninitialized(i2, store)
+                case other =>
+                  false
+              }
+            case _ =>
+              throw new Exception("this should never happen")
+          }
+        case _ =>
+          false
       }
     }
 
@@ -53,7 +77,7 @@ class SymbolicStore(functionDeclarations: Map[String, FunVal]) {
         case UninitializedRef if allowReturnNonInitialized => Some(UninitializedRef)
         case UninitializedRef => None
         case ite@IteVal(_, _, _, _)  => {
-          if (iteContainsUninitialized(ite)) {
+          if (iteContainsUninitialized(ite, this)) {
             if (allowReturnNonInitialized) {
               Some(ite)
             }
@@ -205,6 +229,12 @@ class SymbolicStore(functionDeclarations: Map[String, FunVal]) {
           return true
         }
         false
+        //TODO records
+      case (IteVal(trueState1, falseState1, expr1, _), IteVal(trueState2, falseState2, expr2, _)) =>
+        (store1.storage.getVal(trueState1), store2.storage.getVal(trueState2), store1.storage.getVal(falseState1), store2.storage.getVal(falseState2)) match {
+          case (Some(s1), Some(s2), Some(s3), Some(s4)) =>
+            storeValuesEquals(s1, s2, store1, store2) && storeValuesEquals(s3, s4, store1, store2) && expr1.equals(expr2)
+        }
       case (v1, v2) =>
         v1.equalsVal(v2)
     }
@@ -305,6 +335,15 @@ class SymbolicStore(functionDeclarations: Map[String, FunVal]) {
           rec.put(field, moveValue(res, store, fields(field), pointerMapping))
         }
         res.storage.addNewVal(RecVal(rec))
+      case Some(IteVal(trueState, falseState, expr, loc)) =>
+        res.storage.addNewVal(
+          IteVal(
+            moveValue(res, store, trueState, pointerMapping),
+            moveValue(res, store, falseState, pointerMapping),
+            expr,
+            loc
+          )
+        )
       case Some(v1) =>
         res.storage.addNewVal(v1)
       case None =>
@@ -322,19 +361,20 @@ class SymbolicStore(functionDeclarations: Map[String, FunVal]) {
                  ptr1: PointerVal,
                  ptr2: PointerVal,
                  pointerMapping1: mutable.HashMap[Int, Int],
-                 pointerMapping2: mutable.HashMap[Int, Int]): (PointerVal, PointerVal) = {
+                 pointerMapping2: mutable.HashMap[Int, Int],
+                 pathCondition: Expr): (PointerVal, PointerVal) = {
     if (pointerMapping1.contains(ptr1.address) && pointerMapping2.contains(ptr2.address)) {
       return (PointerVal(pointerMapping1(ptr1.address)), PointerVal(pointerMapping2(ptr2.address)))
     }
     if (pointerMapping1.contains(ptr1.address)) {
-      return (PointerVal(pointerMapping1(ptr1.address)), moveValue(res, store2, ptr2, pointerMapping2))
+      return (PointerVal(pointerMapping1(ptr1.address)), res.storage.addNewVal(moveValue(res, store2, ptr2, pointerMapping2)))
     }
     if (pointerMapping2.contains(ptr2.address)) {
-      return (moveValue(res, store1, ptr1, pointerMapping1), PointerVal(pointerMapping2(ptr2.address)))
+      return (res.storage.addNewVal(moveValue(res, store1, ptr1, pointerMapping1)), PointerVal(pointerMapping2(ptr2.address)))
     }
     (store1.storage.getVal(ptr1), store2.storage.getVal(ptr2)) match {
       case (Some(PointerVal(p1)), Some(PointerVal(p2))) =>
-        var (addr1: PointerVal, addr2: PointerVal) = moveValues(res, store1, store2, PointerVal(p1), PointerVal(p2), pointerMapping1, pointerMapping2)
+        val (addr1: PointerVal, addr2: PointerVal) = moveValues(res, store1, store2, PointerVal(p1), PointerVal(p2), pointerMapping1, pointerMapping2, pathCondition)
         if (addr1.address == addr2.address) {
           val added = res.storage.addNewVal(addr1)
           pointerMapping1.put(ptr1.address, added.address)
@@ -350,72 +390,69 @@ class SymbolicStore(functionDeclarations: Map[String, FunVal]) {
         }
       case (Some(ArrVal(elems1)), Some(ArrVal(elems2))) =>
         if (elems1.length == elems2.length) {
-          var arrayAreSame = true
-          var arr1 = Array[PointerVal]()
-          var arr2 = Array[PointerVal]()
+          var arr = Array[PointerVal]()
           for (i <- elems1.indices) {
-            var (addr1: PointerVal, addr2: PointerVal) =
-              moveValues(res, store1, store2, elems1(i), elems2(i), pointerMapping1, pointerMapping2)
-            arr1 = arr1.appended(addr1)
-            arr2 = arr2.appended(addr2)
-            if (addr1 != addr2) {
-              arrayAreSame = false
+            val (addr1: PointerVal, addr2: PointerVal) = {
+              moveValues(res, store1, store2, elems1(i), elems2(i), pointerMapping1, pointerMapping2, pathCondition)
+            }
+            if (addr1 == addr2) {
+              arr = arr.appended(addr1)
+            }
+            else {
+              arr = arr.appended(res.storage.addNewVal(IteVal(addr1, addr2, pathCondition, CodeLoc(0, 0))))
             }
           }
-          if (arrayAreSame) {
-            val a1 = ArrVal(arr1)
-            val added = res.storage.addNewVal(a1)
-            pointerMapping1.put(ptr1.address, added.address)
-            pointerMapping2.put(ptr2.address, added.address)
-            (added, added)
-          }
-          else {
-            val a1 = ArrVal(arr1)
-            val a2 = ArrVal(arr2)
-            val added1 = res.storage.addNewVal(a1)
-            val added2 = res.storage.addNewVal(a2)
-            pointerMapping1.put(ptr1.address, added1.address)
-            pointerMapping2.put(ptr2.address, added2.address)
-            (added1, added2)
-          }
+          val a = ArrVal(arr)
+          val added = res.storage.addNewVal(a)
+          pointerMapping1.put(ptr1.address, added.address)
+          pointerMapping2.put(ptr2.address, added.address)
+          (added, added)
         }
         else {
           throw  new Exception("this should never happen")
         }
       case (Some(RecVal(fields1)), Some(RecVal(fields2))) =>
         if (fields1.keys == fields2.keys) {
-          var arrayAreSame = true
-          var rec1 = mutable.HashMap[String, PointerVal]()
-          var rec2 = mutable.HashMap[String, PointerVal]()
+          val rec = mutable.HashMap[String, PointerVal]()
           for (field <- fields1.keys) {
             var (addr1: PointerVal, addr2: PointerVal) =
-              moveValues(res, store1, store2, fields1(field), fields2(field), pointerMapping1, pointerMapping2)
-            rec1.put(field, addr1)
-            rec2.put(field, addr2)
-            if (addr1 != addr2) {
-              arrayAreSame = false
+              moveValues(res, store1, store2, fields1(field), fields2(field), pointerMapping1, pointerMapping2, pathCondition)
+            if (addr1 == addr2) {
+              rec.put(field, addr1)
+            }
+            else {
+              rec.put(field, res.storage.addNewVal(IteVal(addr1, addr2, pathCondition, CodeLoc(0, 0))))
             }
           }
-          if (arrayAreSame) {
-            val a1 = RecVal(rec1)
-            val added = res.storage.addNewVal(a1)
-            pointerMapping1.put(ptr1.address, added.address)
-            pointerMapping2.put(ptr2.address, added.address)
-            (added, added)
-          }
-          else {
-            val a1 = RecVal(rec1)
-            val a2 = RecVal(rec2)
-            val added1 = res.storage.addNewVal(a1)
-            val added2 = res.storage.addNewVal(a2)
-            pointerMapping1.put(ptr1.address, added1.address)
-            pointerMapping2.put(ptr2.address, added2.address)
-            (added1, added2)
-          }
+          val r = RecVal(rec)
+          val added = res.storage.addNewVal(r)
+          pointerMapping1.put(ptr1.address, added.address)
+          pointerMapping2.put(ptr2.address, added.address)
+          (added, added)
         }
         else {
           throw new Exception("IMPLEMENT")
         }
+      case (Some(IteVal(trueState1, falseState1, expr1, loc1)), Some(IteVal(trueState2, falseState2, expr2, loc2))) if expr1 == expr2 =>
+        val t1 = moveValues(res, store1, store2, trueState1, trueState2, pointerMapping1, pointerMapping2, pathCondition)
+        val t2 = moveValues(res, store1, store2, falseState1, falseState2, pointerMapping1, pointerMapping2, pathCondition)
+        val newTrueState = if (t1._1 == t1._2) {
+          t1._1
+        }
+        else {
+          res.storage.addNewVal(IteVal(t1._1, t1._2, pathCondition, CodeLoc(0, 0)))
+        }
+        val newFalseState = if (t2._1 == t2._2) {
+          t2._1
+        }
+        else {
+          res.storage.addNewVal(IteVal(t2._1, t2._2, pathCondition, CodeLoc(0, 0)))
+        }
+        val ite = IteVal(newTrueState, newFalseState, expr1, loc1)
+        val added = res.storage.addNewVal(ite)
+        pointerMapping1.put(ptr1.address, added.address)
+        pointerMapping2.put(ptr2.address, added.address)
+        (added, added)
       case (Some(v1), Some(v2)) if v1.equalsVal(v2) =>
         val addr = res.storage.addNewVal(v1)
         pointerMapping1.put(ptr1.address, addr.address)
@@ -427,7 +464,11 @@ class SymbolicStore(functionDeclarations: Map[String, FunVal]) {
         pointerMapping2.put(ptr2.address, addr.address)
         (addr, addr)
       case (_, _) =>
-        (moveValue(res, store1, ptr1, pointerMapping1), moveValue(res, store2, ptr2, pointerMapping2))
+        val p1 = moveValue(res, store1, ptr1, pointerMapping1)
+        val p2 = moveValue(res, store2, ptr2, pointerMapping2)
+        val ite = IteVal(p1, p2, pathCondition, CodeLoc(0, 0))
+        val addr = res.storage.addNewVal(ite)
+        (addr, addr)
     }
   }
 
@@ -444,45 +485,15 @@ class SymbolicStore(functionDeclarations: Map[String, FunVal]) {
         if (otherFrame.contains(variable)) {
           (thisFrame(variable), otherFrame(variable)) match {
             case (PointerVal(ptr1), PointerVal(ptr2)) => {
-              val (addr1, addr2) = moveValues(res, this, other, PointerVal(ptr1), PointerVal(ptr2), thisPointerMapping, otherPointerMapping)
+              val (addr1, addr2) = moveValues(res, this, other, PointerVal(ptr1), PointerVal(ptr2), thisPointerMapping, otherPointerMapping, pathCondition)
               if (addr1.address == addr2.address) {
                 res.addVar(variable, addr1)
               }
               else {
                 val addr = res.storage.getAddress
                 res.addVar(variable, addr)
-                val v1 = res.storage.getVal(addr1, true).get
-                res.storage.getVal(addr2, true).get match {
-                  case UninitializedRef =>
-                    System.out.println("dafdsfddf")
-                  case _ =>
-                }
-
-                val v2 = res.storage.getVal(addr2, true).get
-                res.updateRef(addr, IteVal(v1, v2, pathCondition, CodeLoc(0, 0)))
+                res.updateRef(addr, IteVal(addr1, addr2, pathCondition, CodeLoc(0, 0)))
               }
-//              (storage.getVal(PointerVal(ptr1)), other.storage.getVal(PointerVal(ptr2))) match {
-//                case (Some(val1), Some(val2)) if val1 == val2 =>
-//                  val addr = res.storage.getAddress
-//                  res.addVar(variable, addr)
-//                  res.updateRef(addr, val1)
-//                  thisPointerMapping.put(ptr1, addr.address)
-//                  otherPointerMapping.put(ptr2, addr.address)
-//                case (Some(val1), Some(val2)) =>
-//                  val addr = res.storage.getAddress
-//                  res.addVar(variable, addr)
-//                  res.updateRef(addr, IteVal(val1, val2, pathCondition.expr, CodeLoc(0, 0)))
-//                  thisPointerMapping.put(ptr1, addr.address)
-//                  otherPointerMapping.put(ptr2, addr.address)
-//                case (None, None) =>
-//                  val addr = res.storage.getAddress
-//                  res.addVar(variable, addr)
-//                  res.updateRef(addr, UninitializedRef)
-//                  thisPointerMapping.put(ptr1, addr.address)
-//                  otherPointerMapping.put(ptr2, addr.address)
-//                case _ =>
-//                  throw new Exception("")
-//              }
             }
           }
         }

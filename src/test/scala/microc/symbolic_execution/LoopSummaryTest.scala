@@ -5,7 +5,7 @@ import microc.cfg.{CfgNode, IntraproceduralCfgFactory}
 import microc.{Examples, MicrocSupport, symbolic_execution}
 import munit.FunSuite
 import com.microsoft.z3.{BoolExpr, Context, Status}
-import microc.symbolic_execution.Value.{ArrVal, PointerVal, RecVal, SymbolicExpr, SymbolicVal, Val}
+import microc.symbolic_execution.Value.{ArrVal, PointerVal, RecVal, SymbolicExpr, SymbolicVal, Val, UninitializedRef}
 
 import scala.collection.mutable
 
@@ -68,8 +68,9 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
     var symbolicState = new SymbolicState(null, Number(1, CodeLoc(0, 0)), new SymbolicStore(Map.empty))
     val program = parseUnsafe(code)
     val cfg = new IntraproceduralCfgFactory().fromProgram(program);
-    val loopSummary = new LoopSummary(cfg)
+    val executor = new LoopSummary(cfg)
     var stmt: CfgNode = cfg.getFce("main")
+    val decls = stmt.ast.asInstanceOf[FunDecl].block.vars.flatMap(_.decls)
     while (!stmt.ast.isInstanceOf[WhileStmt]) {
       stmt = stmt.succ.head
     }
@@ -78,9 +79,12 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
     symbolicState = symbolicState.addedVar("k", Number(0, CodeLoc(0, 0)))
     symbolicState = symbolicState.addedVar("i", Number(0, CodeLoc(0, 0)))
     symbolicState = symbolicState.addedVar("_t1", SymbolicExpr(BinaryOp(LowerThan, Identifier("n", CodeLoc(0, 0)), Identifier("m", CodeLoc(0, 0)), CodeLoc(0, 0)), CodeLoc(0, 0)))//normalized condition
-    val pathsOpt = loopSummary.getAllPathsInALoop(stmt, symbolicState,
-      loopSummary.getMemoryCellsFromConditions(loopSummary.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy())),
-      mutable.HashSet[Expr]())
+    symbolicState = symbolicState.addedVar("_t2", UninitializedRef)
+    symbolicState.variableDecls = decls
+    val mapping = mutable.HashMap[Val, Expr]()
+    val memoryCells = executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy()))
+    val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState, executor.createSymbolicStateWithAllValuesSymbolic(symbolicState, mapping),
+      memoryCells, mutable.HashSet[Expr](), mapping)
     assert(pathsOpt.nonEmpty)
     val paths = pathsOpt.get
     assert(paths.size == 2)
@@ -93,7 +97,7 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
           val comparison = ctx.mkGe(n, m)
           val constraint = ctx.mkEq(constraintSolver.createConstraintWithState(paths(i).condition, symbolicState), comparison)
           val solver = ctx.mkSolver()
-          constraint match {  
+          constraint match {
             case cond: BoolExpr => solver.add(cond)
           }
           solver.check() match {
@@ -157,16 +161,21 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
     symbolicState = symbolicState.addedVar("z", SymbolicVal(CodeLoc(3, 0)))
     symbolicState = symbolicState.addedVar("_t1", SymbolicExpr(BinaryOp(LowerThan, Identifier("x", CodeLoc(0, 0)), Identifier("n", CodeLoc(0, 0)), CodeLoc(0, 0)), CodeLoc(0, 0)))//normalized condition
     symbolicState = symbolicState.addedVar("_t2", SymbolicExpr(BinaryOp(GreaterThan, Identifier("z", CodeLoc(0, 0)), Identifier("x", CodeLoc(0, 0)), CodeLoc(0, 0)), CodeLoc(0, 0)))//normalized condition
+    symbolicState = symbolicState.addedVar("_t3", UninitializedRef)
+    symbolicState = symbolicState.addedVar("_t4", UninitializedRef)
     val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
     var main: CfgNode = cfg.getFce("main")
     var stmt = main
+    val decls = stmt.ast.asInstanceOf[FunDecl].block.vars.flatMap(_.decls)
     while (!stmt.ast.isInstanceOf[WhileStmt]) {
       stmt = stmt.succ.head
     }
+    symbolicState.variableDecls = decls
     val executor = new LoopSummary(cfg)
-    val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState,
-      executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy())),
-      mutable.HashSet[Expr]())
+    val mapping = mutable.HashMap[Val, Expr]()
+    val memoryCells = executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy()))
+    val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState, executor.createSymbolicStateWithAllValuesSymbolic(symbolicState, mapping),
+      memoryCells, mutable.HashSet[Expr](), mapping)
     assert(pathsOpt.nonEmpty)
     val paths = pathsOpt.get
     assert(paths.size == 3)
@@ -283,13 +292,16 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
     symbolicState = symbolicState.addedVar("_t3", SymbolicExpr(BinaryOp(LowerThan, Identifier("j", CodeLoc(0, 0)), Number(8, CodeLoc(0, 0)), CodeLoc(0, 0)), CodeLoc(0, 0)))//normalized condition
     val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
     var stmt: CfgNode = cfg.getFce("main")
+    val decls = stmt.ast.asInstanceOf[FunDecl].block.vars.flatMap(_.decls)
     while (!stmt.ast.isInstanceOf[WhileStmt]) {
       stmt = stmt.succ.head
     }
+    symbolicState.variableDecls = decls
     val executor = new LoopSummary(cfg)
-    val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState,
-      executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy())),
-      mutable.HashSet[Expr]())
+    val mapping = mutable.HashMap[Val, Expr]()
+    val memoryCells = executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy()))
+    val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState, executor.createSymbolicStateWithAllValuesSymbolic(symbolicState, mapping),
+      memoryCells, mutable.HashSet[Expr](), mapping)
     assert(pathsOpt.nonEmpty)
     val paths = pathsOpt.get
     assert(paths.size == 5)
@@ -950,16 +962,18 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
     for (decl <- decls) {
       symbolicState.addedVar(decl.name, SymbolicVal(decl.loc))
     }
-    val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState,
-      executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy())),
-      mutable.HashSet[Expr]())
+    symbolicState.variableDecls = decls
+    val mapping = mutable.HashMap[Val, Expr]()
+    val memoryCells = executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy()))
+    val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState, executor.createSymbolicStateWithAllValuesSymbolic(symbolicState, mapping),
+      memoryCells, mutable.HashSet[Expr](), mapping)
     assert(pathsOpt.nonEmpty)
     val paths = pathsOpt.get
     var vertices :List[Vertex] = List()
     for (path <- paths) {
       vertices = vertices.appended(Vertex(path, path.condition, executor.pathToVertex(path), path.iterations))
     }
-    val pda = PDA(executor, vertices, decls, new ConstraintSolver(new Context()), Number(1, CodeLoc(0, 0)), symbolicState)
+    val pda = PDA(executor, vertices, decls, new ConstraintSolver(new Context()), Number(1, CodeLoc(0, 0)), symbolicState, mapping)
     pda.initialize()
     assert(pda.entryStates.size == 3)
     assert(pda.exitStates.size == 1)
@@ -1076,16 +1090,18 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
     for (decl <- decls) {
       symbolicState.addedVar(decl.name, SymbolicVal(decl.loc))
     }
-    val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState,
-      executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy())),
-      mutable.HashSet[Expr]())
+    symbolicState.variableDecls = decls
+    val mapping = mutable.HashMap[Val, Expr]()
+    val memoryCells = executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy()))
+    val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState, executor.createSymbolicStateWithAllValuesSymbolic(symbolicState, mapping),
+      memoryCells, mutable.HashSet[Expr](), mapping)
     assert(pathsOpt.nonEmpty)
     val paths = pathsOpt.get
     var vertices :List[Vertex] = List()
     for (path <- paths) {
       vertices = vertices.appended(Vertex(path, path.condition, executor.pathToVertex(path), path.iterations))
     }
-    val pda = PDA(executor, vertices, decls, new ConstraintSolver(new Context()), Number(1, CodeLoc(0, 0)), symbolicState)
+    val pda = PDA(executor, vertices, decls, new ConstraintSolver(new Context()), Number(1, CodeLoc(0, 0)), symbolicState, mapping)
     pda.initialize()
     assert(pda.entryStates.size == 3)
     assert(pda.exitStates.size == 1)
@@ -1202,16 +1218,18 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
     for (decl <- decls) {
       symbolicState.addedVar(decl.name, SymbolicVal(decl.loc))
     }
-    val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState,
-      executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy())),
-      mutable.HashSet[Expr]())
+    symbolicState.variableDecls = decls
+    val mapping = mutable.HashMap[Val, Expr]()
+    val memoryCells = executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy()))
+    val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState, executor.createSymbolicStateWithAllValuesSymbolic(symbolicState, mapping),
+      memoryCells, mutable.HashSet[Expr](), mapping)
     assert(pathsOpt.nonEmpty)
     val paths = pathsOpt.get
     var vertices :List[Vertex] = List()
     for (path <- paths) {
       vertices = vertices.appended(Vertex(path, path.condition, executor.pathToVertex(path), path.iterations))
     }
-    val pda = PDA(executor, vertices, decls, new ConstraintSolver(new Context()), Number(1, CodeLoc(0, 0)), symbolicState)
+    val pda = PDA(executor, vertices, decls, new ConstraintSolver(new Context()), Number(1, CodeLoc(0, 0)), symbolicState, mapping)
     pda.initialize()
     assert(pda.entryStates.size == 3)
     assert(pda.exitStates.size == 1)
@@ -1328,16 +1346,18 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
     for (decl <- decls) {
       symbolicState.addedVar(decl.name, SymbolicVal(decl.loc))
     }
-    val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState,
-      executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy())),
-      mutable.HashSet[Expr]())
+    symbolicState.variableDecls = decls
+    val mapping = mutable.HashMap[Val, Expr]()
+    val memoryCells = executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy()))
+    val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState, executor.createSymbolicStateWithAllValuesSymbolic(symbolicState, mapping),
+      memoryCells, mutable.HashSet[Expr](), mapping)
     assert(pathsOpt.nonEmpty)
     val paths = pathsOpt.get
     var vertices :List[Vertex] = List()
     for (path <- paths) {
       vertices = vertices.appended(Vertex(path, path.condition, executor.pathToVertex(path), path.iterations))
     }
-    val pda = PDA(executor, vertices, decls, new ConstraintSolver(new Context()), Number(1, CodeLoc(0, 0)), symbolicState)
+    val pda = PDA(executor, vertices, decls, new ConstraintSolver(new Context()), Number(1, CodeLoc(0, 0)), symbolicState, mapping)
     pda.initialize()
     assert(pda.entryStates.size == 3)
     assert(pda.exitStates.size == 1)
@@ -1454,16 +1474,18 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
     for (decl <- decls) {
       symbolicState.addedVar(decl.name, SymbolicVal(decl.loc))
     }
-    val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState,
-      executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy())),
-      mutable.HashSet[Expr]())
+    symbolicState.variableDecls = decls
+    val mapping = mutable.HashMap[Val, Expr]()
+    val memoryCells = executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy()))
+    val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState, executor.createSymbolicStateWithAllValuesSymbolic(symbolicState, mapping),
+      memoryCells, mutable.HashSet[Expr](), mapping)
     assert(pathsOpt.nonEmpty)
     val paths = pathsOpt.get
     var vertices :List[Vertex] = List()
     for (path <- paths) {
       vertices = vertices.appended(Vertex(path, path.condition, executor.pathToVertex(path), path.iterations))
     }
-    val pda = PDA(executor, vertices, decls, new ConstraintSolver(new Context()), Number(1, CodeLoc(0, 0)), symbolicState)
+    val pda = PDA(executor, vertices, decls, new ConstraintSolver(new Context()), Number(1, CodeLoc(0, 0)), symbolicState, mapping)
     pda.initialize()
     assert(pda.entryStates.size == 3)
     assert(pda.exitStates.size == 1)
@@ -1583,16 +1605,18 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
     for (decl <- decls) {
       symbolicState.addedVar(decl.name, SymbolicVal(decl.loc))
     }
-    val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState,
-      executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy())),
-      mutable.HashSet[Expr]())
+    symbolicState.variableDecls = decls
+    val mapping = mutable.HashMap[Val, Expr]()
+    val memoryCells = executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy()))
+    val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState, executor.createSymbolicStateWithAllValuesSymbolic(symbolicState, mapping),
+      memoryCells, mutable.HashSet[Expr](), mapping)
     assert(pathsOpt.nonEmpty)
     val paths = pathsOpt.get
     var vertices :List[Vertex] = List()
     for (path <- paths) {
       vertices = vertices.appended(Vertex(path, path.condition, executor.pathToVertex(path), path.iterations))
     }
-    val pda = PDA(executor, vertices, decls, new ConstraintSolver(new Context()), Number(1, CodeLoc(0, 0)), symbolicState)
+    val pda = PDA(executor, vertices, decls, new ConstraintSolver(new Context()), Number(1, CodeLoc(0, 0)), symbolicState, mapping)
     pda.initialize()
     assert(pda.entryStates.size == 3)
     assert(pda.exitStates.size == 1)
@@ -1712,16 +1736,18 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
         symbolicState.addedVar(decl.name, ArrVal(Array(symbolicState.getSymbolicValOpt(decl.name).get.asInstanceOf[PointerVal])))
       }
     }
-    val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState.deepCopy(),
-      executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy())),
-      mutable.HashSet[Expr]())
+    symbolicState.variableDecls = decls
+    val mapping = mutable.HashMap[Val, Expr]()
+    val memoryCells = executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy()))
+    val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState, executor.createSymbolicStateWithAllValuesSymbolic(symbolicState, mapping),
+      memoryCells, mutable.HashSet[Expr](), mapping)
     assert(pathsOpt.nonEmpty)
     val paths = pathsOpt.get
     var vertices :List[Vertex] = List()
     for (path <- paths) {
       vertices = vertices.appended(Vertex(path, path.condition, executor.pathToVertex(path), path.iterations))
     }
-    val pda = PDA(executor, vertices, decls, new ConstraintSolver(new Context()), Number(1, CodeLoc(0, 0)), symbolicState.deepCopy())
+    val pda = PDA(executor, vertices, decls, new ConstraintSolver(new Context()), Number(1, CodeLoc(0, 0)), symbolicState.deepCopy(), mapping)
     pda.initialize()
     assert(pda.entryStates.size == 3)
     assert(pda.exitStates.size == 1)
@@ -1853,16 +1879,18 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
         symbolicState.addedVar(decl.name, RecVal(fields))
       }
     }
-    val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState.deepCopy(),
-      executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy())),
-      mutable.HashSet[Expr]())
+    symbolicState.variableDecls = decls
+    val mapping = mutable.HashMap[Val, Expr]()
+    val memoryCells = executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy()))
+    val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState, executor.createSymbolicStateWithAllValuesSymbolic(symbolicState, mapping),
+      memoryCells, mutable.HashSet[Expr](), mapping)
     assert(pathsOpt.nonEmpty)
     val paths = pathsOpt.get
     var vertices :List[Vertex] = List()
     for (path <- paths) {
       vertices = vertices.appended(Vertex(path, path.condition, executor.pathToVertex(path), path.iterations))
     }
-    val pda = PDA(executor, vertices, decls, new ConstraintSolver(new Context()), Number(1, CodeLoc(0, 0)), symbolicState.deepCopy())
+    val pda = PDA(executor, vertices, decls, new ConstraintSolver(new Context()), Number(1, CodeLoc(0, 0)), symbolicState.deepCopy(), mapping)
     pda.initialize()
     assert(pda.entryStates.size == 3)
     assert(pda.exitStates.size == 1)
@@ -2008,11 +2036,13 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
     for (decl <- decls) {
       symbolicState.addedVar(decl.name, SymbolicVal(decl.loc))
     }
+    symbolicState.variableDecls = decls
+    val mapping = mutable.HashMap[Val, Expr]()
 
     symbolicState.variableDecls = decls
-    val summary = executor.summarizeLoop(symbolicState)
+    val summary = executor.summarizeLoop(symbolicState, mapping)
     symbolicState.nextStatement = whileStmt
-    val summary2 = executor.summarizeLoop(symbolicState)
+    val summary2 = executor.summarizeLoop(symbolicState, mapping)
     null
   }
 
@@ -2061,7 +2091,7 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
     val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
     var stmt: CfgNode = cfg.getFce("main")
     val main = stmt
-
+    val decls = stmt.ast.asInstanceOf[FunDecl].block.vars.flatMap(_.decls)
     while (!stmt.ast.isInstanceOf[WhileStmt]) {
       stmt = stmt.succ.head
     }
@@ -2074,14 +2104,20 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
     symbolicState = symbolicState.addedVar("_t1", SymbolicVal(CodeLoc(0, 0)))
 
     val executor = new LoopSummary(cfg)
-    val paths = executor.getAllPathsInALoop(stmt, symbolicState,
-      executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy())),
-      mutable.HashSet[Expr]())
+    symbolicState.variableDecls = decls
+    val mapping = mutable.HashMap[Val, Expr]()
+    val memoryCells = executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy()))
+    val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState, executor.createSymbolicStateWithAllValuesSymbolic(symbolicState, mapping),
+      memoryCells, mutable.HashSet[Expr](), mapping)
 
-    assert(paths.nonEmpty)
-    for (path <- paths.get) {
+    assert(pathsOpt.nonEmpty)
+    val paths = pathsOpt.get
+    for (path <- paths) {
       if (path.changes.nonEmpty) {
         val change: Expr => Expr => Expr = path.changes.find  { case (Identifier(name, loc), _) => name == "i" }.get._2
+        println(change.apply(Number(0, CodeLoc(0, 0))).apply(Number(10, CodeLoc(0, 0))))
+        println(change.apply(Number(0, CodeLoc(0, 0))).apply(Number(0, CodeLoc(0, 0))))
+        println(change.apply(Number(10, CodeLoc(0, 0))).apply(Number(0, CodeLoc(0, 0))))
         assert(change.apply(Number(0, CodeLoc(0, 0))).apply(Number(10, CodeLoc(0, 0))).asInstanceOf[Number].value == 10)
         assert(change.apply(Number(0, CodeLoc(0, 0))).apply(Number(0, CodeLoc(0, 0))).asInstanceOf[Number].value == 0)
         assert(change.apply(Number(10, CodeLoc(0, 0))).apply(Number(0, CodeLoc(0, 0))).asInstanceOf[Number].value == 10)
@@ -2113,7 +2149,7 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
     val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
     var stmt: CfgNode = cfg.getFce("main")
     val main = stmt
-
+    val decls = stmt.ast.asInstanceOf[FunDecl].block.vars.flatMap(_.decls)
     while (!stmt.ast.isInstanceOf[WhileStmt]) {
       stmt = stmt.succ.head
     }
@@ -2125,10 +2161,12 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
     symbolicState = symbolicState.addedVar("n", SymbolicVal(CodeLoc(0, 0)))
 
     val executor = new LoopSummary(cfg)
-    val paths = new LoopSummary(cfg).getAllPathsInALoop(stmt, symbolicState,
-      executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy())),
-      mutable.HashSet[Expr]())
-    assert(paths.isEmpty)
+    symbolicState.variableDecls = decls
+    val mapping = mutable.HashMap[Val, Expr]()
+    val memoryCells = executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy()))
+    val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState, executor.createSymbolicStateWithAllValuesSymbolic(symbolicState, mapping),
+      memoryCells, mutable.HashSet[Expr](), mapping)
+    assert(pathsOpt.isEmpty)
   }
 
 
@@ -2173,16 +2211,18 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
     for (decl <- decls) {
       symbolicState.addedVar(decl.name, SymbolicVal(decl.loc))
     }
-    val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState,
-      executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy())),
-      mutable.HashSet[Expr]())
+    symbolicState.variableDecls = decls
+    val mapping = mutable.HashMap[Val, Expr]()
+    val memoryCells = executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy()))
+    val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState, executor.createSymbolicStateWithAllValuesSymbolic(symbolicState, mapping),
+      memoryCells, mutable.HashSet[Expr](), mapping)
     assert(pathsOpt.nonEmpty)
     val paths = pathsOpt.get
     var vertices :List[Vertex] = List()
     for (path <- paths) {
       vertices = vertices.appended(Vertex(path, path.condition, executor.pathToVertex(path), path.iterations))
     }
-    val pda = PDA(executor, vertices, decls, new ConstraintSolver(new Context()), Number(1, CodeLoc(0, 0)), symbolicState)
+    val pda = PDA(executor, vertices, decls, new ConstraintSolver(new Context()), Number(1, CodeLoc(0, 0)), symbolicState, mapping)
     pda.initialize()
     for (edge <- pda.edges) {
       if (edge._1.statements.size > 1) {
@@ -2230,9 +2270,11 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
     for (decl <- decls) {
       symbolicState.addedVar(decl.name, SymbolicVal(decl.loc))
     }
-    val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState,
-      executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy())),
-      mutable.HashSet[Expr]())
+    symbolicState.variableDecls = decls
+    val mapping = mutable.HashMap[Val, Expr]()
+    val memoryCells = executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy()))
+    val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState, executor.createSymbolicStateWithAllValuesSymbolic(symbolicState, mapping),
+      memoryCells, mutable.HashSet[Expr](), mapping)
     assert(pathsOpt.isEmpty)
   }
 
@@ -2275,9 +2317,11 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
         symbolicState.addedVar(decl.name, ArrVal(Array(PointerVal(symbolicState.symbolicStore.storage.size - 1))))
       }
     }
-    val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState,
-      executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy())),
-      mutable.HashSet[Expr]())
+    symbolicState.variableDecls = decls
+    val mapping = mutable.HashMap[Val, Expr]()
+    val memoryCells = executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy()))
+    val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState, executor.createSymbolicStateWithAllValuesSymbolic(symbolicState, mapping),
+      memoryCells, mutable.HashSet[Expr](), mapping)
     assert(pathsOpt.isEmpty)
   }
 
@@ -2321,9 +2365,11 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
         symbolicState.addedVar(decl.name, ArrVal(Array(PointerVal(symbolicState.symbolicStore.storage.size - 1))))
       }
     }
-    val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState,
-      executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy())),
-      mutable.HashSet[Expr]())
+    symbolicState.variableDecls = decls
+    val mapping = mutable.HashMap[Val, Expr]()
+    val memoryCells = executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy()))
+    val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState, executor.createSymbolicStateWithAllValuesSymbolic(symbolicState, mapping),
+      memoryCells, mutable.HashSet[Expr](), mapping)
     assert(pathsOpt.isEmpty)
   }
 
@@ -2360,9 +2406,11 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
       symbolicState.addedVar(decl.name, SymbolicVal(decl.loc))
     }
     symbolicState.addedVar("k", Number(1, CodeLoc(0, 0)))
-    val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState,
-      executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy())),
-      mutable.HashSet[Expr]())
+    symbolicState.variableDecls = decls
+    val mapping = mutable.HashMap[Val, Expr]()
+    val memoryCells = executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy()))
+    val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState, executor.createSymbolicStateWithAllValuesSymbolic(symbolicState, mapping),
+      memoryCells, mutable.HashSet[Expr](), mapping)
     assert(pathsOpt.nonEmpty)
     val paths = pathsOpt.get
     for (path <- paths) {

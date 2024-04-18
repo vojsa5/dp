@@ -1,6 +1,6 @@
 package microc.symbolic_execution
 
-import com.microsoft.z3.{BoolExpr, Context, Status}
+import com.microsoft.z3.{BoolExpr, Context, IntNum, Status}
 import microc.ast.{Alloc, AndAnd, ArrayAccess, ArrayNode, AssignStmt, AstPrinter, BinaryOp, CodeLoc, Divide, Equal, Expr, FieldAccess, GreaterEqual, GreaterThan, Identifier, IdentifierDecl, IfStmt, Input, LowerEqual, LowerThan, Minus, NestedBlockStmt, Not, NotEqual, Number, OrOr, Plus, Record, Stmt, Times, VarRef, WhileStmt}
 import microc.cfg.{CfgNode, ProgramCfg}
 import microc.symbolic_execution.Value.{ArrVal, PointerVal, RecVal, Symbolic, SymbolicExpr, SymbolicVal, UninitializedRef, Val}
@@ -167,6 +167,9 @@ class LoopSummary(program: ProgramCfg,
     var newState = new SymbolicState(oldState.nextStatement, Number(1, CodeLoc(0, 0)), new SymbolicStore(Map.empty))
     val tmpState = oldState.deepCopy()//TODO is this necessary?
     for (v <- oldState.variableDecls) {
+//      if (v.name == "var9") {
+//        System.out.println("fad")
+//      }
       val tmpSymVal = getSymbolicRepressentation(tmpState.getSymbolicVal(v.name, v.loc, true), v.name, oldState, newState, mapping)
       mapping.put(tmpSymVal, Identifier(v.name, v.loc))
     }
@@ -199,10 +202,18 @@ class LoopSummary(program: ProgramCfg,
 
     val updatedVars = mutable.HashSet[Expr]()
     val innerMapping: mutable.HashMap[Val, Expr] = mutable.HashMap[Val, Expr]()
+
+    val innerState = newState.deepCopy()
     for (m <- mapping) {
-      innerMapping.put(m._1, m._2)
+//      m._1 match {
+//        case a: ArrVal =>
+//          innerMapping.put(innerState.getValAtMemoryLoc(m._2), innerMapping(m._1))
+//        case r: RecVal =>
+//        case other =>
+          innerMapping.put(m._1, m._2)
+//      }
     }
-    val pathsOpt = getAllPathsInALoop(loop, symbolicState.deepCopy(), newState.deepCopy(), conditionMemoryCells, updatedVars, innerMapping)
+    val pathsOpt = getAllPathsInALoop(loop, symbolicState.deepCopy(), innerState, conditionMemoryCells, updatedVars, innerMapping)
     if (pathsOpt.isEmpty) {
       return None
     }
@@ -210,23 +221,17 @@ class LoopSummary(program: ProgramCfg,
     for (path <- paths) {
       vertices = vertices.appended(Vertex(path, path.condition, pathToVertex(path), path.iterations))
     }
-//    val pda = if (loopPDAs.contains(loop)) {
-//      loopPDAs(loop)
-//    }
-//    else {
-      val pda = PDA(this, vertices, symbolicState.variableDecls, solver, Number(1, CodeLoc(0, 0)), newState, mapping)
-      pda.initialize()
-      loopPDAs.put(loop, pda)
-      pda
-    //}
-
-//    for (v <- symbolicState.variableDecls) {
-//      val tmpSymVal = SymbolicVal(v.loc)
-//      newState = newState.addedVar(v.name, tmpSymVal)
-//    }
-    val x = pda.summarizeType1Loop2(symbolicState)
-    val res = Some(new SummarizationResult(x, newState, updatedVars))
-    res
+    val pda = PDA(this, vertices, symbolicState.variableDecls, solver, Number(1, CodeLoc(0, 0)), newState, mapping)
+    pda.initialize()
+    if (pda.checkForConnectedCycles()) {
+      return None
+    }
+    pda.summarizeType1Loop2(symbolicState) match {
+      case Some(summary) =>
+        Some(new SummarizationResult(summary, newState, updatedVars))
+      case None =>
+        None
+    }
   }
 
 
@@ -298,9 +303,6 @@ class LoopSummary(program: ProgramCfg,
                 .map(pathContinuation => pathContinuation.addedCondition(guard))
                 .map(pathContinuation => path.appendedAsPath(pathContinuation))
 
-              if (curr.succ.tail.isEmpty) {
-                throw new Exception("IMPLEMENT")
-              }
               val falseState = symbolicState.deepCopy()
               pathsOpt = getAllTruePaths2(elseBranch, loopId, originalSymbolicState, falseState,
                 incrementedMemoryLocations, updatedVars, conditionMemoryCells, locationsWithUnpredictability.clone(), mapping)
@@ -357,8 +359,11 @@ class LoopSummary(program: ProgramCfg,
               case (_, BinaryOp(_, _, _, _)) =>
               case (id@Identifier(_, _), id2@Identifier(_, _)) =>
                 val s = symbolicState.getValAtMemoryLoc(id2)
-                val v = mapping(s)
-                mapping.put(s, left)
+                if (mapping.contains(s)) {
+                  //TODO look at this
+                  val v = mapping(s)
+                  mapping.put(s, left)
+                }
               case _ =>
             }
             if (curr.succ.head.id > loopId) {
@@ -645,8 +650,8 @@ class LoopSummary(program: ProgramCfg,
     val changes = pathToVertex(vertex1.path)
     val iterations = vertex1.path.iterations
 
-    val symbolicState = s/*pathToState(vertex1.path)*/.deepCopy()
-    val symbolicState2 = s/*pathToState(vertex2.path)*/.deepCopy()
+    val symbolicState = s.deepCopy()
+    val symbolicState2 = s.deepCopy()
 
     changes.foreach(change => {
       val valLocation = symbolicState.getMemoryLoc(change._1)
@@ -690,6 +695,116 @@ class LoopSummary(program: ProgramCfg,
       case Status.SATISFIABLE =>
         val tmp = applyMapping(pathsConstraints, mapping)
         Some(Edge(vertex2, tmp, resChanges))
+      case _ =>
+        None
+    }
+  }
+
+  def computePeriod(vertex1: Vertex, vertex2: Vertex, vertex3: Vertex): Option[Int] = {
+    val symbolicState = s.deepCopy()
+    val symbolicState2 = s.deepCopy()
+
+
+    val changes = pathToVertex(vertex1.path)
+    val changes2 = pathToVertex(vertex2.path)
+    val iterations = vertex1.path.iterations
+
+    changes.foreach(change => {
+      val valLocation = symbolicState.getMemoryLoc(change._1)
+      val tmp = change._2.apply(BinaryOp(Minus, iterations, Number(1, CodeLoc(0, 0)), CodeLoc(0, 0)))
+        .apply(symbolicState.symbolicStore.storage.getVal(valLocation).get.asInstanceOf[Symbolic])
+      val newVal = tmp match {
+        case v: Val => v
+        case e: Expr =>
+          Utility.removeUnnecessarySymbolicExpr(SymbolicExpr(e, CodeLoc(0, 0)))
+      }
+      symbolicState.setMemoryLocation(valLocation, newVal)
+    })
+    val path1Constraint = Utility.applyTheState(vertex1.condition, symbolicState)
+    val resChanges = new mutable.HashMap[Expr, Expr => Expr]()
+    for (change <- changes) {
+      resChanges.put(change._1, change._2.apply(iterations))
+    }
+    changes.foreach(change => {
+      val valLocation = symbolicState2.getMemoryLoc(change._1)
+      val newVal = change._2.apply(iterations).apply(symbolicState2.symbolicStore.storage.getVal(valLocation).get.asInstanceOf[Symbolic]) match {
+        case v: Val => v
+        case e: Expr =>
+          Utility.removeUnnecessarySymbolicExpr(SymbolicExpr(e, CodeLoc(0, 0)))
+      }
+      symbolicState2.symbolicStore.storage.addVal(valLocation, newVal)
+    })
+    val path2Constraint = Utility.applyTheState(vertex2.condition, symbolicState2)
+    val period = SymbolicVal(CodeLoc(0, 0))
+    val symbolicState3 = symbolicState2.deepCopy()
+
+    changes2.foreach(change => {
+      val valLocation = symbolicState2.getMemoryLoc(change._1)
+      val newVal = change._2.apply(BinaryOp(Minus, period, Number(1, CodeLoc(0, 0)), CodeLoc(0, 0)))
+        .apply(symbolicState2.symbolicStore.storage.getVal(valLocation).get.asInstanceOf[Symbolic]) match {
+        case v: Val => v
+        case e: Expr =>
+          Utility.removeUnnecessarySymbolicExpr(SymbolicExpr(e, CodeLoc(0, 0)))
+      }
+      symbolicState2.symbolicStore.storage.addVal(valLocation, newVal)
+    })
+    val path3Constraint = Utility.applyTheState(vertex2.condition, symbolicState2)
+
+    changes2.foreach(change => {
+      val valLocation = symbolicState3.getMemoryLoc(change._1)
+      val newVal = change._2.apply(period)
+        .apply(symbolicState3.symbolicStore.storage.getVal(valLocation).get.asInstanceOf[Symbolic]) match {
+        case v: Val => v
+        case e: Expr =>
+          Utility.removeUnnecessarySymbolicExpr(SymbolicExpr(e, CodeLoc(0, 0)))
+      }
+      symbolicState3.symbolicStore.storage.addVal(valLocation, newVal)
+    })
+    val path4Constraint = Utility.applyTheState(vertex3.condition, symbolicState3)
+    val ctxSolver = ctx.mkSolver()
+    val pathsConstraints = {
+      Utility.simplifyArithExpr(
+        BinaryOp(
+          AndAnd,
+          BinaryOp(
+            AndAnd,
+            BinaryOp(AndAnd, path1Constraint, path2Constraint, CodeLoc(0, 0)),
+            BinaryOp(AndAnd, path3Constraint, path4Constraint, CodeLoc(0, 0)),
+            CodeLoc(0, 0)
+          ),
+          BinaryOp(
+            AndAnd,
+            BinaryOp(GreaterThan, iterations, Number(0, CodeLoc(0, 0)), CodeLoc(0, 0)),
+            BinaryOp(GreaterEqual, period, Number(0, CodeLoc(0, 0)), CodeLoc(0, 0)),
+            CodeLoc(0, 0)
+          ),
+          CodeLoc(0, 0)
+        )
+      )
+    }
+    val constraint = solver.createConstraintWithState(pathsConstraints, symbolicState)
+    ctxSolver.add(ConstraintSolver.getCondition(ctx, constraint))
+    ctxSolver.check() match {
+      case Status.SATISFIABLE =>
+        var model = ctxSolver.getModel
+        val periodConst = ctx.mkIntConst(period.name)
+        val firstResult = model.eval(periodConst, true)
+
+        val notFirstResult = ctx.mkNot(ctx.mkEq(periodConst, firstResult))
+        ctxSolver.push()
+        ctxSolver.add(notFirstResult)
+        ctxSolver.check() match {
+          case Status.UNSATISFIABLE =>
+            firstResult match {
+              case num: IntNum =>
+                Some(num.getInt)
+              case _ =>
+                None
+            }
+          case _ =>
+            model = ctxSolver.getModel
+            None
+        }
       case _ =>
         None
     }

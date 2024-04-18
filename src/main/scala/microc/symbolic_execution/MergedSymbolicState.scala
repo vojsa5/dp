@@ -13,11 +13,12 @@ class MergedSymbolicState(
                            var subStates: (SymbolicState, SymbolicState))
   extends SymbolicState(nextStatement, pathCondition, symbolicStore, callStack, variableDecls) {
 
-  override def nextState(): SymbolicState = {
-    new MergedSymbolicState(nextStatement.succ.head, pathCondition, symbolicStore, callStack, variableDecls, subStates)
+  override def pathsCount(): Int = {
+    subStates._1.pathsCount() + subStates._2.pathsCount()
   }
 
   override def getIfTrueState(): SymbolicState = {
+    val nextStatement = getNextStatement()
     val ast = nextStatement.ast;
     ast match {
       case WhileStmt(guard, thenBranch, loc) =>
@@ -51,10 +52,13 @@ class MergedSymbolicState(
         }
         val next = nextStatement.succ.find(s => s.ast != elseBranch.head).get
         new MergedSymbolicState(next, addToPathCondition(guard), symbolicStore.deepCopy(), copyCallStack(callStack), variableDecls, subStates)
+      case _ =>
+        throw new Exception("this should never happen")
     }
   }
 
   override def getIfFalseState(): SymbolicState = {
+    val nextStatement = getNextStatement()
     val ast = nextStatement.ast;
     ast match {
       case WhileStmt(guard, thenBranch, loc) =>
@@ -88,6 +92,8 @@ class MergedSymbolicState(
         }
         val next = nextStatement.succ.find(s => s.ast == elseBranch.head).get
         new MergedSymbolicState(next, addToPathCondition(Not(guard, loc)), symbolicStore.deepCopy(), copyCallStack(callStack), variableDecls, subStates)
+      case _ =>
+        throw new Exception("this should never happen")
     }
   }
 }

@@ -9,7 +9,6 @@ import microc.util.IOUtil.InputStreamOpts
 
 import java.io.{InputStream, OutputStream, Reader}
 import java.nio.charset.StandardCharsets
-import scala.collection.mutable
 import scala.concurrent.{Await, Future, TimeoutException}
 import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -43,7 +42,7 @@ class SymbolicExecuteAction(
      }
      val timeoutI = timeout match {
        case Some(v) => v
-       case None => 10
+       case None => 30
      }
      val factory = new SymbolicExecutorFactory(summariationB, subsumptionB, smartMerging, smartMergingCost, searchStrategyStr)
      val programCfg = {
@@ -55,11 +54,13 @@ class SymbolicExecuteAction(
        executor.run()
      }
      try {
-       Await.result(future, timeoutI.seconds) // Adjust the timeout duration as needed
-     } catch {
+       Await.result(future, timeoutI.seconds)
+     }
+     catch {
        case e: TimeoutException =>
          println("Execution timed out!")
-       // Handle the timeout scenario, e.g., by gracefully stopping the executor or logging the timeout
+       case e =>
+         println(e)
      }
 
      output.write(executor.statistics.numPaths.toString.getBytes(StandardCharsets.UTF_8))

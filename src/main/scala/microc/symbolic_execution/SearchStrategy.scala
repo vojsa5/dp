@@ -7,7 +7,7 @@ import scala.collection.immutable.Queue
 import scala.collection.mutable
 import scala.util.Random
 
-class RandomAccessSet[T] {
+class RandomAccessSet[T] {//TODO look at this
   private val elements = mutable.ArrayBuffer[T]()
   private val indexMap = mutable.HashMap[T, Int]()
   private val random = new Random()
@@ -51,6 +51,8 @@ trait SearchStrategy {
   def getState(): SymbolicState
 
   def statesCount(): Int
+
+  def updateStateHistory(oldState: SymbolicState, newState: SymbolicState): Unit = {}
 }
 
 
@@ -159,11 +161,9 @@ class KleeSearchStrategy(stateHistory: StateHistory, covered: mutable.HashSet[Cf
 
   override def addState(symbolicState: SymbolicState): Unit = {
     coverageSearchStrategy.addState(symbolicState)
-    //println("COUNTS AFTER ADD:", randomPathSearchStrategy.statesCount())
   }
 
   override def getState(): SymbolicState = {
-    //println("COUNTS IN GET:", randomPathSearchStrategy.statesCount())
     val res = if (isCoverageStage) {
       isCoverageStage = false
       val res = coverageSearchStrategy.getState()
@@ -176,9 +176,15 @@ class KleeSearchStrategy(stateHistory: StateHistory, covered: mutable.HashSet[Cf
       coverageSearchStrategy.set.remove(res)
       res
     }
-    //println("COUNTS AFTER GET:", randomPathSearchStrategy.statesCount())
     res
   }
 
-  override def statesCount(): Int = randomPathSearchStrategy.statesCount()
+  override def statesCount(): Int = {
+    randomPathSearchStrategy.statesCount()
+  }
+
+  override def updateStateHistory(oldState: SymbolicState, newState: SymbolicState): Unit = {
+    stateHistory.addState(stateHistory.getParent(oldState), newState)
+    stateHistory.removeState(oldState)
+  }
 }

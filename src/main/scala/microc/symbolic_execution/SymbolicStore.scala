@@ -215,6 +215,7 @@ class SymbolicStore(functionDeclarations: Map[String, FunVal]) {
           case (Some(s1), Some(s2)) =>
             storeValuesEquals(s1, s2, store1, store2)
           case (None, None) => true
+          case _ => false
         }
       case (p1: ArrVal, p2: ArrVal) =>
         if (p1.elems.length == p2.elems.length) {
@@ -234,6 +235,14 @@ class SymbolicStore(functionDeclarations: Map[String, FunVal]) {
         (store1.storage.getVal(trueState1), store2.storage.getVal(trueState2), store1.storage.getVal(falseState1), store2.storage.getVal(falseState2)) match {
           case (Some(s1), Some(s2), Some(s3), Some(s4)) =>
             storeValuesEquals(s1, s2, store1, store2) && storeValuesEquals(s3, s4, store1, store2) && expr1.equals(expr2)
+          case (Some(s1), Some(s2), None, None) =>
+            storeValuesEquals(s1, s2, store1, store2) && expr1.equals(expr2)
+          case (None, None, Some(s3), Some(s4)) =>
+            storeValuesEquals(s3, s4, store1, store2) && expr1.equals(expr2)
+          case (None, None, None, None) =>
+            expr1.equals(expr2)
+          case _ =>
+            false
         }
       case (v1, v2) =>
         v1.equalsVal(v2)
@@ -269,7 +278,7 @@ class SymbolicStore(functionDeclarations: Map[String, FunVal]) {
         }
       }
     }
-    mutable.HashSet.empty
+    resMap
   }
 
 

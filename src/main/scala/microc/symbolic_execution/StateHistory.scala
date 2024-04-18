@@ -39,6 +39,10 @@ class StateHistory {
 
   def statesCount(): Int = count + (if (!initialRunned) 1 else 0)
 
+  def getParent(state: SymbolicState): SymbolicState = {
+    preds(state)
+  }
+
 
   def getState(): SymbolicState = {
     count -= 1
@@ -76,14 +80,11 @@ class StateHistory {
   def removeStateInner(state: SymbolicState): Unit = {
     preds.get(state) match {
       case Some(parent) =>
-        if (!unfinishedPaths.contains(parent) ) {
-          throw new Exception("IMPLEMENT")
-        }
         unfinishedPaths(parent).remove(state)
         if (unfinishedPaths(parent).isEmpty) {
           unfinishedPaths.remove(parent)
+          removeStateInner(parent)
         }
-        removeStateInner(parent)
       case None =>
     }
   }

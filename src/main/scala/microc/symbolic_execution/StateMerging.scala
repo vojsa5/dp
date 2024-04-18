@@ -20,12 +20,12 @@ class HeuristicBasedStateMerging(strategy: SearchStrategy, variableSolvingCosts:
       case Some(alreadyExisting) => {
         for (existingState <- alreadyExisting) {
           if (state.isSimilarTo(existingState, limitCost, variableSolvingCosts(state.nextStatement))) {
-            statesToRemove.add(alreadyExisting.last)
-            val merged = alreadyExisting.last.mergeStates(existingState)
+            statesToRemove.add(existingState)
+            val merged = existingState.mergeStates(state)
+            strategy.updateStateHistory(state, merged)
             states((state.nextStatement, state.symbolicStore.framesCnt())).remove(existingState)
-            val lastState = new MergedSymbolicState(merged.nextStatement, merged.pathCondition, merged.symbolicStore, merged.callStack, merged.variableDecls, (state, existingState))
-            states.getOrElseUpdate((state.nextStatement, state.symbolicStore.framesCnt()), new mutable.HashSet[SymbolicState]()).add(lastState)
-            strategy.addState(lastState)
+            states.getOrElseUpdate((state.nextStatement, state.symbolicStore.framesCnt()), new mutable.HashSet[SymbolicState]()).add(merged)
+            strategy.addState(merged)
             return
           }
         }
@@ -58,11 +58,13 @@ class HeuristicBasedStateMerging(strategy: SearchStrategy, variableSolvingCosts:
 class AgressiveStateMerging(strategy: SearchStrategy) extends StateMerging {
 
   override def addState(state: SymbolicState): Unit = {
+    //println("ADD STATE(MERGING): ", states.map(state => state._1._1.id), statesCount(), state.nextStatement.id)
     val newState = states.get((state.nextStatement, state.symbolicStore.framesCnt())) match {
       case Some(alreadyExisting) => {
         statesToRemove.add(alreadyExisting.last)
         val merged = alreadyExisting.last.mergeStates(state)
-        new MergedSymbolicState(merged.nextStatement, merged.pathCondition, merged.symbolicStore, merged.callStack, merged.variableDecls, (alreadyExisting.last, state))
+        strategy.updateStateHistory(state, merged)
+        merged
       }
       case None => state
     }

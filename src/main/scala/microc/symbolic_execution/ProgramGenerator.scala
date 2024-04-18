@@ -1,6 +1,6 @@
 package microc.symbolic_execution
 
-import microc.ast.{Alloc, AndAnd, ArrayAccess, ArrayNode, AssignStmt, AstPrinter, BinaryOp, BinaryOperator, CallFuncExpr, CodeLoc, Deref, Divide, Equal, Expr, FieldAccess, FunBlockStmt, FunDecl, GreaterEqual, GreaterThan, Identifier, IdentifierDecl, IfStmt, Input, Loc, LowerEqual, LowerThan, Minus, NestedBlockStmt, Not, NotEqual, Null, Number, OrOr, OutputStmt, Plus, Program, Record, RecordField, ReturnStmt, Stmt, StmtInNestedBlock, Times, VarRef, VarStmt, WhileStmt}
+import microc.ast.{Alloc, AndAnd, ArrayAccess, ArrayNode, AssignStmt, AstPrinter, BinaryOp, BinaryOperator, Block, CallFuncExpr, CodeLoc, Deref, Divide, Equal, Expr, FieldAccess, FunBlockStmt, FunDecl, GreaterEqual, GreaterThan, Identifier, IdentifierDecl, IfStmt, Input, Loc, LowerEqual, LowerThan, Minus, NestedBlockStmt, Not, NotEqual, Null, Number, OrOr, OutputStmt, Plus, Program, Record, RecordField, ReturnStmt, Stmt, StmtInNestedBlock, Times, VarRef, VarStmt, WhileStmt}
 
 import scala.collection.mutable
 import scala.util.Random
@@ -42,7 +42,7 @@ case class RecType(fields: mutable.HashMap[String, VarType]) extends VarType {
 
 
 
-class ProgramGenerator() {
+class ProgramGenerator(loopGenerationProbability: Double = 1.0/6.0, forLoopGenerationProbability: Double = 1.0/6.0, maxStmtDepth: Int = 2, maxTopLvlStmtsCount: Int = 15, maxStmtsWithinABlock: Int = 7) {
   val random = new Random()
 
   val existingTypes: mutable.HashSet[VarType] = mutable.HashSet[VarType]()
@@ -54,6 +54,10 @@ class ProgramGenerator() {
   var arraySizes: mutable.HashMap[String, Int] = mutable.HashMap()
 
   var generatedAnArray = false
+
+  val remainingProbability = 1.0 - loopGenerationProbability - forLoopGenerationProbability
+
+  val uniformProbability = remainingProbability / 4
 
   def randomLoc(): CodeLoc = CodeLoc(random.nextInt(100), random.nextInt(100))
 
@@ -105,7 +109,7 @@ class ProgramGenerator() {
   }
 
   def randomExpr(expectedType: VarType, depth: Int = 0, declaredIdentifiers: Map[String, VarType], arrSize: Int = 0): Expr = {
-    if (depth > 4) {
+    if (depth > 5) {
       getRandomValueOfType(expectedType)
     }
     else {
@@ -164,7 +168,7 @@ class ProgramGenerator() {
   }
 
   def randomStmt(depth: Int = 0, declaredIdentifiers: Map[String, VarType]): StmtInNestedBlock = {
-    if (depth > 2) {
+    if (depth > maxStmtDepth) {
       random.nextInt(2) match {
         case 0 =>
           OutputStmt (randomExpr (NumType (), declaredIdentifiers = declaredIdentifiers), randomLoc () )
@@ -178,7 +182,18 @@ class ProgramGenerator() {
       }
     }
     else {
-      random.nextInt(6) match {
+      val randomValue = scala.util.Random.nextDouble()
+      val caseNumber = randomValue match {
+        case x if x < uniformProbability => 0
+        case x if x < 2 * uniformProbability => 1
+        case x if x < 3 * uniformProbability => 2
+        case x if x < 4 * uniformProbability => 5
+        case x if x < 4 * uniformProbability + loopGenerationProbability => 3
+        case x if x < 4 * uniformProbability + loopGenerationProbability + forLoopGenerationProbability => 4
+        case _ =>
+          throw new Exception("this should never happen")
+      }
+      caseNumber match {
         case 0 => {
           val identifier = randomIdentifier(declaredIdentifiers)
           val size = declaredIdentifiers(identifier.name) match {
@@ -215,17 +230,17 @@ class ProgramGenerator() {
         }
         case 2 => IfStmt(
           randomExpr(NumType(), depth + 1, declaredIdentifiers),
-          NestedBlockStmt((1 to random.nextInt(3) + 3).map(_ => randomStmt(depth + 1, declaredIdentifiers)).toList, randomLoc()),
-          Some(NestedBlockStmt((1 to random.nextInt(3) + 3).map(_ => randomStmt(depth + 1, declaredIdentifiers)).toList, randomLoc())),
+          NestedBlockStmt((1 to random.nextInt(maxStmtsWithinABlock)).map(_ => randomStmt(depth + 1, declaredIdentifiers)).toList, randomLoc()),
+          Some(NestedBlockStmt((1 to random.nextInt(maxStmtsWithinABlock)).map(_ => randomStmt(depth + 1, declaredIdentifiers)).toList, randomLoc())),
           randomLoc()
         )
         case 3 => WhileStmt(
           randomExpr(NumType(), depth + 1, declaredIdentifiers),
-          NestedBlockStmt((1 to random.nextInt(3) + 3).map(_ => randomStmt(depth + 1, declaredIdentifiers)).toList, randomLoc()),
+          NestedBlockStmt((1 to random.nextInt(maxStmtsWithinABlock)).map(_ => randomStmt(depth + 1, declaredIdentifiers)).toList, randomLoc()),
           randomLoc()
         )
         case 4 =>
-          var block = NestedBlockStmt((1 to random.nextInt(3) + 3).map(_ => randomStmt(depth + 1, declaredIdentifiers)).toList, randomLoc())
+          var block = NestedBlockStmt((1 to random.nextInt(maxStmtsWithinABlock)).map(_ => randomStmt(depth + 1, declaredIdentifiers)).toList, randomLoc())
           val it = randomIdentifierOfType(NumType(), declaredIdentifiers)
           block = NestedBlockStmt(block.body.appended(AssignStmt(it, BinaryOp(Plus, it, Number(1, randomLoc()), randomLoc()), randomLoc())), randomLoc())
           WhileStmt(
@@ -311,7 +326,7 @@ class ProgramGenerator() {
     }
 
     // Collecting all statements including initializations and random statements
-    val bodyStatements = initAssignments ++ List.fill(random.nextInt(5) + 5)(randomStmt(declaredIdentifiers = declaredIdentifiers))
+    val bodyStatements = initAssignments ++ List.fill(random.nextInt(maxTopLvlStmtsCount))(randomStmt(declaredIdentifiers = declaredIdentifiers))
     val ret = ReturnStmt(randomExpr(NumType(), 3, declaredIdentifiers), randomLoc())
     val block = FunBlockStmt(List(varsStmt), bodyStatements, ret, randomLoc())
 
@@ -337,6 +352,29 @@ class ProgramGenerator() {
       case _ =>
     }
     AssignStmt(Identifier(varName, randomLoc()), expr, randomLoc())
+  }
+
+  def plugAnError(fun: FunDecl, declaredIdentifiers: Map[String, VarType]): FunDecl = {
+    val newStmt = AssignStmt(randomIdentifierOfType(NumType(), declaredIdentifiers), BinaryOp(Divide, Number(1, randomLoc()), Number(0, randomLoc()), randomLoc()), randomLoc())
+
+    val block = getABlocktoPlugAnError(fun.block)
+    val randomIndex = Random.nextInt(block.body.length)
+    val (before, after) = fun.block.stmts.splitAt(randomIndex)
+    FunDecl(fun.name, fun.params, FunBlockStmt(fun.block.vars, before ++ (newStmt :: after), fun.block.ret, fun.block.loc), fun.loc)
+  }
+
+  def getABlocktoPlugAnError(block: Block): Block = {
+    val randomIndex = Random.nextInt(block.body.length)
+    block.body(randomIndex) match {
+      case IfStmt(_, thenBlock, _, _) if (random.nextInt(1) == 0) =>
+        getABlocktoPlugAnError(thenBlock.asInstanceOf[Block])
+      case IfStmt(_, _, elseBlock, _)  =>
+        getABlocktoPlugAnError(elseBlock.asInstanceOf[Block])
+      case WhileStmt(_, block, _) =>
+        getABlocktoPlugAnError(block.asInstanceOf[Block])
+      case _ =>
+        block
+    }
   }
 
   def generateRandomProgram(printProgram: Boolean = true): Program = {

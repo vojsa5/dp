@@ -975,11 +975,12 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
     }
     val pda = PDA(executor, vertices, decls, new ConstraintSolver(new Context()), Number(1, CodeLoc(0, 0)), symbolicState, mapping)
     pda.initialize()
+    assert(!pda.checkForConnectedCycles())
     assert(pda.entryStates.size == 3)
     assert(pda.exitStates.size == 1)
     assert(pda.edges.size == 3)
 
-    val summary = pda.summarizeType1Loop2(symbolicState)
+    val summary = pda.summarizeType1Loop2(symbolicState).get
 
     var lastIterCount = Number(1, CodeLoc(0, 0))
     for (initialX <- 0 to 5) {
@@ -1107,7 +1108,7 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
     assert(pda.exitStates.size == 1)
     assert(pda.edges.size == 3)
 
-    val summary = pda.summarizeType1Loop2(symbolicState)
+    val summary = pda.summarizeType1Loop2(symbolicState).get
 
     var lastIterCount = Number(1, CodeLoc(0, 0))
     for (initialX <- 0 to 5) {
@@ -1235,7 +1236,7 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
     assert(pda.exitStates.size == 1)
     assert(pda.edges.size == 3)
 
-    val summary = pda.summarizeType1Loop2(symbolicState)
+    val summary = pda.summarizeType1Loop2(symbolicState).get
 
     var lastIterCount = Number(1, CodeLoc(0, 0))
     for (initialX <- 0 to 5) {
@@ -1363,7 +1364,7 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
     assert(pda.exitStates.size == 1)
     assert(pda.edges.size == 3)
 
-    val summary = pda.summarizeType1Loop2(symbolicState)
+    val summary = pda.summarizeType1Loop2(symbolicState).get
 
     var lastIterCount = Number(1, CodeLoc(0, 0))
     for (initialX <- 0 to 5) {
@@ -1491,7 +1492,7 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
     assert(pda.exitStates.size == 1)
     assert(pda.edges.size == 3)
 
-    val summary = pda.summarizeType1Loop2(symbolicState)
+    val summary = pda.summarizeType1Loop2(symbolicState).get
 
     var lastIterCount = Number(1, CodeLoc(0, 0))
     for (initialX <- 0 to 5) {
@@ -1622,7 +1623,7 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
     assert(pda.exitStates.size == 1)
     assert(pda.edges.size == 3)
 
-    val summary = pda.summarizeType1Loop2(symbolicState)
+    val summary = pda.summarizeType1Loop2(symbolicState).get
 
     var lastIterCount = Number(1, CodeLoc(0, 0))
     for (initialX <- 0 to 5) {
@@ -1753,7 +1754,7 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
     assert(pda.exitStates.size == 1)
     assert(pda.edges.size == 3)
 
-    val summary = pda.summarizeType1Loop2(symbolicState)
+    val summary = pda.summarizeType1Loop2(symbolicState).get
 
     var lastIterCount = Number(1, CodeLoc(0, 0))
     for (initialX <- 0 to 5) {
@@ -1896,7 +1897,7 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
     assert(pda.exitStates.size == 1)
     assert(pda.edges.size == 3)
 
-    val summary = pda.summarizeType1Loop2(symbolicState)
+    val summary = pda.summarizeType1Loop2(symbolicState).get
 
     var lastIterCount = Number(1, CodeLoc(0, 0))
     for (initialX <- 0 to 5) {
@@ -2070,7 +2071,7 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
 
 
 
-  test("capture change from var") {
+    test("capture change from var") {
     val code =
       """
         |main() {
@@ -2159,6 +2160,7 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
     symbolicState = symbolicState.addedVar("i", Number(0, CodeLoc(0, 0)))
     symbolicState = symbolicState.addedVar("k", SymbolicVal(CodeLoc(0, 0)))
     symbolicState = symbolicState.addedVar("n", SymbolicVal(CodeLoc(0, 0)))
+    symbolicState = symbolicState.addedVar("_t1", SymbolicVal(CodeLoc(0, 0)))
 
     val executor = new LoopSummary(cfg)
     symbolicState.variableDecls = decls
@@ -2223,6 +2225,7 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
       vertices = vertices.appended(Vertex(path, path.condition, executor.pathToVertex(path), path.iterations))
     }
     val pda = PDA(executor, vertices, decls, new ConstraintSolver(new Context()), Number(1, CodeLoc(0, 0)), symbolicState, mapping)
+    assert(!pda.checkForConnectedCycles())
     pda.initialize()
     for (edge <- pda.edges) {
       if (edge._1.statements.size > 1) {
@@ -2434,4 +2437,162 @@ class LoopSummaryTest extends FunSuite with MicrocSupport with Examples {
   }
 
 
+  test("periods of cycles") {
+    val code =
+      """
+        |main() {
+        |  var n, x, z;
+        |  n = input;
+        |  x = input;
+        |  z = input;
+        |  while (x < n) {
+        |   if (z > x) {
+        |     x = x + 1;
+        |   }
+        |   else {
+        |     z = z + 1;
+        |   }
+        |  }
+        |  return 1 / (x - z);
+        |}
+        |""".stripMargin;
+
+    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+    var stmt: CfgNode = cfg.getFce("main")
+    val main = stmt
+
+    while (!stmt.ast.isInstanceOf[WhileStmt]) {
+      stmt = stmt.succ.head
+    }
+    val executor = new LoopSummary(cfg)
+    val decls = main.ast.asInstanceOf[FunDecl].block.vars.flatMap(_.decls)
+    val symbolicState = new SymbolicState(null, Number(1, CodeLoc(0, 0)), new SymbolicStore(Map.empty))
+    for (decl <- decls) {
+      symbolicState.addedVar(decl.name, SymbolicVal(decl.loc))
+    }
+    symbolicState.variableDecls = decls
+    val mapping = mutable.HashMap[Val, Expr]()
+    val memoryCells = executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy()))
+    val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState, executor.createSymbolicStateWithAllValuesSymbolic(symbolicState, mapping),
+      memoryCells, mutable.HashSet[Expr](), mapping)
+    assert(pathsOpt.nonEmpty)
+    val paths = pathsOpt.get
+
+    val v1 = Vertex(paths(1), paths(1).condition, executor.pathToVertex(paths(1)), paths(1).iterations)
+    val v2 = Vertex(paths(2), paths(2).condition, executor.pathToVertex(paths(2)), paths(2).iterations)
+    var period = executor.computePeriod(v1, v2, v1)
+    assert(period.nonEmpty)
+    assert(period.get == 1)
+
+    period = executor.computePeriod(v2, v1, v2)
+    assert(period.nonEmpty)
+    assert(period.get == 1)
+    null
+  }
+
+
+  test("periods of cycles bigger increment") {
+    val code =
+      """
+        |main() {
+        |  var n, x, z;
+        |  n = input;
+        |  x = input;
+        |  z = input;
+        |  while (x < n) {
+        |   if (z > x) {
+        |     x = x + 2;
+        |   }
+        |   else {
+        |     z = z + 2;
+        |   }
+        |  }
+        |  return 1 / (x - z);
+        |}
+        |""".stripMargin;
+
+    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+    var stmt: CfgNode = cfg.getFce("main")
+    val main = stmt
+
+    while (!stmt.ast.isInstanceOf[WhileStmt]) {
+      stmt = stmt.succ.head
+    }
+    val executor = new LoopSummary(cfg)
+    val decls = main.ast.asInstanceOf[FunDecl].block.vars.flatMap(_.decls)
+    val symbolicState = new SymbolicState(null, Number(1, CodeLoc(0, 0)), new SymbolicStore(Map.empty))
+    for (decl <- decls) {
+      symbolicState.addedVar(decl.name, SymbolicVal(decl.loc))
+    }
+    symbolicState.variableDecls = decls
+    val mapping = mutable.HashMap[Val, Expr]()
+    val memoryCells = executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy()))
+    val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState, executor.createSymbolicStateWithAllValuesSymbolic(symbolicState, mapping),
+      memoryCells, mutable.HashSet[Expr](), mapping)
+    assert(pathsOpt.nonEmpty)
+    val paths = pathsOpt.get
+
+    val v1 = Vertex(paths(1), paths(1).condition, executor.pathToVertex(paths(1)), paths(1).iterations)
+    val v2 = Vertex(paths(2), paths(2).condition, executor.pathToVertex(paths(2)), paths(2).iterations)
+    var period = executor.computePeriod(v1, v2, v1)
+    assert(period.nonEmpty)
+    assert(period.get == 1)
+
+    period = executor.computePeriod(v2, v1, v2)
+    assert(period.nonEmpty)
+    assert(period.get == 1)
+    null
+  }
+
+  test("periods of cycles bigger increment 2") {
+    val code =
+      """
+        |main() {
+        |  var n, x, z;
+        |  n = input;
+        |  x = input;
+        |  z = input;
+        |  while (x < n) {
+        |   if (z > x) {
+        |     x = x + 1;
+        |   }
+        |   else {
+        |     z = z + 2;
+        |   }
+        |  }
+        |  return 1 / (x - z);
+        |}
+        |""".stripMargin;
+
+    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+    var stmt: CfgNode = cfg.getFce("main")
+    val main = stmt
+
+    while (!stmt.ast.isInstanceOf[WhileStmt]) {
+      stmt = stmt.succ.head
+    }
+    val executor = new LoopSummary(cfg)
+    val decls = main.ast.asInstanceOf[FunDecl].block.vars.flatMap(_.decls)
+    val symbolicState = new SymbolicState(null, Number(1, CodeLoc(0, 0)), new SymbolicStore(Map.empty))
+    for (decl <- decls) {
+      symbolicState.addedVar(decl.name, SymbolicVal(decl.loc))
+    }
+    symbolicState.variableDecls = decls
+    val mapping = mutable.HashMap[Val, Expr]()
+    val memoryCells = executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt, symbolicState.deepCopy()))
+    val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState, executor.createSymbolicStateWithAllValuesSymbolic(symbolicState, mapping),
+      memoryCells, mutable.HashSet[Expr](), mapping)
+    assert(pathsOpt.nonEmpty)
+    val paths = pathsOpt.get
+
+    val v1 = Vertex(paths(1), paths(1).condition, executor.pathToVertex(paths(1)), paths(1).iterations)
+    val v2 = Vertex(paths(2), paths(2).condition, executor.pathToVertex(paths(2)), paths(2).iterations)
+    var period = executor.computePeriod(v1, v2, v1)
+    assert(period.nonEmpty)
+    assert(period.get == 1)
+
+    period = executor.computePeriod(v2, v1, v2)
+    assert(period.isEmpty)
+    null
+  }
 }

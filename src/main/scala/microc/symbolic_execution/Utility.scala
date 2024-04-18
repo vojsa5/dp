@@ -325,4 +325,25 @@ object Utility {
     }
   }
 
+  def getConjunctions(expr: Expr): mutable.HashSet[Expr] = {
+    expr match {
+      case binOp: BinaryOp =>
+        binOp.operator match {
+          case AndAnd =>
+            val res = getConjunctions(binOp.left).addAll(getConjunctions(binOp.right))
+            res.add(expr)
+            res
+          case _ =>
+            mutable.HashSet[Expr]()
+        }
+      case _ =>
+        mutable.HashSet[Expr]()
+    }
+  }
+
+  def simplifyADisjunction(expr1: Expr, expr2: Expr): Expr = {
+    val disjunction1 = getConjunctions(expr1)
+    val disjunction2 = getConjunctions(expr2)
+    null
+  }
 }

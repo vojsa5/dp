@@ -43,8 +43,21 @@ object Main {
   }
 
   @main(doc = "Generate program")
-  def generateProgram(file: String): Int = {
-    new GenerateProgramAction(file).run()
+  def generateProgram(
+                       @arg(name = "file", doc = "Output file path for the generated program")
+                       file: String,
+                       @arg(name = "loopGenProb", doc = "Probability of generating a loop")
+                       loopGenProb: Double = 1/6,
+                       @arg(name = "forLoopGenProb", doc = "Probability of generating a for loop")
+                       forLoopGenProb: Double = 1/6,
+                       @arg(name = "maxStmtDepth", doc = "Maximum depth of statement nesting")
+                       maxStmtDepth: Int = 2,
+                       @arg(name = "maxTopLvlStmtsCount", doc = "Maximum number of top-level statements")
+                       maxTopLvlStmtsCount: Int = 15,
+                       @arg(name = "maxStmtsWithinABlock", doc = "Maximum number of statements within a block")
+                       maxStmtsWithinABlock: Int = 7
+                     ): Int = {
+    new GenerateProgramAction(file, loopGenProb, forLoopGenProb, maxStmtDepth, maxTopLvlStmtsCount, maxStmtsWithinABlock).run()
   }
 
 

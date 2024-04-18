@@ -150,7 +150,7 @@ class SymbolicExecutor(program: ProgramCfg,
         step(path)
       }
 
-      statistics.numPaths += 1
+      statistics.numPaths += path.pathsCount()
       if (path.returnValue.nonEmpty) {
         res = path.returnValue
       }
@@ -321,11 +321,11 @@ class SymbolicExecutor(program: ProgramCfg,
           //          statistics.numPaths += 1
           //          step(nextState)
           //        }
-          searchStrategy.addState(nextState)
-
           if (stateHistory.nonEmpty) {
             stateHistory.get.addState(symbolicState, nextState)
           }
+          searchStrategy.addState(nextState)
+
 
         case Status.UNSATISFIABLE =>
       }
@@ -366,7 +366,6 @@ class SymbolicExecutor(program: ProgramCfg,
     if (subsumption.nonEmpty) {
       ast match {
         case stmt: AssignStmt if Utility.statementCanCauseError(stmt) =>
-          println("KKKKKKKK", statement.id)
         case _ =>
           subsumption.get.computeAnnotation(statement)
       }
@@ -551,7 +550,10 @@ class SymbolicExecutor(program: ProgramCfg,
           case Number(value, _) => Number(if (value == 0) 1 else 0, loc)
           case v@SymbolicVal(_) => SymbolicExpr(Not(v, loc), loc)
           case SymbolicExpr(value, _) => SymbolicExpr(Not(value, loc), loc)
-          case _ => throw errorNonIntArithmetics(loc, symbolicState)
+          case IteVal(trueState, falseState, expr, loc) =>
+            IteVal(symbolicState.addedAlloc(symbolicState.getVal(trueState).get), symbolicState.addedAlloc(symbolicState.getVal(falseState).get), expr, loc)
+          case _ =>
+            throw errorNonIntArithmetics(loc, symbolicState)
         }
       case Number(value, loc) => Number(value, loc)
       case id@Identifier(_, _) =>
@@ -751,8 +753,6 @@ class SymbolicExecutor(program: ProgramCfg,
               case _ => throw errorNonIntArithmetics(loc, symbolicState)
             }
           case other =>
-            val g = other
-            println(other)
             throw errorNonArrayAccess(loc, evaluate(array, symbolicState).toString, symbolicState)
         }
       case e =>

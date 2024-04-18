@@ -5,14 +5,12 @@ import microc.symbolic_execution.ProgramGenerator
 
 import java.io.{File, PrintWriter}
 
-class GenerateProgramAction(file: String) extends Action {
-
+class GenerateProgramAction(file: String, loopGenProb: Double, forLoopGenProb: Double, maxStmtDepth: Int, maxTopLvlStmtsCount: Int, maxStmtsWithinABlock: Int) extends Action {
   override def run(): Int = {
-    val program = new ProgramGenerator().generateRandomProgram(false)
+    val programGenerator = new ProgramGenerator(loopGenProb, forLoopGenProb, maxStmtDepth, maxTopLvlStmtsCount, maxStmtsWithinABlock)
+    val program = programGenerator.generateRandomProgram(false)
     val pw = new PrintWriter(new File(file))
-    var content: String = ""
-    program.funs.foreach(fce => content += new AstPrinter().print(fce))
-    println(content)
+    val content = new AstPrinter().print(program)
     pw.print(content)
     pw.close()
     0

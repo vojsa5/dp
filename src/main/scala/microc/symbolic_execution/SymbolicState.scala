@@ -20,8 +20,16 @@ class SymbolicState(
 
   var returnValue: Option[Val] = None
 
+  def pathsCount(): Int = {
+    1
+  }
+
   def deepCopy(): SymbolicState = {
     new SymbolicState(this.nextStatement, this.pathCondition, this.symbolicStore.deepCopy(), this.callStack, this.variableDecls)
+  }
+
+  def getNextStatement(): CfgNode = {
+    nextStatement
   }
 
   def updatedVar(variable: PointerVal, value: Val): SymbolicState = {
@@ -264,12 +272,14 @@ class SymbolicState(
   }
 
   def mergeStates(other: SymbolicState): SymbolicState = {
-    new SymbolicState(
+    Utility.simplifyADisjunction(this.pathCondition, other.pathCondition)
+    new MergedSymbolicState(
       nextStatement,
       BinaryOp(OrOr, this.pathCondition, other.pathCondition, CodeLoc(0, 0)),
       symbolicStore = symbolicStore.mergeStores(other.symbolicStore, pathCondition).get,
       callStack = this.callStack,
-      variableDecls = this.variableDecls
+      variableDecls = this.variableDecls,
+      (this, other)
     )
   }
 
@@ -282,12 +292,12 @@ class SymbolicState(
   }
 
   def isSimilarTo(other: SymbolicState, limit: Double, variableSolvingCosts: mutable.HashMap[String, Double]): Boolean = {
-    val variablesThatDiffers = other.symbolicStore.getDifferentVariables(other.symbolicStore)
+    val variablesThatDiffers = symbolicStore.getDifferentVariables(other.symbolicStore)
     var cost: Double = 0.0
     for (variable <- variablesThatDiffers) {
       cost += variableSolvingCosts.getOrElse(variable, 0.0)
     }
-    cost <= limit
+    cost < limit
   }
 
 }

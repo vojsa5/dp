@@ -87,7 +87,7 @@ class AstNormalizer {
           val guardExpr: Expr = normalizeExpr(guard, stmts, vars, declaredVars)
           normalizeStatement(thenBranch, newStmts, vars, declaredVars)
           val thenBranchBlock = NestedBlockStmt(newStmts.toList, loc)
-          val elseBranchBlock =
+          val elseBranchBlock = {
             elseBranch match {
               case Some(value) =>
                 newStmts = ListBuffer.empty
@@ -95,6 +95,14 @@ class AstNormalizer {
                 Some(NestedBlockStmt(newStmts.toList, loc))
               case None => None
             }
+          }
+          elseBranchBlock match {
+            case Some(block) =>
+              if (block.body.isEmpty && thenBranchBlock.body.isEmpty) {
+                return
+              }
+            case None =>
+          }
           stmts.append(IfStmt(guardExpr, thenBranchBlock, elseBranchBlock, loc))
         case WhileStmt(guard, block, loc) =>
           val guardStmts: ListBuffer[StmtInNestedBlock] = ListBuffer.empty

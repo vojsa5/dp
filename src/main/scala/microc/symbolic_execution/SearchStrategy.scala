@@ -137,7 +137,7 @@ class CoverageSearchStrategy(covered: mutable.HashSet[CfgNode]) extends SearchSt
   }
 
   private def nextUncoveredDistance(symbolicState: SymbolicState): Int =
-    nextUncoveredDistanceInner(symbolicState.nextStatement)
+    nextUncoveredDistanceInner(symbolicState.programLocation)
 
   override def addState(symbolicState: SymbolicState): Unit =
     set.add(symbolicState)

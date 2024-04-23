@@ -1,8 +1,9 @@
-package microc.symbolic_execution
+package microc.symbolic_execution.optimizations.merging
 
 import microc.analysis.Declarations
-import microc.ast.{AssignStmt, Decl, FunDecl, Identifier, IfStmt, OutputStmt, ReturnStmt, VarStmt, WhileStmt}
+import microc.ast.{AssignStmt, FunDecl, Identifier, IfStmt, OutputStmt, ReturnStmt, VarStmt, WhileStmt}
 import microc.cfg.{CfgNode, ProgramCfg}
+import microc.symbolic_execution.Utility
 
 import scala.collection.mutable
 

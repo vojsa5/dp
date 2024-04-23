@@ -5,13 +5,17 @@ import microc.analysis.{QueryCountAnalyses, SemanticAnalysis}
 import microc.ast.{Decl, Program}
 import microc.cfg.{CfgNode, IntraproceduralCfgFactory, ProgramCfg}
 import microc.parser.Parser
+import microc.symbolic_execution.optimizations.merging.{AggressiveStateMerging, HeuristicBasedStateMerging, RecursionBasedAnalyses}
+import microc.symbolic_execution.optimizations.subsumption.PathSubsumption
+import microc.symbolic_execution.optimizations.summarization.LoopSummary
 
 import java.util
 import javax.management.InvalidApplicationException
 import scala.collection.immutable.HashSet
 import scala.collection.mutable
 
-class SymbolicExecutorFactory(useSummarizaiton: Boolean, useSubsumption: Boolean, mergingStrategyType: Option[String], smartMergingCost: Option[Int], searchStrategyType: String) {
+class SymbolicExecutorFactory(useSummarizaiton: Boolean, useSubsumption: Boolean, mergingStrategyType: Option[String],
+                              smartMergingCost: Option[Int], kappa: Option[Int], searchStrategyType: String) {
   def get(program: Program): SymbolicExecutor = {
     val programCfg = new IntraproceduralCfgFactory().fromProgram(program)
     val ctx = new Context()
@@ -29,7 +33,7 @@ class SymbolicExecutorFactory(useSummarizaiton: Boolean, useSubsumption: Boolean
         new DFSSearchStrategy()
       case "random" =>
         new RandomSearchStrategy()
-      case "random-path" =>
+      case "tree" =>
         stateHistory = Some(new StateHistory())
         new RandomPathSelectionStrategy(stateHistory.get)
       case "coverage" =>
@@ -49,8 +53,8 @@ class SymbolicExecutorFactory(useSummarizaiton: Boolean, useSubsumption: Boolean
       case Some("none") =>
         searchStrategy
       case Some("aggresive") =>
-        new AgressiveStateMerging(searchStrategy)
-      case Some("query-count") => {
+        new AggressiveStateMerging(searchStrategy)
+      case Some("querycount") => {
         val analysesResult = new QueryCountAnalyses(programCfg)(new SemanticAnalysis().analyze(program)).analyze()
         val variableCosts = new mutable.HashMap[CfgNode, mutable.HashMap[String, Double]]
         for (node <- analysesResult) {
@@ -63,7 +67,11 @@ class SymbolicExecutorFactory(useSummarizaiton: Boolean, useSubsumption: Boolean
         new HeuristicBasedStateMerging(new BFSSearchStrategy, variableCosts, smartMergingCost.get)
       }
       case Some("tmp") => {
-        val tmp = new RecursionBasedAnalyses()(new SemanticAnalysis().analyze(program))
+        val kappaI = kappa match {
+          case Some(value) => value
+          case None => 1
+        }
+        val tmp = new RecursionBasedAnalyses()(new SemanticAnalysis().analyze(program), kappaI)
         tmp.tmp2(programCfg)
         new HeuristicBasedStateMerging(new BFSSearchStrategy, tmp.mapping, smartMergingCost.get)
       }

@@ -1,9 +1,8 @@
-package microc.symbolic_execution
+package microc.symbolic_execution.optimizations
 
-import microc.ast.{AndAnd, BinaryOp, CodeLoc, Expr, Number, Stmt}
+import microc.ast.{AndAnd, BinaryOp, CodeLoc, Expr, Stmt}
+import microc.symbolic_execution.Utility
 import microc.symbolic_execution.Value.SymbolicVal
-
-import scala.collection.mutable
 
 //class Path(val statements: List[Stmt], var condition: Expr) {
 //

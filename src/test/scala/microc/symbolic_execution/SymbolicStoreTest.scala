@@ -473,9 +473,9 @@ class SymbolicStoreTest extends FunSuite with MicrocSupport with Examples {
       )
     )
 
-    var mergedStoreOpt = store1.mergeStores(store2, Number(1, CodeLoc(0, 0)))
+    var mergedStoreOpt = store1.mergeStores(store2, Number(1, CodeLoc(0, 0)), Number(1, CodeLoc(0, 0)))
     assert(mergedStoreOpt.nonEmpty)
-    var mergedStore = mergedStoreOpt.get
+    var mergedStore = mergedStoreOpt.get._1
     mergedStore.storeEquals(store1)
     assert(mergedStore.storeEquals(store1))
     assert(mergedStore.storeEquals(store2))
@@ -539,9 +539,9 @@ class SymbolicStoreTest extends FunSuite with MicrocSupport with Examples {
       )
     )
 
-    mergedStoreOpt = store1.mergeStores(store2, Number(1, CodeLoc(0, 0)))
+    mergedStoreOpt = store1.mergeStores(store2, Number(1, CodeLoc(0, 0)), Number(1, CodeLoc(0, 0)))
     assert(mergedStoreOpt.nonEmpty)
-    mergedStore = mergedStoreOpt.get
+    mergedStore = mergedStoreOpt.get._1
     assert(mergedStore.storeEquals(store1))
     assert(mergedStore.storeEquals(store2))
     assert(store1.storeEquals(mergedStore))
@@ -618,9 +618,9 @@ class SymbolicStoreTest extends FunSuite with MicrocSupport with Examples {
       )
     )
 
-    val mergedStoreOpt = store1.mergeStores(store2, Number(1, CodeLoc(0, 0)))
+    val mergedStoreOpt = store1.mergeStores(store2, Number(1, CodeLoc(0, 0)), Number(1, CodeLoc(0, 0)))
     assert(mergedStoreOpt.nonEmpty)
-    val mergedStore = mergedStoreOpt.get
+    val mergedStore = mergedStoreOpt.get._1
     assert(mergedStore.storeEquals(store1))
     assert(mergedStore.storeEquals(store2))
     assert(store1.storeEquals(mergedStore))
@@ -666,10 +666,10 @@ class SymbolicStoreTest extends FunSuite with MicrocSupport with Examples {
     ptr = store2.addNewVar("z")
     store2.updateRef(ptr, PointerVal(2))
 
-    val merged = store1.mergeStores(store2, Number(1, CodeLoc(0, 0)))
-    assert(!merged.get.getVal("x", CodeLoc(0, 0), new SymbolicState(null, null, null)).isInstanceOf[IteVal])
-    assert(merged.get.getVal("y", CodeLoc(0, 0), new SymbolicState(null, null, null)).isInstanceOf[IteVal])
-    assert(merged.get.getVal("z", CodeLoc(0, 0), new SymbolicState(null, null, null)).isInstanceOf[IteVal])
+    val merged = store1.mergeStores(store2, Number(1, CodeLoc(0, 0)), Number(1, CodeLoc(0, 0)))
+    assert(!merged.get._1.getVal("x", CodeLoc(0, 0), new SymbolicState(null, null, null)).isInstanceOf[IteVal])
+    assert(merged.get._1.getVal("y", CodeLoc(0, 0), new SymbolicState(null, null, null)).isInstanceOf[IteVal])
+    assert(merged.get._1.getVal("z", CodeLoc(0, 0), new SymbolicState(null, null, null)).isInstanceOf[IteVal])
     null
   }
 
@@ -707,9 +707,9 @@ class SymbolicStoreTest extends FunSuite with MicrocSupport with Examples {
     ptr = store2.addNewVar("z")
     store2.updateRef(ptr, PointerVal(1))
 
-    val mergedStoreOpt = store1.mergeStores(store2, Number(1, CodeLoc(0, 0)))
+    val mergedStoreOpt = store1.mergeStores(store2, Number(1, CodeLoc(0, 0)), Number(1, CodeLoc(0, 0)))
     assert(mergedStoreOpt.nonEmpty)
-    val mergedStore = mergedStoreOpt.get
+    val mergedStore = mergedStoreOpt.get._1
     assert(mergedStore.storeEquals(store1))
     assert(mergedStore.storeEquals(store2))
     assert(store1.storeEquals(mergedStore))
@@ -770,9 +770,9 @@ class SymbolicStoreTest extends FunSuite with MicrocSupport with Examples {
     ptr = store2.addNewVar("y")
     store2.updateRef(ptr, PointerVal(2))
 
-    val mergedStoreOpt = store1.mergeStores(store2, Number(1, CodeLoc(0, 0)))
+    val mergedStoreOpt = store1.mergeStores(store2, Number(1, CodeLoc(0, 0)), Number(1, CodeLoc(0, 0)))
     assert(mergedStoreOpt.nonEmpty)
-    val mergedStore = mergedStoreOpt.get
+    val mergedStore = mergedStoreOpt.get._1
     assert(mergedStore.getVal("y", CodeLoc(0, 0), null).isInstanceOf[IteVal])
   }
 
@@ -830,9 +830,9 @@ class SymbolicStoreTest extends FunSuite with MicrocSupport with Examples {
     ptr = store2.addNewVar("y")
     store2.updateRef(ptr, PointerVal(8))
 
-    val mergedStoreOpt = store1.mergeStores(store2, Number(1, CodeLoc(0, 0)))
+    val mergedStoreOpt = store1.mergeStores(store2, Number(1, CodeLoc(0, 0)), Number(1, CodeLoc(0, 0)))
     assert(mergedStoreOpt.nonEmpty)
-    val mergedStore = mergedStoreOpt.get
+    val mergedStore = mergedStoreOpt.get._1
     assert(mergedStore.getVal("y", CodeLoc(0, 0), null).isInstanceOf[IteVal])
   }
 
@@ -886,9 +886,9 @@ class SymbolicStoreTest extends FunSuite with MicrocSupport with Examples {
     store2.updateRef(ptr, RecVal(m))
     assert(store1.storeEquals(store2))
 
-    val mergedStoreOpt = store1.mergeStores(store2, Number(1, CodeLoc(0, 0)))
+    val mergedStoreOpt = store1.mergeStores(store2, Number(1, CodeLoc(0, 0)), Number(1, CodeLoc(0, 0)))
     assert(mergedStoreOpt.nonEmpty)
-    val mergedStore = mergedStoreOpt.get
+    val mergedStore = mergedStoreOpt.get._1
     assert(mergedStore.storeEquals(store1))
     assert(mergedStore.storeEquals(store2))
     assert(store1.storeEquals(mergedStore))
@@ -923,9 +923,9 @@ class SymbolicStoreTest extends FunSuite with MicrocSupport with Examples {
     store2.updateRef(ptr, ArrVal(Array(PointerVal(0), PointerVal(1), PointerVal(2))))
     assert(!store1.storeEquals(store2))
 
-    val mergedStoreOpt = store1.mergeStores(store2, Number(1, CodeLoc(0, 0)))
+    val mergedStoreOpt = store1.mergeStores(store2, Number(1, CodeLoc(0, 0)), Number(1, CodeLoc(0, 0)))
     assert(mergedStoreOpt.nonEmpty)
-    val mergedStore = mergedStoreOpt.get
+    val mergedStore = mergedStoreOpt.get._1
     assert(!mergedStore.storeEquals(store1))
     assert(!mergedStore.storeEquals(store2))
     assert(!store1.storeEquals(mergedStore))

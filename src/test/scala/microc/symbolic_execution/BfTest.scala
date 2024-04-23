@@ -3,6 +3,8 @@ package microc.symbolic_execution
 import com.microsoft.z3.Context
 import microc.analysis.{QueryCountAnalyses, SemanticAnalysis}
 import microc.cfg.{CfgNode, IntraproceduralCfgFactory}
+import microc.symbolic_execution.optimizations.merging.{AggressiveStateMerging, DynamicStateMerging, HeuristicBasedStateMerging, RecursionBasedAnalyses}
+import microc.symbolic_execution.optimizations.subsumption.PathSubsumption
 import microc.{Examples, MicrocSupport}
 import munit.FunSuite
 
@@ -437,7 +439,7 @@ class BfTest extends FunSuite with MicrocSupport with Examples {
   test("bf if instead of while merging") {
     val code = bfCodeNoWhile
     val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    val executor = new SymbolicExecutor(cfg, None, searchStrategy = new AgressiveStateMerging(new BFSSearchStrategy))
+    val executor = new SymbolicExecutor(cfg, None, searchStrategy = new AggressiveStateMerging(new BFSSearchStrategy))
     executor.run()
   }
 
@@ -502,7 +504,7 @@ class BfTest extends FunSuite with MicrocSupport with Examples {
     val code = bfCodeNoWhile
     val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
     val ctx = new Context()
-    val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx), ctx)), searchStrategy = new AgressiveStateMerging(new BFSSearchStrategy))
+    val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx), ctx)), searchStrategy = new AggressiveStateMerging(new BFSSearchStrategy))
     executor.run()
   }
 

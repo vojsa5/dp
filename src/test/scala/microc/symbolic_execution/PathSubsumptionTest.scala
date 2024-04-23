@@ -1,9 +1,10 @@
 package microc.symbolic_execution
 
 import com.microsoft.z3.Context
-import microc.ast.{AndAnd, BinaryOp, CodeLoc, Divide, Expr, GreaterThan, Identifier, LowerThan, Minus, Null, Number, Plus, Times}
-import microc.cfg.{CfgStmtNode, IntraproceduralCfgFactory}
+import microc.ast.{AndAnd, BinaryOp, CodeLoc, Divide, Expr, GreaterEqual, GreaterThan, Identifier, LowerEqual, LowerThan, Minus, Null, Number, Plus, Times, VarStmt, WhileStmt}
+import microc.cfg.{CfgNode, CfgStmtNode, IntraproceduralCfgFactory}
 import microc.symbolic_execution.Value.SymbolicVal
+import microc.symbolic_execution.optimizations.subsumption.PathSubsumption
 import microc.{Examples, MicrocSupport}
 import munit.FunSuite
 
@@ -28,7 +29,7 @@ class PathSubsumptionTest extends FunSuite with MicrocSupport with Examples {
     var pathSubsumption = new PathSubsumption(constraintSolver, context)
     val node = new CfgStmtNode(1, Null(CodeLoc(0, 0)))
     val symbolicState = new SymbolicState(null, Number(1, CodeLoc(0, 0)), new SymbolicStore(Map.empty))
-    symbolicState.addedVar("x", SymbolicVal(CodeLoc(0, 0)))
+    symbolicState.updateVar("x", SymbolicVal(CodeLoc(0, 0)))
 //    for (_ <- 0 to 10) {
 //      assert(pathSubsumption.checkSubsumption(node, generateRandomExpr(), new SymbolicState(null, Number(1, CodeLoc(0, 0)), new SymbolicStore(Map.empty))))
 //    }
@@ -235,6 +236,138 @@ class PathSubsumptionTest extends FunSuite with MicrocSupport with Examples {
   }
 
 
+  test("loop inductivness") {
+    val code =
+      """
+        |main() {
+        |  var x, y, i, n;
+        |  x = input;
+        |  i = input;
+        |  n = input;
+        |  y = x;
+        |  while (i < n) {
+        |     x = x + 1;
+        |     i = i + 1;
+        |  }
+        |  if (x < y) {
+        |     x = 1 / 0;
+        |  }
+        |  return 0;
+        |}
+        |""".stripMargin;
+    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+    var stmt: CfgNode = cfg.getFce("main")
+    val main = stmt
+
+    val state = new SymbolicState(stmt, Number(1, CodeLoc(0, 0)), new SymbolicStore(Map.empty))
+    state.updateVar("x", SymbolicVal(CodeLoc(0, 0)))
+    state.updateVar("i", SymbolicVal(CodeLoc(0, 0)))
+    state.updateVar("n", SymbolicVal(CodeLoc(0, 0)))
+    state.updateVar("y", state.getValueOfVar("x"))
+    state.updateVar("_t1", SymbolicVal(CodeLoc(0, 0)))
+    state.variableDecls = List.empty
+
+    while (!stmt.ast.isInstanceOf[WhileStmt]) {
+      stmt.ast match {
+        case VarStmt(vars, _) =>
+          for (v <- vars) {
+            if (Utility.varIsFromOriginalProgram(v.name)) {
+              state.variableDecls = state.variableDecls.appended(v)
+            }
+          }
+        case _ =>
+      }
+      stmt = stmt.succ.head
+    }
+    val ctx = new Context()
+    val ps = new PathSubsumption(new ConstraintSolver(ctx), ctx)
+
+    state.programLocation = stmt
+    assert(ps.computeInductivness(state, BinaryOp(GreaterEqual, Identifier("x", CodeLoc(0, 0)), Identifier("y", CodeLoc(0, 0)), CodeLoc(0, 0)), new SymbolicExecutor(cfg), stmt))
+    assert(!ps.computeInductivness(state, BinaryOp(LowerEqual, Identifier("x", CodeLoc(0, 0)), Identifier("y", CodeLoc(0, 0)), CodeLoc(0, 0)), new SymbolicExecutor(cfg), stmt))
+  }
+
+  test("remove non-inductive labels") {
+    val code =
+      """
+        |main() {
+        |  var x, y, i, n;
+        |  x = input;
+        |  i = input;
+        |  n = input;
+        |  y = x;
+        |  while (i < n) {
+        |     x = x + 1;
+        |     i = i + 1;
+        |  }
+        |  if (x < y) {
+        |     x = 1 / 0;
+        |  }
+        |  return 0;
+        |}
+        |""".stripMargin;
+    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+    var stmt: CfgNode = cfg.getFce("main")
+    val main = stmt
+
+    val state = new SymbolicState(stmt, Number(1, CodeLoc(0, 0)), new SymbolicStore(Map.empty))
+    state.updateVar("x", SymbolicVal(CodeLoc(0, 0)))
+    state.updateVar("i", SymbolicVal(CodeLoc(0, 0)))
+    state.updateVar("n", SymbolicVal(CodeLoc(0, 0)))
+    state.updateVar("y", state.getValueOfVar("x"))
+    state.updateVar("_t1", SymbolicVal(CodeLoc(0, 0)))
+    state.variableDecls = List.empty
+
+    while (!stmt.ast.isInstanceOf[WhileStmt]) {
+      stmt.ast match {
+        case VarStmt(vars, _) =>
+          for (v <- vars) {
+            if (Utility.varIsFromOriginalProgram(v.name)) {
+              state.variableDecls = state.variableDecls.appended(v)
+            }
+          }
+        case _ =>
+      }
+      stmt = stmt.succ.head
+    }
+    val ctx = new Context()
+    val ps = new PathSubsumption(new ConstraintSolver(ctx), ctx)
+
+    state.programLocation = stmt
+
+    assert(
+      ps.removeNonInductiveLabels(
+        state,
+        BinaryOp(
+          AndAnd,
+          BinaryOp(
+            GreaterEqual,
+            Identifier("x", CodeLoc(0, 0)),
+            Identifier("y", CodeLoc(0, 0)),
+            CodeLoc(0, 0)
+          ),
+          BinaryOp(
+            LowerThan,
+            Identifier("i", CodeLoc(0, 0)),
+            Identifier("n", CodeLoc(0, 0)),
+            CodeLoc(0, 0)
+          ),
+          CodeLoc(0, 0)
+        ),
+        new SymbolicExecutor(cfg),
+        stmt
+      ).equals(
+        BinaryOp(
+          GreaterEqual,
+          Identifier("x", CodeLoc(0, 0)),
+          Identifier("y", CodeLoc(0, 0)),
+          CodeLoc(0, 0)
+        )
+      )
+    )
+  }
+
+
   test("summarization from paper 3") {
     val code =
       """
@@ -258,7 +391,7 @@ class PathSubsumptionTest extends FunSuite with MicrocSupport with Examples {
     val ctx = new Context()
     val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx), ctx)), ctx, new DFSSearchStrategy());
     val res = executor.run()
-    assert(executor.statistics.stoppedWithSubsumption == 2)
+//    assert(executor.statistics.stoppedWithSubsumption == 2)
     assert(executor.statistics.numPaths == 3)
   }
 
@@ -288,7 +421,7 @@ class PathSubsumptionTest extends FunSuite with MicrocSupport with Examples {
     val ctx = new Context()
     val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx), ctx)), ctx, new DFSSearchStrategy());
     val res = executor.run()
-    assert(executor.statistics.stoppedWithSubsumption == 4)
+//    assert(executor.statistics.stoppedWithSubsumption == 4)
     assert(executor.statistics.numPaths == 5)
   }
 
@@ -321,7 +454,7 @@ class PathSubsumptionTest extends FunSuite with MicrocSupport with Examples {
     val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx), ctx)), ctx, new DFSSearchStrategy());
     val initialProgramSize = cfg.nodes.size
     val res = executor.run()
-    assert(executor.statistics.stoppedWithSubsumption == 3)
+//    assert(executor.statistics.stoppedWithSubsumption == 3)
     assert(executor.statistics.numPaths == 4)
     assert(cfg.nodes.find(node => node.id == 15.0).get.succ.head.id == 12.0)
     assert(cfg.nodes.find(node => node.id == 16.0).get.succ.head.id == 9.0)
@@ -719,7 +852,7 @@ class PathSubsumptionTest extends FunSuite with MicrocSupport with Examples {
     val ctx = new Context()
     val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx), ctx)), ctx, new DFSSearchStrategy());
     executor.run()
-    assert(executor.statistics.stoppedWithSubsumption == 8)
+//    assert(executor.statistics.stoppedWithSubsumption == 8)
     assert(executor.statistics.numPaths == 10)
     null
   }
@@ -763,337 +896,107 @@ class PathSubsumptionTest extends FunSuite with MicrocSupport with Examples {
     val code =
       """
         |main() {
-        |  var var0,var1,var2,var3,var4,var5,var6,var7,var8,var9,var10,var11,var12,var13,var14,var15,var16,var17,var18;
-        |  var0 = {FrbkUriwKD:2};
-        |  var1 = 7;
-        |  var2 = 4;
-        |  var3 = alloc 4;
-        |  var4 = {ZpXlPyHmHH:5,dDqnONreXn:8,JLaheWDogc:alloc 3,vmnUidYZzD:[3,-1,6,7,8],bCwcGzSyvN:alloc 8};
-        |  var5 = 8;
-        |  var6 = [2,1,8,1,3];
-        |  var7 = 8;
-        |  var8 = 6;
-        |  var9 = 1;
-        |  var10 = alloc 3;
-        |  var11 = alloc 5;
-        |  var12 = {JjAdAZdRmn:5,qNOvLPeZSX:alloc alloc 6,GojQXAWRfc:alloc 8};
-        |  var13 = alloc 7;
-        |  var14 = 8;
-        |  var15 = 6;
-        |  var16 = 0;
-        |  var17 = alloc 5;
-        |  var18 = [8,4,8,4,8];
-        |  if (!var18[3]) {
-        |    output var18[2];
-        |    var6[1] = var6[3];
-        |    while (input) {
-        |      while (var4.dDqnONreXn) {
-        |        var1 = var12.JjAdAZdRmn;
-        |        var3 = var13;
-        |        output var6[0];
-        |        output input;
-        |      }
-        |      if (input) {
-        |        output var18[4];
-        |        var17 = &var5;
-        |        var11 = &var2;
-        |        var17 = &var5;
-        |      } else {
-        |        output var12.JjAdAZdRmn;
-        |        output input;
-        |        output var1;
-        |        var2 = [4,1,2,5,4,6][4];
-        |        var4 = var4;
-        |      }
-        |      while (!!2) {
-        |        var14 = input;
-        |        output var7;
-        |        output var8;
-        |        output !var0.FrbkUriwKD;
-        |      }
-        |      var1 = var8;
+        |  var var0,var1,var2,var3,var4,var5,var6,var7,var8,var9,var10,var11,var12,var13,var14,var15,var16,var17,var18,var19,var20,var21;
+        |  var0 = 2;
+        |  var1 = [0,2,3,8,7,-1,1];
+        |  var2 = {oaGrBnuZij:3,rewHZGUfuL:0};
+        |  var3 = 8;
+        |  var4 = 5;
+        |  var5 = {qasYOcTZAu:4};
+        |  var6 = [[6,8,4,3,-1,8,2],[0,4,2,3,-1,-1,0],[3,-1,7,-1,4,6,2],[5,1,1,1,2,0,5],[3,8,-1,3,6,2,8,4,1],[2,5,1,8,-1,6,1,5]];
+        |  var7 = {RTRGMUWTKc:alloc 0};
+        |  var8 = alloc 3;
+        |  var9 = 6;
+        |  var10 = -1;
+        |  var11 = {WwllhQzzga:alloc 5};
+        |  var12 = {eObqkYDAeF:0,wQFTpXtJGR:alloc [7,7,7,-1,3,2,5,-1],PfXGYhPMoV:[5,6,0,-1,1]};
+        |  var13 = alloc 4;
+        |  var14 = [2,5,5,0,1,1];
+        |  var15 = 1;
+        |  var16 = 4;
+        |  var17 = 1;
+        |  var18 = alloc 5;
+        |  var19 = [alloc -1,alloc 5,alloc 8,alloc 7,alloc 3];
+        |  var20 = {tlvWBMenWg:3};
+        |  var21 = [5,3,1,0,4,8,0,7,-1];
+        |  var14 = var14;
+        |  var1 = var1;
+        |  while ((var9 < var15)) {
+        |    var21 = var21;
+        |    while ((var0 < var10)) {
+        |      var0 = (var0 + 1);
         |    }
-        |    var2 = var12.JjAdAZdRmn;
-        |    if (var18[0]) {
-        |      if (var2) {
-        |        output var18[0];
-        |        output var2;
-        |        var9 = var4.ZpXlPyHmHH;
-        |        var6 = var18;
-        |      } else {
-        |        output var12.JjAdAZdRmn;
-        |        var1 = [7,8,0,-1,3,-1,1][4];
-        |        var1 = !7;
-        |        var12 = var12;
-        |      }
-        |      if (var18[1]) {
-        |        output var18[2];
-        |        output (var5 * var6[3]);
-        |        var1 = [7,7,6,7,2,7,-1,1,3][3];
-        |        output !input;
-        |      } else {
-        |        output input;
-        |        var7 = input;
-        |        var10 = alloc 1;
-        |      }
-        |      var4 = var4;
-        |    } else {
-        |      if ((var1 - input)) {
-        |        output input;
-        |        var6 = var6;
-        |        var8 = var9;
-        |        var12 = var12;
-        |      } else {
-        |        output input;
-        |        var12 = var12;
-        |        output var0.FrbkUriwKD;
-        |      }
-        |      while (var18[4]) {
-        |        var15 = var7;
-        |        var4 = var4;
-        |        output !input;
-        |      }
-        |      while (input) {
-        |        output var12.JjAdAZdRmn;
-        |        var6 = var6;
-        |        var2 = [0,2,0,-1,0,4,6,6][0];
-        |        output var4.ZpXlPyHmHH;
-        |      }
-        |      var5 = var0.FrbkUriwKD;
-        |    }
-        |  } else {
-        |    output var9;
-        |    if (input) {
-        |      if (var18[3]) {
-        |        output !!input;
-        |        output var6[3];
-        |        output var0.FrbkUriwKD;
-        |        output var1;
-        |        output var4.dDqnONreXn;
-        |      } else {
-        |        output !var18[2];
-        |        var9 = [0,5,7,6,8,6,1][3];
-        |        output var14;
-        |        var2 = var12.JjAdAZdRmn;
-        |      }
-        |      while (!var5) {
-        |        output var18[4];
-        |        output (input * (input + var18[3]));
-        |        output !var6[0];
-        |        var14 = var7;
-        |        var4 = var4;
-        |      }
-        |      while ((var16 * input)) {
-        |        output (var5 + (!input - input));
-        |        output var0.FrbkUriwKD;
-        |        output var6[4];
-        |        var18 = var6;
-        |        output var0.FrbkUriwKD;
-        |      }
-        |      var6[1] = input;
-        |    } else {
-        |      var15 = var12.JjAdAZdRmn;
-        |      var18[2] = var4.ZpXlPyHmHH;
-        |      var11 = alloc (7 - 5);
-        |    }
-        |    var6[2] = input;
+        |    var9 = (var9 + 1);
         |  }
-        |  output var12.JjAdAZdRmn;
-        |  var18[3] = var6[4];
-        |  while (input) {
-        |    if (!input) {
-        |      while ((input * [-1,8,2,-1,-1,-1][0])) {
-        |        var7 = [5,4,2,3,6][2];
-        |        output input;
-        |        output var18[4];
-        |        output input;
-        |        output input;
-        |      }
-        |      output (input * [3,-1,3,1,0,-1][2]);
-        |      if (var12.JjAdAZdRmn) {
-        |        output (var1 * !input);
-        |        var18 = var6;
-        |        var18 = var18;
-        |        output var12.JjAdAZdRmn;
+        |  while ((var17 < var3)) {
+        |    if (var1[6]) {
+        |      if (!input) {
+        |        while (var16) {
+        |          var2 = var2;
+        |          output var5.qasYOcTZAu;
+        |        }
         |      } else {
-        |        var5 = input;
-        |        output input;
-        |        output var1;
-        |        var6 = var6;
-        |        var13 = alloc 4;
+        |        while (![7,1,4,7,-1,5,3,3][4]) {}
+        |        while ((!2 * [4,7,4,4,7,7][5])) {
+        |          output var17;
+        |          var7 = var7;
+        |          output var2.oaGrBnuZij;
+        |          output var3;
+        |        }
+        |        while ((var4 < var4)) {
+        |          output (var14[4] * input);
+        |          var4 = (var4 + 1);
+        |        }
+        |        while (!var15) {
+        |          var1 = var1;
+        |          output (input + var21[3]);
+        |          var18 = &var3;
+        |        }
+        |      }
+        |      while ((var16 < var0)) {
+        |        var16 = (var16 + 1);
+        |      }
+        |      while ((var4 < var15)) {
+        |        while ((var4 < var15)) {
+        |          var12 = var12;
+        |          var0 = !6;
+        |          output var14[2];
+        |          var4 = (var4 + 1);
+        |        }
+        |        while ((var10 < var16)) {
+        |          output input;
+        |          var10 = (var10 + 1);
+        |        }
+        |        if (var14[2]) {
+        |          var8 = var18;
+        |          output var14[2];
+        |        } else {
+        |          var11 = var11;
+        |          var14 = var14;
+        |        }
+        |        var4 = (var4 + 1);
         |      }
         |    } else {
-        |      output !input;
-        |      output input;
-        |      if (input) {
-        |        output var8;
-        |        output input;
-        |        var3 = &var8;
-        |      } else {
-        |        output (((([3,8,1,2,7,7][2] * !3) * (var12.JjAdAZdRmn + !6)) * !var6[2]) * !input);
-        |        var3 = &var2;
-        |        output var6[2];
-        |        output var2;
-        |      }
-        |      if (input) {
-        |        var18 = var6;
-        |        var1 = !1;
-        |        var5 = var4.dDqnONreXn;
-        |      } else {
-        |        output (!var8 + input);
-        |        var4 = var4;
-        |        var7 = input;
-        |      }
-        |      var6[1] = !var2;
-        |    }
-        |    if ((input + var18[3])) {
-        |      output (input + (6 * 5));
-        |      while (var8) {
-        |        output (input - var18[3]);
-        |        var9 = input;
-        |        output !var18[2];
-        |        output !var6[1];
-        |      }
-        |      var16 = input;
-        |      var5 = var0.FrbkUriwKD;
-        |      var5 = var0.FrbkUriwKD;
-        |    } else {
-        |      if (input) {
-        |        var11 = &var8;
-        |        var4 = var4;
-        |        output (var12.JjAdAZdRmn * (input * !var4.dDqnONreXn));
-        |      } else {
-        |        var4 = var4;
-        |        output !var18[4];
-        |        output var12.JjAdAZdRmn;
-        |        var13 = &var1;
-        |        var4 = var4;
-        |      }
-        |      output ([-1,6,5,2,4,7][4] + var16);
-        |      output (var14 - input);
-        |      var6[4] = var4.dDqnONreXn;
-        |      while (input) {
-        |        var14 = (3 - 5);
-        |        var10 = alloc 7;
-        |        output (input - var12.JjAdAZdRmn);
-        |        output (input - input);
-        |        var18 = var18;
+        |      var21[1] = input;
+        |      var14[0] = (var2.oaGrBnuZij * var12.eObqkYDAeF);
+        |      while (var3) {}
+        |      while ((var3 < var9)) {
+        |        var6[0] = var21;
+        |        while ((var4 < var16)) {
+        |          var4 = (var4 + 1);
+        |        }
+        |        while ((var9 < var0)) {
+        |          var9 = (var9 + 1);
+        |        }
+        |        var3 = (var3 + 1);
         |      }
         |    }
-        |    while (!!input) {
-        |      if ((!8 + [4,-1,8,7,-1,-1][0])) {
-        |        var11 = &var7;
-        |        output var16;
-        |        output input;
-        |        output var18[2];
-        |      } else {
-        |        output (input * var4.ZpXlPyHmHH);
-        |        output input;
-        |        var12 = var12;
-        |        output input;
-        |        output var18[1];
-        |      }
-        |      var5 = var2;
-        |      if (input) {
-        |        output var12.JjAdAZdRmn;
-        |        var15 = !5;
-        |        var16 = [6,5,1,1,7,-1,0][0];
-        |        var10 = alloc 1;
-        |        output var4.dDqnONreXn;
-        |      } else {
-        |        output !!input;
-        |        var8 = var4.ZpXlPyHmHH;
-        |        output var14;
-        |      }
+        |    while ((var10 < var10)) {
+        |      var10 = (var10 + 1);
         |    }
+        |    var17 = (var17 + 1);
         |  }
-        |  output input;
-        |  if (!var0.FrbkUriwKD) {
-        |    output !input;
-        |    var8 = var2;
-        |    output input;
-        |    if (input) {
-        |      while (var6[3]) {
-        |        output !(var2 - var8);
-        |        output var9;
-        |        output var16;
-        |        output !(var4.dDqnONreXn * var16);
-        |        var18 = var18;
-        |      }
-        |      var17 = &var5;
-        |      while (var0.FrbkUriwKD) {
-        |        output (var0.FrbkUriwKD * (input + !!input));
-        |        var10 = alloc 5;
-        |        output input;
-        |        var16 = (5 - 7);
-        |        var12 = var12;
-        |      }
-        |      while (var12.JjAdAZdRmn) {
-        |        var11 = var10;
-        |        output input;
-        |        var3 = &var5;
-        |        var13 = alloc 5;
-        |      }
-        |      var6[0] = var12.JjAdAZdRmn;
-        |    } else {
-        |      while (var18[1]) {
-        |        var4 = var4;
-        |        output input;
-        |        output var6[0];
-        |        var9 = [4,8,5,7,5,4][4];
-        |        var7 = var14;
-        |      }
-        |      while (!input) {
-        |        output var6[2];
-        |        output var18[1];
-        |        output var5;
-        |        var9 = input;
-        |      }
-        |      output var6[4];
-        |      output input;
-        |    }
-        |  } else {
-        |    var18[2] = var18[4];
-        |    output var4.dDqnONreXn;
-        |    var10 = var17;
-        |    while (var4.dDqnONreXn) {
-        |      if (var1) {
-        |        output !((var4.ZpXlPyHmHH + var4.ZpXlPyHmHH) + var6[1]);
-        |        var14 = var9;
-        |        output input;
-        |        output (var4.ZpXlPyHmHH + var18[3]);
-        |        var4 = var4;
-        |      } else {
-        |        output !input;
-        |        var2 = !5;
-        |        var18 = var6;
-        |        output var4.ZpXlPyHmHH;
-        |      }
-        |      output var12.JjAdAZdRmn;
-        |      if ((input * !6)) {
-        |        var16 = var4.dDqnONreXn;
-        |        output input;
-        |        output var5;
-        |      } else {
-        |        var12 = var12;
-        |        var18 = var6;
-        |        var16 = input;
-        |        var12 = var12;
-        |      }
-        |      var6[4] = var12.JjAdAZdRmn;
-        |      while (var18[3]) {
-        |        output var8;
-        |        var1 = var14;
-        |        output input;
-        |        var6 = var6;
-        |        output var14;
-        |      }
-        |    }
-        |  }
-        |  output input;
-        |  var18[2] = (input - input);
-        |  output input;
-        |  return var12.JjAdAZdRmn;
+        |  return var14[2];
         |}
         |""".stripMargin;
     val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));

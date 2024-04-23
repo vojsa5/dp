@@ -1,11 +1,80 @@
 package microc.symbolic_execution
 
-import microc.ast.{CodeLoc, Expr, Identifier, Loc}
+import microc.ast.{BinaryOp, CodeLoc, Expr, Identifier, Loc, Not, OrOr}
 import microc.symbolic_execution.ExecutionException.{errorIncompatibleTypes, errorUninitializedReference}
-import microc.symbolic_execution.Value.{ArrVal, FunVal, IteVal, NullRef, PointerVal, RecVal, RefVal, SymbolicVal, UninitializedRef, Val}
+import microc.symbolic_execution.Value.{ArrVal, FunVal, IteVal, NullRef, PointerVal, RecVal, RefVal, Symbolic, SymbolicVal, UninitializedRef, Val}
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
+
+
+object SymbolicStore {
+
+  def mergePathCondition(pathCondition: Expr, symbolicStore: SymbolicStore, res: SymbolicStore, pointerMapping: mutable.HashMap[Int, Int]): Expr = {
+    pathCondition match {
+      case PointerVal(address) =>
+        pointerMapping.get(address) match {
+          case Some(addr) =>
+            res.storage.getVal(PointerVal(addr)).get.asInstanceOf[Symbolic]
+          case None =>
+            val v = mergePathCondition(
+              symbolicStore.getValOfPtr(PointerVal(address)).get.asInstanceOf[Symbolic],
+              symbolicStore,
+              res,
+              pointerMapping
+            ).asInstanceOf[Symbolic]
+            val ptr = res.storage.addNewVal(v)
+            pointerMapping.put(address, ptr.address)
+            v
+        }
+      case IteVal(trueState, falseState, expr, loc) =>
+        val ite = IteVal(
+          pointerMapping.get(trueState.address) match {
+            case Some(addr) =>
+              PointerVal(addr)
+            case None =>
+              val v = mergePathCondition(
+                trueState,
+                symbolicStore,
+                res,
+                pointerMapping
+              ).asInstanceOf[Symbolic]
+              val ptr = res.storage.addNewVal(v)
+              pointerMapping.put(trueState.address, ptr.address)
+              ptr
+          },
+          pointerMapping.get(falseState.address) match {
+            case Some(addr) =>
+              PointerVal(addr)
+            case None =>
+              val v = mergePathCondition(
+                falseState,
+                symbolicStore,
+                res,
+                pointerMapping
+              ).asInstanceOf[Symbolic]
+              val ptr = res.storage.addNewVal(v)
+              pointerMapping.put(falseState.address, ptr.address)
+              ptr
+          },
+          expr,
+          loc
+        )
+        ite
+      case BinaryOp(op, left, right, loc) =>
+        BinaryOp(
+          op,
+          mergePathCondition(left, symbolicStore, res, pointerMapping),
+          mergePathCondition(right, symbolicStore, res, pointerMapping),
+          loc
+        )
+      case Not(expr, loc) => Not(mergePathCondition(expr, symbolicStore, res, pointerMapping), loc)
+      case other => other
+    }
+  }
+
+}
+
 
 class SymbolicStore(functionDeclarations: Map[String, FunVal]) {
 
@@ -225,6 +294,8 @@ class SymbolicStore(functionDeclarations: Map[String, FunVal]) {
                 return false
               case (Some(_), Some(_)) =>
               case (None, None) =>
+              case _ =>
+                throw new Exception("IMPLEMENT")
             }
           }
           return true
@@ -345,14 +416,13 @@ class SymbolicStore(functionDeclarations: Map[String, FunVal]) {
         }
         res.storage.addNewVal(RecVal(rec))
       case Some(IteVal(trueState, falseState, expr, loc)) =>
-        res.storage.addNewVal(
-          IteVal(
-            moveValue(res, store, trueState, pointerMapping),
-            moveValue(res, store, falseState, pointerMapping),
-            expr,
-            loc
-          )
+        val ite = IteVal(
+          moveValue(res, store, trueState, pointerMapping),
+          moveValue(res, store, falseState, pointerMapping),
+          expr,
+          loc
         )
+        res.storage.addNewVal(ite)
       case Some(v1) =>
         res.storage.addNewVal(v1)
       case None =>
@@ -408,7 +478,8 @@ class SymbolicStore(functionDeclarations: Map[String, FunVal]) {
               arr = arr.appended(addr1)
             }
             else {
-              arr = arr.appended(res.storage.addNewVal(IteVal(addr1, addr2, pathCondition, CodeLoc(0, 0))))
+              val ite = IteVal(addr1, addr2, pathCondition, CodeLoc(0, 0))
+              arr = arr.appended(res.storage.addNewVal(ite))
             }
           }
           val a = ArrVal(arr)
@@ -430,7 +501,8 @@ class SymbolicStore(functionDeclarations: Map[String, FunVal]) {
               rec.put(field, addr1)
             }
             else {
-              rec.put(field, res.storage.addNewVal(IteVal(addr1, addr2, pathCondition, CodeLoc(0, 0))))
+              val ite = IteVal(addr1, addr2, pathCondition, CodeLoc(0, 0))
+              rec.put(field, res.storage.addNewVal(ite))
             }
           }
           val r = RecVal(rec)
@@ -449,13 +521,15 @@ class SymbolicStore(functionDeclarations: Map[String, FunVal]) {
           t1._1
         }
         else {
-          res.storage.addNewVal(IteVal(t1._1, t1._2, pathCondition, CodeLoc(0, 0)))
+          val ite = IteVal(t1._1, t1._2, pathCondition, CodeLoc(0, 0))
+          res.storage.addNewVal(ite)
         }
         val newFalseState = if (t2._1 == t2._2) {
           t2._1
         }
         else {
-          res.storage.addNewVal(IteVal(t2._1, t2._2, pathCondition, CodeLoc(0, 0)))
+          val ite = IteVal(t2._1, t2._2, pathCondition, CodeLoc(0, 0))
+          res.storage.addNewVal(ite)
         }
         val ite = IteVal(newTrueState, newFalseState, expr1, loc1)
         val added = res.storage.addNewVal(ite)
@@ -482,8 +556,9 @@ class SymbolicStore(functionDeclarations: Map[String, FunVal]) {
   }
 
 
+
   // states should have the same number of frames
-  def mergeStores(other: SymbolicStore, pathCondition: Expr): Option[SymbolicStore] = {
+  def mergeStores(other: SymbolicStore, pathCondition: Expr, pathCondition2: Expr): Option[(SymbolicStore, Expr)] = {
     val res = new SymbolicStore(functionDeclarations)
     val thisPointerMapping: mutable.HashMap[Int, Int] = new mutable.HashMap[Int, Int]()
     val otherPointerMapping: mutable.HashMap[Int, Int] = new mutable.HashMap[Int, Int]()
@@ -501,7 +576,8 @@ class SymbolicStore(functionDeclarations: Map[String, FunVal]) {
               else {
                 val addr = res.storage.getAddress
                 res.addVar(variable, addr)
-                res.updateRef(addr, IteVal(addr1, addr2, pathCondition, CodeLoc(0, 0)))
+                val ite = IteVal(addr1, addr2, pathCondition, CodeLoc(0, 0))
+                res.updateRef(addr, ite)
               }
             }
           }
@@ -529,6 +605,12 @@ class SymbolicStore(functionDeclarations: Map[String, FunVal]) {
         res.pushFrame()
       }
     }
-    Some(res)
+    val r = Some(res,
+      Utility.simplifyADisjunction(
+        SymbolicStore.mergePathCondition(pathCondition, this, res, thisPointerMapping),
+        SymbolicStore.mergePathCondition(pathCondition2, other, res, otherPointerMapping)
+      )
+    )
+    r
   }
 }

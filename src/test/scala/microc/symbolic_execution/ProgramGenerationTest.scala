@@ -4,6 +4,9 @@ import com.microsoft.z3.Context
 import microc.analysis.{QueryCountAnalyses, SemanticAnalysis}
 import microc.ast.AstNormalizer
 import microc.cfg.{CfgNode, IntraproceduralCfgFactory, ProgramCfg}
+import microc.symbolic_execution.optimizations.subsumption.PathSubsumption
+import microc.symbolic_execution.optimizations.summarization.LoopSummary
+import microc.symbolic_execution.optimizations.merging.HeuristicBasedStateMerging
 import microc.{Examples, MicrocSupport}
 import munit.FunSuite
 

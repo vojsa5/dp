@@ -152,6 +152,13 @@ object Utility {
           case (a, b) =>
             BinaryOp(operator, a, b, loc)
         }
+      case Not(Number(value, loc), _) =>
+        Number(if (value == 0) {
+          1
+        }
+        else {
+          0
+        }, loc)
       case other => other
     }
     if (res != expr) {
@@ -168,11 +175,11 @@ object Utility {
       case PointerVal(addr) => PointerVal(addr)
       case SymbolicExpr(expr, _) => applyTheState(expr, state, allowReturnNonInitialized)
       case IteVal(val1, val2, cond, loc) =>
-        (applyVal(state.getVal(val1).get, state), applyVal(state.getVal(val2).get, state)) match {
-          case (a: Symbolic, b: Symbolic) => IteVal(state.addedAlloc(a), state.addedAlloc(b), applyTheState(cond, state, allowReturnNonInitialized), loc)
-          case (a: Symbolic, b) => IteVal(state.addedAlloc(a), state.addedAlloc(SymbolicExpr(b, loc)), applyTheState(cond, state, allowReturnNonInitialized), loc)
-          case (a, b: Symbolic) => IteVal(state.addedAlloc(SymbolicExpr(a, loc)), state.addedAlloc(b), applyTheState(cond, state, allowReturnNonInitialized), loc)
-          case (a, b) => IteVal(state.addedAlloc(SymbolicExpr(a, loc)), state.addedAlloc(SymbolicExpr(b, loc)), applyTheState(cond, state, allowReturnNonInitialized), loc)
+        (applyVal(state.getValOnMemoryLocation(val1).get, state), applyVal(state.getValOnMemoryLocation(val2).get, state)) match {
+          case (a: Symbolic, b: Symbolic) => IteVal(state.addAlloc(a), state.addAlloc(b), applyTheState(cond, state, allowReturnNonInitialized), loc)
+          case (a: Symbolic, b) => IteVal(state.addAlloc(a), state.addAlloc(SymbolicExpr(b, loc)), applyTheState(cond, state, allowReturnNonInitialized), loc)
+          case (a, b: Symbolic) => IteVal(state.addAlloc(SymbolicExpr(a, loc)), state.addAlloc(b), applyTheState(cond, state, allowReturnNonInitialized), loc)
+          case (a, b) => IteVal(state.addAlloc(SymbolicExpr(a, loc)), state.addAlloc(SymbolicExpr(b, loc)), applyTheState(cond, state, allowReturnNonInitialized), loc)
         }
       case r@RecVal(fields) => r
       //RecVal(fields.map(field => (field._1, SymbolicExpr(applyVal(field._2, state, allowReturnNonInitialized), CodeLoc(0, 0)))))
@@ -188,7 +195,7 @@ object Utility {
       case Not(expr, loc) =>
         Not(applyTheState(expr, state, allowReturnNonInitialized), loc)
       case BinaryOp(operator, left, right, loc) => BinaryOp(operator, applyTheState(left, state, allowReturnNonInitialized), applyTheState(right, state, allowReturnNonInitialized), loc)
-      case Identifier(name, loc) => applyVal(state.getSymbolicVal(name, loc, allowReturnNonInitialized), state, allowReturnNonInitialized)
+      case Identifier(name, loc) => applyVal(state.getValueOfVar(name, loc, allowReturnNonInitialized), state, allowReturnNonInitialized)
       case n@Number(_, _) => n
       case v@SymbolicVal(_) => v
       case NullRef => NullRef
@@ -197,6 +204,10 @@ object Utility {
       case r@RecVal(_) => r
       case a@ArrVal(_) => a
       case i@Input(loc) => SymbolicVal(CodeLoc(0, 0))
+      case ArrayAccess(array, index, loc) =>
+        ArrayAccess(applyTheState(array, state, allowReturnNonInitialized), applyTheState(index, state, allowReturnNonInitialized), loc)
+      case ArrayNode(elems, loc) =>
+        ArrayNode(elems.map(elem => applyTheState(elem, state, allowReturnNonInitialized)), loc)
       case _ =>
         throw new Exception("")
     }
@@ -334,16 +345,87 @@ object Utility {
             res.add(expr)
             res
           case _ =>
-            mutable.HashSet[Expr]()
+            val res = mutable.HashSet[Expr]()
+            res.add(expr)
+            res
         }
       case _ =>
-        mutable.HashSet[Expr]()
+        val res = mutable.HashSet[Expr]()
+        res.add(expr)
+        res
     }
   }
 
   def simplifyADisjunction(expr1: Expr, expr2: Expr): Expr = {
-    val disjunction1 = getConjunctions(expr1)
-    val disjunction2 = getConjunctions(expr2)
-    null
+    val disjunctions1 = getConjunctions(expr1)
+    val disjunctions2 = getConjunctions(expr2)
+    val sharedDisjunctions = mutable.HashSet[Expr]()
+    val uniqueDisjuntions1 = mutable.HashSet[Expr]()
+    val uniqueDisjuntions2 = mutable.HashSet[Expr]()
+    for (disjunction <- disjunctions1) {
+      if (disjunctions2.contains(disjunction)) {
+        sharedDisjunctions.add(disjunction)
+      }
+      else {
+        uniqueDisjuntions1.add(disjunction)
+      }
+    }
+    for (disjunction <- disjunctions2) {
+      if (!disjunctions1.contains(disjunction)) {
+        uniqueDisjuntions2.add(disjunction)
+      }
+    }
+    var sharedConjunction: Expr = null
+    var uniqueConjunction1: Expr = null
+    var uniqueConjunction2: Expr = null
+    for (disjunction <- sharedDisjunctions) {
+      if (sharedConjunction == null) {
+        sharedConjunction = disjunction
+      }
+      else {
+        sharedConjunction = BinaryOp(AndAnd, sharedConjunction, disjunction, CodeLoc(0, 0))
+      }
+    }
+    for (disjunction <- uniqueDisjuntions1) {
+      if (uniqueConjunction1 == null) {
+        uniqueConjunction1 = disjunction
+      }
+      else {
+        uniqueConjunction1 = BinaryOp(OrOr, uniqueConjunction1, disjunction, CodeLoc(0, 0))
+      }
+    }
+    for (disjunction <- uniqueDisjuntions2) {
+      if (uniqueConjunction2 == null) {
+        uniqueConjunction2 = disjunction
+      }
+      else {
+        uniqueConjunction2 = BinaryOp(OrOr, uniqueConjunction2, disjunction, CodeLoc(0, 0))
+      }
+    }
+    val res = if (sharedConjunction == null) {
+      (uniqueConjunction1, uniqueConjunction2) match {
+        case (null, null) =>
+          throw new Exception("this should never happen")
+        case (null, v) =>
+          uniqueConjunction2
+        case (v, null) =>
+          uniqueConjunction1
+        case (v1, v2) =>
+          BinaryOp(OrOr, uniqueConjunction1, uniqueConjunction2, CodeLoc(0, 0))
+      }
+    }
+    else {
+      (uniqueConjunction1, uniqueConjunction2) match {
+        case (null, null) =>
+          sharedConjunction
+        case (null, v) =>
+          BinaryOp(AndAnd, sharedConjunction, uniqueConjunction2, CodeLoc(0, 0))
+        case (v, null) =>
+          BinaryOp(AndAnd, sharedConjunction, uniqueConjunction1, CodeLoc(0, 0))
+        case (v1, v2) =>
+          BinaryOp(AndAnd, sharedConjunction, BinaryOp(OrOr, uniqueConjunction1, uniqueConjunction2, CodeLoc(0, 0)), CodeLoc(0, 0))
+      }
+    }
+    simplifyArithExpr(res)
   }
 }

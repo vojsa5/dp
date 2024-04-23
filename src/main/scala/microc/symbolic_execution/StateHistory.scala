@@ -101,8 +101,8 @@ class StateHistory {
                                  limitCost: Double,
                                  variableSolvingCosts: mutable.HashMap[CfgNode, mutable.HashMap[String, Double]]
                                ): Boolean = {
-    if (symbolicState1.nextStatement.id == symbolicState2.nextStatement.id && symbolicState1.symbolicStore.framesCnt() == symbolicState2.symbolicStore.framesCnt()) {
-      return symbolicState1.isSimilarTo(symbolicState2, limitCost, variableSolvingCosts(symbolicState1.nextStatement))
+    if (symbolicState1.programLocation.id == symbolicState2.programLocation.id && symbolicState1.symbolicStore.framesCnt() == symbolicState2.symbolicStore.framesCnt()) {
+      return symbolicState1.isSimilarTo(symbolicState2, limitCost, variableSolvingCosts(symbolicState1.programLocation))
     }
     if (depth == 0) {
       return false

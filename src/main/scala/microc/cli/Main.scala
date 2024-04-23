@@ -26,6 +26,8 @@ object Main {
                         smartMerging: Option[String] = None,
                         @arg(name = "smart-merging-cost", doc = "smart merging cost (optional int argument)")
                         smartMergingCost: Option[Int] = None,
+                        @arg(name = "kappa", doc = "kappa for smart merging (optional int argument)")
+                        kappa: Option[Int] = None,
                         @arg(name = "summarization", doc = "Enable loop summarization (optional bool argument)")
                         summarization: Option[Boolean] = None,
                         @arg(name = "subsumption", doc = "Enable path subsumption (optional bool argument)")
@@ -39,7 +41,7 @@ object Main {
       case Some(file) => new FileOutputStream(file)
       case None => System.out
     }
-    new SymbolicExecuteAction(programInput, searchStrategy, smartMerging, smartMergingCost, summarization, summarization, timeout, output).run()
+    new SymbolicExecuteAction(programInput, searchStrategy, smartMerging, smartMergingCost, kappa, summarization, subsumption, timeout, output).run()
   }
 
   @main(doc = "Generate program")

@@ -3,6 +3,7 @@ package microc.symbolic_execution
 import microc.analysis.{QueryCountAnalyses, SemanticAnalysis}
 import microc.ast.IdentifierDecl
 import microc.cfg.IntraproceduralCfgFactory
+import microc.symbolic_execution.optimizations.merging.RecursionBasedAnalyses
 import microc.{Examples, MicrocSupport}
 import munit.FunSuite
 

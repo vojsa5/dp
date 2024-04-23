@@ -4,7 +4,8 @@ import microc.analysis.{QueryCountAnalyses, SemanticAnalysis}
 import microc.ast.AstNormalizer
 import microc.cfg.{CfgNode, IntraproceduralCfgFactory}
 import microc.parser.LLParser
-import microc.symbolic_execution.{BFSSearchStrategy, HeuristicBasedStateMerging, RecursionBasedAnalyses, SymbolicExecutor, SymbolicExecutorFactory}
+import microc.symbolic_execution.optimizations.merging.{HeuristicBasedStateMerging, RecursionBasedAnalyses}
+import microc.symbolic_execution.{BFSSearchStrategy, SymbolicExecutor, SymbolicExecutorFactory}
 import microc.util.IOUtil.InputStreamOpts
 
 import java.io.{InputStream, OutputStream, Reader}
@@ -18,6 +19,7 @@ class SymbolicExecuteAction(
                              searchStrategy: Option[String],
                              smartMerging: Option[String],
                              smartMergingCost: Option[Int],
+                             kappa: Option[Int],
                              summarization: Option[Boolean],
                              subsumption: Option[Boolean],
                              timeout: Option[Int],
@@ -44,7 +46,7 @@ class SymbolicExecuteAction(
        case Some(v) => v
        case None => 30
      }
-     val factory = new SymbolicExecutorFactory(summariationB, subsumptionB, smartMerging, smartMergingCost, searchStrategyStr)
+     val factory = new SymbolicExecutorFactory(summariationB, subsumptionB, smartMerging, smartMergingCost, kappa, searchStrategyStr)
      val programCfg = {
        new AstNormalizer().normalize(parser.parseProgram(source))
      }
@@ -53,6 +55,7 @@ class SymbolicExecuteAction(
      val future = Future {
        executor.run()
      }
+     val startTime = System.currentTimeMillis()
      try {
        Await.result(future, timeoutI.seconds)
      }
@@ -62,6 +65,8 @@ class SymbolicExecuteAction(
        case e =>
          println(e)
      }
+     val endTime = System.currentTimeMillis()
+     val elapsedTime = endTime - startTime
 
      output.write(executor.statistics.numPaths.toString.getBytes(StandardCharsets.UTF_8))
      println(executor.statistics.numPaths)

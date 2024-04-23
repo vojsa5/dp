@@ -4,6 +4,9 @@ import com.microsoft.z3.Context
 import microc.analysis.{QueryCountAnalyses, SemanticAnalysis}
 import microc.ast.{AstNormalizer, Program}
 import microc.cfg.{CfgNode, IntraproceduralCfgFactory, ProgramCfg}
+import microc.symbolic_execution.optimizations.merging.{AggressiveStateMerging, HeuristicBasedStateMerging, RecursionBasedAnalyses}
+import microc.symbolic_execution.optimizations.subsumption.PathSubsumption
+import microc.symbolic_execution.optimizations.summarization.LoopSummary
 
 import scala.collection.mutable
 import scala.concurrent.{Await, Future, TimeoutException}
@@ -50,7 +53,7 @@ class ExperimentRunner {
       tmp.tmp2(cfg)
 
       res = res.appended("heur2 " + searchStrategy._1, new HeuristicBasedStateMerging(searchStrategy._2, tmp.mapping, 3))
-      res = res.appended("aggr " + searchStrategy._1, new AgressiveStateMerging(searchStrategy._2))
+      res = res.appended("aggr " + searchStrategy._1, new AggressiveStateMerging(searchStrategy._2))
     }
     res
   }

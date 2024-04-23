@@ -4,6 +4,9 @@ import com.microsoft.z3.Context
 import microc.analysis.{QueryCountAnalyses, SemanticAnalysis}
 import microc.ast.{CodeLoc, Decl, NestedBlockStmt, Number, WhileStmt}
 import microc.cfg.{CfgNode, IntraproceduralCfgFactory}
+import microc.symbolic_execution.optimizations.subsumption.PathSubsumption
+import microc.symbolic_execution.optimizations.summarization.LoopSummary
+import microc.symbolic_execution.optimizations.merging.{AggressiveStateMerging, HeuristicBasedStateMerging}
 import microc.{Examples, MicrocSupport}
 import munit.FunSuite
 
@@ -761,6 +764,37 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
         |   k = 1 / 0;
         |  }
         |  return k * i;
+        |}
+        |""".stripMargin;
+
+    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+    val ctx = new Context()
+    val executor = new LoopSummary(cfg)
+    executor.run()
+  }
+
+  test("sequential unbounded loop finishes with summarization correctly 2") {
+    val code =
+      """
+        |main() {
+        |  var a, i, n;
+        |  a = 0;
+        |  i = input;
+        |  n = input;
+        |
+        |  while (i < n) {
+        |    a = a + 2;
+        |    i = i + 1;
+        |  }
+        |
+        |  if (a == 15) {
+        |    a = 1 / 0;
+        |  }
+        |  else {
+        |
+        |  }
+        |
+        |  return 0;
         |}
         |""".stripMargin;
 
@@ -3398,235 +3432,69 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
     val code =
       """
         |main() {
-        |  var var0,var1,var2,var3,var4,var5,var6,var7,var8,var9,var10,var11,var12,var13,var14,var15,var16,var17,var18,var19,var20,var21,var22,var23,var24,var25,var26,var27;
-        |  var0 = {ZiDVisiYjZ:6,fVkBeOYvac:2,ANekffvDSl:1,orgIRcDHoa:6};
-        |  var1 = 1;
-        |  var2 = 4;
-        |  var3 = {oagofINLUu:7,jkLsndkGTy:alloc 8,cTxsIAbxhU:2};
-        |  var4 = 5;
-        |  var5 = alloc 8;
-        |  var6 = [7,1,4,5,2,2,2];
-        |  var7 = alloc 2;
-        |  var8 = {wuxRiNamVJ:alloc alloc 6,OaZdtzsxma:alloc 8};
-        |  var9 = [alloc -1,alloc 5,alloc -1,alloc 5,alloc 3,alloc 8,alloc 7];
-        |  var10 = 3;
-        |  var11 = 7;
-        |  var12 = 4;
-        |  var13 = 3;
-        |  var14 = 0;
-        |  var15 = 4;
-        |  var16 = [7,4,5,5,8,8,6,6];
-        |  var17 = 0;
-        |  var18 = 6;
-        |  var19 = alloc alloc 2;
-        |  var20 = {lOcqqrnldC:1,NQOqXljxeg:alloc 2};
-        |  var21 = 4;
-        |  var22 = [1,1,8,-1,7,0,5,7];
-        |  var23 = 4;
-        |  var24 = {EMQqEFLBWm:2,okmHFYsYta:0};
-        |  var25 = 3;
-        |  var26 = 3;
-        |  var27 = [1,1,5,1,2,6,3,3];
-        |  var6[1] = var24.EMQqEFLBWm;
-        |  var9[2] = alloc var27[7];
-        |  if (input) {
-        |    output var0.orgIRcDHoa;
-        |    output var12;
-        |    if (var10) {
-        |      while ((var13 < var14)) {
-        |        output (input - input);
-        |        var24 = var24;
-        |        var16 = var16;
-        |        var7 = &var12;
-        |        var27 = var22;
-        |        var13 = (var13 + 1);
-        |      }
-        |      output !var3.oagofINLUu;
-        |      var27 = var16;
-        |    } else {
-        |      while ((var23 < var11)) {
-        |        output (input - !input);
-        |        var15 = var21;
-        |        var2 = !1;
-        |        output ((!var0.ANekffvDSl + var22[0]) - !(((1 - -1) * var0.fVkBeOYvac) * input));
-        |        var23 = (var23 + 1);
-        |      }
-        |      output var22[4];
-        |      if (!var24.EMQqEFLBWm) {
-        |        var14 = input;
-        |        output !var16[0];
-        |        output input;
-        |        var17 = !-1;
-        |        output input;
-        |      } else {
-        |        output var3.oagofINLUu;
-        |        output (var21 - !((var3.oagofINLUu - input) * ([4,1,7,0,-1,4][5] - !5)));
-        |        var17 = (2 + 4);
-        |        output var25;
-        |        var18 = [3,6,3,4,4,-1][2];
-        |      }
-        |      while (var22[0]) {
-        |        output !input;
-        |        output (input - (var3.cTxsIAbxhU - input));
-        |        output ((var22[1] * input) - var25);
-        |        var0 = var0;
-        |        output var17;
-        |      }
-        |      var27[0] = (!3 * [2,5,5,5,-1][4]);
+        |  var var0,var1,var2,var3,var4,var5,var6,var7,var8,var9,var10,var11,var12,var13,var14,var15,var16,var17,var18,var19,var20,var21,var22,var23,var24,var25,var26;
+        |  var0 = 0;
+        |  var1 = 5;
+        |  var2 = 3;
+        |  var3 = 2;
+        |  var4 = {cHBiKkwpZV:0,tNuYDkeSNC:alloc -1,efNRyctmGF:7,bBDGoCFXBA:8};
+        |  var5 = 3;
+        |  var6 = {WHLokIkAyA:alloc 6};
+        |  var7 = 6;
+        |  var8 = alloc 1;
+        |  var9 = 1;
+        |  var10 = 1;
+        |  var11 = 2;
+        |  var12 = alloc 8;
+        |  var13 = -1;
+        |  var14 = 5;
+        |  var15 = alloc 7;
+        |  var16 = 1;
+        |  var17 = [alloc 8,alloc 2,alloc 0,alloc 0,alloc 8,alloc 7,alloc 1,alloc 2,alloc -1];
+        |  var18 = {BJvuAvwVou:8,GsGXzoMDAE:alloc alloc 7};
+        |  var19 = [2,1,7,1,5,0,8,0,6];
+        |  var20 = alloc -1;
+        |  var21 = alloc alloc 7;
+        |  var22 = alloc [alloc -1,alloc 6,alloc 5,alloc 7,alloc 2,alloc 6,alloc 8,alloc 6,alloc 4];
+        |  var23 = alloc 8;
+        |  var24 = alloc alloc alloc 3;
+        |  var25 = alloc alloc 0;
+        |  var26 = [-1,2,4,6,1];
+        |  while ((var13 < var5)) {
+        |    while ((var16 < var11)) {
+        |      var0 = !var18.BJvuAvwVou;
+        |      var16 = (var16 + 1);
         |    }
-        |    while ((var21 < var1)) {
-        |      output var0.orgIRcDHoa;
-        |      var5 = alloc (7 - 6);
-        |      output input;
-        |      var12 = ((6 + 7) * [1,1,1,2,3,0,3][5]);
-        |      var21 = (var21 + 1);
+        |    while ((var16 < var10)) {
+        |      while ((var0 < var5)) {
+        |        output var26[0];
+        |        var0 = (var0 + 1);
+        |      }
+        |      var19[7] = (!(6 + 8) - input);
+        |      var16 = (var16 + 1);
         |    }
-        |    var12 = input;
-        |  } else {
-        |    while (input) {
-        |      while ((var4 < var21)) {
-        |        var12 = (5 * 6);
-        |        var2 = [8,6,5,4,8,-1,6][4];
-        |        var7 = alloc 7;
-        |        var8 = var8;
-        |        var24 = var24;
-        |        var4 = (var4 + 1);
-        |      }
-        |      while (input) {
-        |        output !var18;
-        |        var4 = var3.oagofINLUu;
-        |        var15 = [8,5,6,1,-1][1];
-        |      }
-        |      while ((var26 < var15)) {
-        |        output input;
-        |        output input;
-        |        var7 = &var13;
-        |        output (var16[7] - (input + input));
-        |        output var0.fVkBeOYvac;
-        |        var26 = (var26 + 1);
-        |      }
-        |      var9[6] = alloc [5,7,1,8,-1,0,4,5,3][6];
-        |    }
-        |    output !input;
-        |    output !var27[1];
-        |  }
-        |  var16[6] = (var27[6] * input);
-        |  var9[6] = alloc var6[6];
-        |  if (input) {
-        |    output !!var26;
-        |    while (input) {
-        |      if (input) {
-        |        var4 = input;
-        |        output (input * var17);
-        |        output var22[6];
-        |        var22 = var16;
-        |      } else {
-        |        var18 = input;
-        |        output input;
-        |        output !input;
-        |        var9 = var9;
-        |      }
-        |      if (var14) {
-        |        var27 = var22;
-        |        output var0.orgIRcDHoa;
-        |        output ((var3.cTxsIAbxhU * (var27[6] - !input)) + var16[5]);
-        |      } else {
-        |        var15 = var0.ZiDVisiYjZ;
-        |        output (var3.cTxsIAbxhU - (var2 * var25));
-        |        var16 = var16;
-        |        output input;
-        |      }
-        |      if (var22[0]) {
-        |        var18 = var0.orgIRcDHoa;
-        |        var15 = input;
-        |        var20 = var20;
-        |        var5 = var7;
-        |        output input;
-        |      } else {
-        |        var3 = var3;
-        |        var7 = var7;
-        |        var8 = var8;
-        |        var10 = input;
-        |        output (input + var22[2]);
-        |      }
-        |      var22[0] = var0.ANekffvDSl;
-        |      while ((var13 < var18)) {
-        |        var4 = (-1 - 5);
-        |        var10 = (1 - 2);
-        |        output var20.lOcqqrnldC;
-        |        var16 = var22;
-        |        output var22[5];
-        |        var13 = (var13 + 1);
-        |      }
-        |    }
-        |    var23 = var0.ANekffvDSl;
-        |    while ((!var1 - !var3.cTxsIAbxhU)) {
-        |      var6[3] = input;
-        |      if (var0.orgIRcDHoa) {
-        |        var26 = !8;
-        |        output input;
-        |        var4 = !5;
-        |        output input;
-        |        var23 = var24.okmHFYsYta;
-        |      } else {
-        |        output (!var10 + (var0.orgIRcDHoa - !(!6 + (8 * 0))));
-        |        var5 = var7;
-        |        output (!var16[1] + !var2);
-        |        var25 = var4;
-        |      }
-        |      var11 = !input;
-        |      while ((var25 < var2)) {
-        |        output input;
-        |        output input;
-        |        var6 = var6;
-        |        var25 = (var25 + 1);
-        |      }
-        |    }
-        |  } else {
-        |    var12 = var25;
-        |    var27[4] = input;
-        |    output var2;
-        |    while (!var11) {
-        |      var27 = var22;
-        |      while ((var2 < var15)) {
-        |        var6 = var6;
-        |        output input;
-        |        var24 = var24;
-        |        output input;
+        |    if (input) {
+        |      while ((var2 < var9)) {
         |        var2 = (var2 + 1);
         |      }
-        |      while ((!2 * input)) {
-        |        output input;
-        |        var1 = input;
-        |        output var6[0];
-        |      }
-        |      while (var22[4]) {
-        |        var26 = input;
-        |        var1 = (3 * 8);
-        |        output var25;
-        |        output var27[2];
-        |        var7 = var5;
-        |      }
-        |      if (!var13) {
-        |        output var18;
-        |        var8 = var8;
-        |        output !!input;
-        |        output input;
-        |        var26 = [0,6,2,7,7,8][0];
-        |      } else {
-        |        output var11;
-        |        output !var15;
-        |        var19 = var19;
-        |      }
+        |      var1 = input;
+        |    } else {
+        |      if (input) {} else {}
+        |      output var18.BJvuAvwVou;
+        |      var26[2] = ((input + input) * var9);
         |    }
-        |    output (([8,-1,5,0,0,8,6][4] * [2,6,0,7,0,1,1,0,5][6]) + input);
+        |    output var18.BJvuAvwVou;
+        |    var13 = (var13 + 1);
         |  }
-        |  output (var24.EMQqEFLBWm + var24.okmHFYsYta);
-        |  return var10;
+        |  var2 = (var19[8] + (input - input));
+        |  while (input) {}
+        |  output var26[0];
+        |  return input;
         |}
         |""".stripMargin
 
     val program = parseUnsafe(code)
+    println(program)
     val cfg = new IntraproceduralCfgFactory().fromProgram(program)
 
     val analysesResult = new QueryCountAnalyses(cfg)(new SemanticAnalysis().analyze(program)).analyze()
@@ -3638,7 +3506,7 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
       }
       variableCosts.put(node._1, nodeCosts)
     }
-    val executor = new SymbolicExecutor(cfg, searchStrategy = new HeuristicBasedStateMerging(new BFSSearchStrategy, variableCosts, 3))
+    val executor = new SymbolicExecutor(cfg, searchStrategy = new AggressiveStateMerging(new RandomSearchStrategy))
     executor.run()
   }
 
@@ -3647,36 +3515,64 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
     val code =
       """
         |main() {
-        |  var var0,var1,var2,var3,var4,var5,var6,var7,var8,var9,var10,var11,var12,var13,var14,var15,var16,var17;
+        |  var var0,var1,var2,var3,var4,var5,var6,var7,var8,var9,var10,var11,var12,var13,var14,var15,var16,var17,var18,var19,var20,var21,var22,var23,var24,var25,var26;
         |  var0 = 0;
-        |  var1 = 8;
-        |  var2 = 2;
-        |  var3 = [5,2,1,8,3,-1,7,8,2];
-        |  var4 = 8;
-        |  var5 = [0,3,3,8,7,1];
-        |  var6 = {TxDxdCMpIF:1,HDSBrIAuKM:5,kUyibOAvPZ:-1,dxOKbiyZgQ:alloc [5,7,4,4,1,5,2,7],dkjOARXwLV:alloc 3};
-        |  var7 = {TAILvftcuo:alloc 6,awEtLTnPUr:4,MQmJMqvkqB:2};
-        |  var8 = alloc 4;
-        |  var9 = 2;
-        |  var10 = alloc 2;
-        |  var11 = alloc 0;
-        |  var12 = alloc 6;
-        |  var13 = alloc alloc 0;
-        |  var14 = -1;
-        |  var15 = 2;
-        |  var16 = alloc 3;
-        |  var17 = [5,1,4,0,-1];
-        |  output var0;
-        |  var17[0] = input;
-        |  var4 = (var5[3] + var6.kUyibOAvPZ);
-        |  while ((var14 < var4)) {
-        |    output var7.awEtLTnPUr;
-        |    var0 = var9;
-        |    var0 = !!input;
-        |    var14 = (var14 + 1);
+        |  var1 = 5;
+        |  var2 = 3;
+        |  var3 = 2;
+        |  var4 = {cHBiKkwpZV:0,tNuYDkeSNC:alloc -1,efNRyctmGF:7,bBDGoCFXBA:8};
+        |  var5 = 3;
+        |  var6 = {WHLokIkAyA:alloc 6};
+        |  var7 = 6;
+        |  var8 = alloc 1;
+        |  var9 = 1;
+        |  var10 = 1;
+        |  var11 = 2;
+        |  var12 = alloc 8;
+        |  var13 = -1;
+        |  var14 = 5;
+        |  var15 = alloc 7;
+        |  var16 = 1;
+        |  var17 = [alloc 8,alloc 2,alloc 0,alloc 0,alloc 8,alloc 7,alloc 1,alloc 2,alloc -1];
+        |  var18 = {BJvuAvwVou:8,GsGXzoMDAE:alloc alloc 7};
+        |  var19 = [2,1,7,1,5,0,8,0,6];
+        |  var20 = alloc -1;
+        |  var21 = alloc alloc 7;
+        |  var22 = alloc [alloc -1,alloc 6,alloc 5,alloc 7,alloc 2,alloc 6,alloc 8,alloc 6,alloc 4];
+        |  var23 = alloc 8;
+        |  var24 = alloc alloc alloc 3;
+        |  var25 = alloc alloc 0;
+        |  var26 = [-1,2,4,6,1];
+        |  while ((var13 < var5)) {
+        |    while ((var16 < var11)) {
+        |      var0 = !var18.BJvuAvwVou;
+        |      var16 = (var16 + 1);
+        |    }
+        |    while ((var16 < var10)) {
+        |      while ((var0 < var5)) {
+        |        output var26[0];
+        |        var0 = (var0 + 1);
+        |      }
+        |      var19[7] = (!(6 + 8) - input);
+        |      var16 = (var16 + 1);
+        |    }
+        |    if (input) {
+        |      while ((var2 < var9)) {
+        |        var2 = (var2 + 1);
+        |      }
+        |      var1 = input;
+        |    } else {
+        |      if (input) {} else {}
+        |      output var18.BJvuAvwVou;
+        |      var26[2] = ((input + input) * var9);
+        |    }
+        |    output var18.BJvuAvwVou;
+        |    var13 = (var13 + 1);
         |  }
-        |  var14 = var0;
-        |  return var5[1];
+        |  var2 = (var19[8] + (input - input));
+        |  while (input) {}
+        |  output var26[0];
+        |  return input;
         |}
         |""".stripMargin
 
@@ -3919,157 +3815,63 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
     val code =
       """
         |main() {
-        |  var var0,var1,var2,var3,var4,var5,var6,var7,var8,var9,var10,var11,var12,var13,var14,var15,var16,var17,var18,var19,var20,var21,var22,var23;
-        |  var0 = {MgLKKhqpVi:1};
-        |  var1 = {TolyGWAAHP:-1};
-        |  var2 = 6;
-        |  var3 = alloc 1;
-        |  var4 = -1;
-        |  var5 = -1;
-        |  var6 = {cKCKWDvQRT:1};
-        |  var7 = alloc alloc 5;
-        |  var8 = -1;
-        |  var9 = [6,4,6,0,5,5];
-        |  var10 = 0;
-        |  var11 = 8;
-        |  var12 = 7;
-        |  var13 = alloc 4;
-        |  var14 = 2;
-        |  var15 = alloc 6;
-        |  var16 = alloc alloc 0;
-        |  var17 = 0;
-        |  var18 = {oEmwNrnAoJ:-1,MYMviwoBat:4,MRnzUskFsY:[alloc 5,alloc 1,alloc 7,alloc 8,alloc 5,alloc 3]};
-        |  var19 = 4;
-        |  var20 = {OTocGXZLNo:alloc alloc alloc 1};
-        |  var21 = alloc 7;
-        |  var22 = 6;
-        |  var23 = [8,-1,0,7,8];
-        |  if ((!input * var2)) {
-        |    var9[0] = (var9[4] * input);
-        |    var9 = var9;
-        |  } else {
-        |    while (!(input + (7 - 4))) {
-        |      var9[3] = (input - [2,3,7,1,3,4,0,1][0]);
+        |  var var0,var1,var2,var3,var4,var5,var6,var7,var8,var9,var10,var11,var12,var13,var14,var15,var16,var17,var18,var19,var20,var21,var22,var23,var24,var25,var26;
+        |  var0 = 0;
+        |  var1 = 5;
+        |  var2 = 3;
+        |  var3 = 2;
+        |  var4 = {cHBiKkwpZV:0,tNuYDkeSNC:alloc -1,efNRyctmGF:7,bBDGoCFXBA:8};
+        |  var5 = 3;
+        |  var6 = {WHLokIkAyA:alloc 6};
+        |  var7 = 6;
+        |  var8 = alloc 1;
+        |  var9 = 1;
+        |  var10 = 1;
+        |  var11 = 2;
+        |  var12 = alloc 8;
+        |  var13 = -1;
+        |  var14 = 5;
+        |  var15 = alloc 7;
+        |  var16 = 1;
+        |  var17 = [alloc 8,alloc 2,alloc 0,alloc 0,alloc 8,alloc 7,alloc 1,alloc 2,alloc -1];
+        |  var18 = {BJvuAvwVou:8,GsGXzoMDAE:alloc alloc 7};
+        |  var19 = [2,1,7,1,5,0,8,0,6];
+        |  var20 = alloc -1;
+        |  var21 = alloc alloc 7;
+        |  var22 = alloc [alloc -1,alloc 6,alloc 5,alloc 7,alloc 2,alloc 6,alloc 8,alloc 6,alloc 4];
+        |  var23 = alloc 8;
+        |  var24 = alloc alloc alloc 3;
+        |  var25 = alloc alloc 0;
+        |  var26 = [-1,2,4,6,1];
+        |  while ((var13 < var5)) {
+        |    while ((var16 < var11)) {
+        |      var0 = !var18.BJvuAvwVou;
+        |      var16 = (var16 + 1);
         |    }
-        |  }
-        |  while (var6.cKCKWDvQRT) {
-        |    while ((var22 < var19)) {
-        |      while (var9[3]) {
-        |        output var9[5];
-        |        var5 = var11;
-        |        var9 = var9;
-        |        output var18.MYMviwoBat;
+        |    while ((var16 < var10)) {
+        |      while ((var0 < var5)) {
+        |        output var26[0];
+        |        var0 = (var0 + 1);
         |      }
-        |      var9[3] = input;
-        |      var23[3] = !!1;
-        |      while ((var11 < var10)) {
-        |        var11 = (var11 + 1);
-        |      }
-        |      var22 = (var22 + 1);
+        |      var19[7] = (!(6 + 8) - input);
+        |      var16 = (var16 + 1);
         |    }
-        |  }
-        |  output var1.TolyGWAAHP;
-        |  var23[2] = var9[5];
-        |  if (var18.MYMviwoBat) {} else {
-        |    while (var23[0]) {
-        |      while ((var2 < var10)) {
-        |        output (!var4 * !var5);
-        |        var3 = alloc 7;
+        |    if (input) {
+        |      while ((var2 < var9)) {
         |        var2 = (var2 + 1);
         |      }
-        |      var23[0] = (input + [6,3,5,-1,3,4,8,-1,-1][6]);
-        |      var9[3] = (var6.cKCKWDvQRT - var0.MgLKKhqpVi);
-        |      if (input) {
-        |        var9 = var9;
-        |        output var18.MYMviwoBat;
-        |        var3 = &var2;
-        |      } else {
-        |        var19 = (5 - 8);
-        |        var21 = var15;
-        |        output input;
-        |        output var9[2];
-        |        var22 = input;
-        |      }
-        |    }
-        |    var3 = var21;
-        |    var23[2] = (input * input);
-        |    if (!input) {
-        |      var20 = var20;
-        |      while ((var17 < var11)) {
-        |        var16 = var16;
-        |        var21 = &var22;
-        |        var17 = (var17 + 1);
-        |      }
-        |      output ((7 + 8) + var14);
-        |      while ((var11 < var12)) {
-        |        var15 = var21;
-        |        var18 = var18;
-        |        var11 = (var11 + 1);
-        |      }
-        |      output var11;
+        |      var1 = input;
         |    } else {
-        |      while (var23[2]) {}
-        |      while (![7,6,-1,0,7,0][5]) {}
-        |      output input;
-        |      var23[3] = ![4,7,3,3,5,1,0,1][3];
-        |      var19 = !var19;
+        |      if (input) {} else {}
+        |      output var18.BJvuAvwVou;
+        |      var26[2] = ((input + input) * var9);
         |    }
-        |    while ((var8 < var14)) {
-        |      var8 = (var8 + 1);
-        |    }
-        |    var9[0] = input;
+        |    output var18.BJvuAvwVou;
+        |    var13 = (var13 + 1);
         |  }
-        |  output var6.cKCKWDvQRT;
-        |  if (!var18.MYMviwoBat) {
-        |    if (var6.cKCKWDvQRT) {
-        |      var8 = !input;
-        |      if ((input + var0.MgLKKhqpVi)) {
-        |        output var1.TolyGWAAHP;
-        |        var23 = var23;
-        |      } else {
-        |        var6 = var6;
-        |        var13 = var3;
-        |        output input;
-        |      }
-        |      while ((var12 < var11)) {
-        |        var12 = (var12 + 1);
-        |      }
-        |      output var11;
-        |      output var4;
-        |      output ([3,1,5,1,0,7,6,8][2] + var6.cKCKWDvQRT);
-        |    } else {
-        |      output var9[3];
-        |    }
-        |    while (!var23[0]) {
-        |      while ((var19 < var22)) {
-        |        output !!input;
-        |        output var23[2];
-        |        var19 = (var19 + 1);
-        |      }
-        |      while (var6.cKCKWDvQRT) {
-        |        var4 = var18.oEmwNrnAoJ;
-        |        output var9[1];
-        |        output var23[3];
-        |      }
-        |      while ((var5 < var11)) {
-        |        output var23[4];
-        |        output input;
-        |        var5 = (var5 + 1);
-        |      }
-        |      while ((var2 < var5)) {
-        |        var18 = var18;
-        |        output var9[0];
-        |        var20 = var20;
-        |        output var6.cKCKWDvQRT;
-        |        output !var9[0];
-        |        var2 = (var2 + 1);
-        |      }
-        |      output var6.cKCKWDvQRT;
-        |    }
-        |    var23[2] = var1.TolyGWAAHP;
-        |    var1 = var1;
-        |    var9[5] = var23[2];
-        |  } else {}
+        |  var2 = (var19[8] + (input - input));
+        |  while (input) {}
+        |  output var26[0];
         |  return input;
         |}
         |""".stripMargin
@@ -4077,7 +3879,8 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
     val program = parseUnsafe(code)
     val cfg = new IntraproceduralCfgFactory().fromProgram(program)
 
-    val executor = new LoopSummary(cfg)
+    val ctx = new Context()
+    val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx), ctx)), ctx)
     executor.run()
 
   }

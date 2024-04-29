@@ -1,10 +1,11 @@
 package microc.cli
 
+import microc.analyses.RecursionBasedAnalyses
 import microc.analysis.{QueryCountAnalyses, SemanticAnalysis}
 import microc.ast.AstNormalizer
 import microc.cfg.{CfgNode, IntraproceduralCfgFactory}
 import microc.parser.LLParser
-import microc.symbolic_execution.optimizations.merging.{HeuristicBasedStateMerging, RecursionBasedAnalyses}
+import microc.symbolic_execution.optimizations.merging.HeuristicBasedStateMerging
 import microc.symbolic_execution.{BFSSearchStrategy, SymbolicExecutor, SymbolicExecutorFactory}
 import microc.util.IOUtil.InputStreamOpts
 
@@ -23,7 +24,8 @@ class SymbolicExecuteAction(
                              summarization: Option[Boolean],
                              subsumption: Option[Boolean],
                              timeout: Option[Int],
-                             output: OutputStream
+                             coverageOutput: OutputStream,
+                             timeOutput: OutputStream
                            ) extends Action
  {
 
@@ -50,7 +52,6 @@ class SymbolicExecuteAction(
      val programCfg = {
        new AstNormalizer().normalize(parser.parseProgram(source))
      }
-     val cfg = new IntraproceduralCfgFactory().fromProgram(programCfg);
      val executor = factory.get(programCfg)
      val future = Future {
        executor.run()
@@ -68,8 +69,11 @@ class SymbolicExecuteAction(
      val endTime = System.currentTimeMillis()
      val elapsedTime = endTime - startTime
 
-     output.write(executor.statistics.numPaths.toString.getBytes(StandardCharsets.UTF_8))
+     coverageOutput.write(executor.statistics.numPaths.toString.getBytes(StandardCharsets.UTF_8))
      println(executor.statistics.numPaths)
+
+     timeOutput.write(elapsedTime.toString.getBytes(StandardCharsets.UTF_8))
+     println(elapsedTime)
      0
    }
 

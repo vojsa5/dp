@@ -1,8 +1,9 @@
 package microc.symbolic_execution
 
-import microc.ast.{AndAnd, ArrayAccess, BinaryOp, CodeLoc, Decl, Equal, Expr, FieldAccess, Identifier, IdentifierDecl, IfStmt, Input, Loc, NestedBlockStmt, Not, Null, Number, OrOr, RecordField, WhileStmt}
+import microc.ast.{AndAnd, ArrayAccess, ArrayNode, BinaryOp, CodeLoc, Decl, Deref, Equal, Expr, FieldAccess, Identifier, IdentifierDecl, IfStmt, Input, Loc, NestedBlockStmt, Not, Null, Number, OrOr, RecordField, WhileStmt}
 import microc.cfg.CfgNode
-import microc.symbolic_execution.Value.{ArrVal, NullRef, PointerVal, RecVal, Symbolic, SymbolicExpr, SymbolicVal, UninitializedRef, Val}
+import microc.symbolic_execution.ExecutionException.errorArrayOutOfBounds
+import microc.symbolic_execution.Value.{ArrVal, IteVal, NullRef, PointerVal, RecVal, Symbolic, SymbolicExpr, SymbolicVal, UninitializedRef, Val}
 import microc.symbolic_execution.optimizations.merging.MergedSymbolicState
 
 import scala.collection.mutable
@@ -75,11 +76,20 @@ class SymbolicState(
     expr match {
       case Identifier(name, _) =>
         symbolicStore.findVar(name).get
+      case Deref(pointer, loc) =>
+        symbolicStore.getValOfPtr(getMemoryLoc(pointer)) match {
+          case Some(p: PointerVal) =>
+            p
+          case _ => throw new Exception("this should never happen.")
+        }
       case ArrayAccess(array, index, loc) =>
         symbolicStore.getValOfPtr(getMemoryLoc(array)) match {
           case Some(ArrVal(elems)) =>
             index match {
               case Number(value, _) =>
+                if (value >= elems.length) {
+                  throw errorArrayOutOfBounds(loc, elems.length, value, this)
+                }
                 elems(value)
               case _ =>
                 throw new Exception("IMPLEMENT")
@@ -94,6 +104,8 @@ class SymbolicState(
           case _ =>
             throw new Exception("IMPLEMENT")
         }
+      case _ =>
+        throw new Exception("this should never happen")
     }
   }
 
@@ -121,8 +133,10 @@ class SymbolicState(
   }
 
   def addedLoopTrace(trace: (Expr, mutable.HashMap[Expr, Expr => Expr])): SymbolicState = {
-    programLocation = programLocation.succ.maxBy(node => node.id)
-    pathCondition = BinaryOp(AndAnd, pathCondition, trace._1, CodeLoc(0, 0))
+    if (programLocation.succ.nonEmpty) {
+      programLocation = programLocation.succ.maxBy(node => node.id)
+      pathCondition = BinaryOp(AndAnd, pathCondition, trace._1, CodeLoc(0, 0))
+    }
     this
   }
 
@@ -139,6 +153,11 @@ class SymbolicState(
         BinaryOp(operator, loadVariablesToExpr(left), loadVariablesToExpr(right), loc)
       case n@Number(_, _) => n
       case in@Input(_) => in
+      case d@Deref(_, _) =>
+        getValAtMemoryLoc(d) match {
+          case v: Expr => v
+          case _ => throw new Exception("This should not happen")
+        }
       case f@FieldAccess(_, _, _) =>
         getValAtMemoryLoc(f) match {
           case v: Expr => v
@@ -156,7 +175,7 @@ class SymbolicState(
   }
 
   def addToPathCondition(expr: Expr): Expr = {
-    val pathConditionNewExpr = loadVariablesToExpr(expr)
+    val pathConditionNewExpr = Utility.removeIteVal(loadVariablesToExpr(expr), this)
     Utility.simplifyArithExpr(BinaryOp(AndAnd, pathCondition, pathConditionNewExpr, expr.loc))
   }
 
@@ -166,7 +185,7 @@ class SymbolicState(
     ast match {
       case WhileStmt(guard, thenBranch, loc) =>
         val next = if (thenBranch.asInstanceOf[NestedBlockStmt].body.isEmpty) {
-          programLocation.succ.head
+          programLocation.succ.find(s => s.ast == ast).get
         }
         else {
           val firstThenStatement = thenBranch.asInstanceOf[NestedBlockStmt].body.head
@@ -175,7 +194,7 @@ class SymbolicState(
         new SymbolicState(next, addToPathCondition(guard), symbolicStore.deepCopy(), copyCallStack(callStack), variableDecls)
       case IfStmt(guard, thenBranch, None, loc) =>
         val next = if (thenBranch.asInstanceOf[NestedBlockStmt].body.isEmpty) {
-          programLocation.succ.head
+          programLocation.succ.find(s => s.ast == ast).get
         }
         else {
           val firstThenStatement = thenBranch.asInstanceOf[NestedBlockStmt].body.head
@@ -203,7 +222,7 @@ class SymbolicState(
     ast match {
       case WhileStmt(guard, thenBranch, loc) =>
         val next = if (thenBranch.asInstanceOf[NestedBlockStmt].body.isEmpty) {
-          programLocation.succ.head
+          programLocation.succ.find(s => s.ast != ast).get
         }
         else {
           val firstThenStatement = thenBranch.asInstanceOf[NestedBlockStmt].body.head
@@ -212,7 +231,7 @@ class SymbolicState(
         new SymbolicState(next, addToPathCondition(Not(guard, loc)), symbolicStore.deepCopy(), copyCallStack(callStack), variableDecls)
       case IfStmt(guard, thenBranch, None, loc) =>
         val next = if (thenBranch.asInstanceOf[NestedBlockStmt].body.isEmpty) {
-          programLocation.succ.head
+          programLocation.succ.find(s => s.ast != ast).get
         }
         else {
           val firstThenStatement = thenBranch.asInstanceOf[NestedBlockStmt].body.head

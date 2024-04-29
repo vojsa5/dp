@@ -1,48 +1,14 @@
-package microc.symbolic_execution
+package microc.symbolic_execution.experiments
 
-import microc.ast.{Alloc, AndAnd, ArrayAccess, ArrayNode, AssignStmt, AstPrinter, BinaryOp, BinaryOperator, Block, CallFuncExpr, CodeLoc, Deref, Divide, Equal, Expr, FieldAccess, FunBlockStmt, FunDecl, GreaterEqual, GreaterThan, Identifier, IdentifierDecl, IfStmt, Input, Loc, LowerEqual, LowerThan, Minus, NestedBlockStmt, Not, NotEqual, Null, Number, OrOr, OutputStmt, Plus, Program, Record, RecordField, ReturnStmt, Stmt, StmtInNestedBlock, Times, VarRef, VarStmt, WhileStmt}
+import microc.ast.{Alloc, ArrayAccess, ArrayNode, AssignStmt, AstPrinter, BinaryOp, BinaryOperator, Block, CodeLoc, Divide, Equal, Expr, FieldAccess, FunBlockStmt, FunDecl, Identifier, IdentifierDecl, IfStmt, Input, LowerThan, Minus, NestedBlockStmt, Not, NotEqual, Null, Number, OutputStmt, Plus, Program, Record, RecordField, ReturnStmt, StmtInNestedBlock, Times, VarRef, VarStmt, WhileStmt}
+import microc.symbolic_execution.Utility
 
 import scala.collection.mutable
 import scala.util.Random
 
-
-abstract class VarType {
-  def toString(): String
-
-  def getInner(field: String): VarType
-}
-
-case class NumType() extends VarType {
-  override def toString: String = "number"
-
-  override def getInner(field: String): VarType = throw new UnsupportedOperationException()
-}
-
-
-case class PtrType(inner: VarType) extends VarType {
-  override def toString: String = "pointer -> " + inner.toString
-
-  override def getInner(field: String): VarType = inner
-}
-
-
-case class ArrayType(innerType: VarType) extends VarType {
-  override def toString: String = "array -> " + innerType.toString
-
-  override def getInner(field: String): VarType = innerType
-}
-
-
-case class RecType(fields: mutable.HashMap[String, VarType]) extends VarType {
-
-  override def toString(): String = "rec -> " + fields.map(field => "( " + field._1 + " " + field._2.toString + " )")
-
-  override def getInner(field: String): VarType = fields(field)
-}
-
-
-
-class ProgramGenerator(loopGenerationProbability: Double = 1.0/6.0, forLoopGenerationProbability: Double = 1.0/6.0, maxStmtDepth: Int = 2, maxTopLvlStmtsCount: Int = 15, maxStmtsWithinABlock: Int = 7) {
+class ProgramGenerator(loopGenerationProbability: Double = 1.0 / 6.0, forLoopGenerationProbability: Double = 1.0 / 6.0,
+                       maxStmtDepth: Int = 2, maxTopLvlStmtsCount: Int = 15, maxStmtsWithinABlock: Int = 7,
+                       guaranteedError: Boolean = false, tryNotToGenerateRandomError: Boolean = true) {
   val random = new Random()
 
   val existingTypes: mutable.HashSet[VarType] = mutable.HashSet[VarType]()
@@ -66,7 +32,12 @@ class ProgramGenerator(loopGenerationProbability: Double = 1.0/6.0, forLoopGener
     if (isPointer) {
       if (random.nextBoolean()) Equal else NotEqual
     } else {
-      val operators = List(Plus, Minus, Times)
+      val operators = if (tryNotToGenerateRandomError) {
+        List(Plus, Minus, Times)
+      }
+      else {
+        List(Plus, Minus, Times, Divide)
+      }
       operators(random.nextInt(operators.size))
     }
   }
@@ -171,7 +142,7 @@ class ProgramGenerator(loopGenerationProbability: Double = 1.0/6.0, forLoopGener
     if (depth > maxStmtDepth) {
       random.nextInt(2) match {
         case 0 =>
-          OutputStmt (randomExpr (NumType (), declaredIdentifiers = declaredIdentifiers), randomLoc () )
+          OutputStmt(randomExpr(NumType(), declaredIdentifiers = declaredIdentifiers), randomLoc())
         case 1 =>
           val identifier = randomIdentifier(declaredIdentifiers)
           val size = declaredIdentifiers(identifier.name) match {
@@ -213,12 +184,12 @@ class ProgramGenerator(loopGenerationProbability: Double = 1.0/6.0, forLoopGener
                   Number(random.nextInt(arraySizes(name)), randomLoc()),
                   randomLoc()
                 )
-//              case ArrayNode(elems, _) =>
-//                ArrayAccess(
-//                  identifier,
-//                  Number(random.nextInt(elems.size), randomLoc()),
-//                  randomLoc()
-//                )
+              //              case ArrayNode(elems, _) =>
+              //                ArrayAccess(
+              //                  identifier,
+              //                  Number(random.nextInt(elems.size), randomLoc()),
+              //                  randomLoc()
+              //                )
             },
             randomExpr(innerType, depth + 1, declaredIdentifiers),
             randomLoc()
@@ -246,8 +217,8 @@ class ProgramGenerator(loopGenerationProbability: Double = 1.0/6.0, forLoopGener
           WhileStmt(
             BinaryOp(LowerThan, it, randomIdentifierOfType(NumType(), declaredIdentifiers), randomLoc()),
             block,
-          randomLoc()
-        )
+            randomLoc()
+          )
         case 5 =>
           OutputStmt(randomExpr(NumType(), depth + 1, declaredIdentifiers), randomLoc())
       }
@@ -259,6 +230,7 @@ class ProgramGenerator(loopGenerationProbability: Double = 1.0/6.0, forLoopGener
     existingTypes.add(res)
     res
   }
+
   private def getRandomTypeWithHardcodedProbabilitiesInner(inRecord: Boolean): VarType = {
     if (random.nextBoolean())
       NumType()
@@ -281,7 +253,7 @@ class ProgramGenerator(loopGenerationProbability: Double = 1.0/6.0, forLoopGener
       else {
         val fields = mutable.HashMap[String, VarType]()
         val res = RecType(fields)
-        for (i <- 0 until random.nextInt(5) + 1){
+        for (i <- 0 until random.nextInt(5) + 1) {
           val inner = getRandomTypeWithHardcodedProbabilitiesInner(true)
           if (!existingTypes.contains(inner)) {
             NumType()
@@ -297,7 +269,7 @@ class ProgramGenerator(loopGenerationProbability: Double = 1.0/6.0, forLoopGener
     }
   }
 
-  def randomFunDecl(name: String): FunDecl = {
+  def randomFunDecl(name: String): (FunDecl, Map[String, VarType]) = {
 
     // 'main' function has zero parameters
     val params = List.empty[IdentifierDecl]
@@ -306,7 +278,7 @@ class ProgramGenerator(loopGenerationProbability: Double = 1.0/6.0, forLoopGener
 
 
     // Variable declarations
-    var varDecls = (0 to random.nextInt(15) + 15  ).map { i =>
+    var varDecls = (0 to random.nextInt(15) + 15).map { i =>
       val varName = s"var${i}"
       val varType = getRandomTypeWithHardcodedProbabilities()
       //println(varName, varType)
@@ -330,7 +302,7 @@ class ProgramGenerator(loopGenerationProbability: Double = 1.0/6.0, forLoopGener
     val ret = ReturnStmt(randomExpr(NumType(), 3, declaredIdentifiers), randomLoc())
     val block = FunBlockStmt(List(varsStmt), bodyStatements, ret, randomLoc())
 
-    FunDecl(name, params, block, randomLoc())
+    (FunDecl(name, params, block, randomLoc()), declaredIdentifiers)
   }
 
 
@@ -366,11 +338,11 @@ class ProgramGenerator(loopGenerationProbability: Double = 1.0/6.0, forLoopGener
   def getABlocktoPlugAnError(block: Block): Block = {
     val randomIndex = Random.nextInt(block.body.length)
     block.body(randomIndex) match {
-      case IfStmt(_, thenBlock, _, _) if (random.nextInt(1) == 0) =>
+      case IfStmt(_, thenBlock, _, _) if thenBlock.asInstanceOf[NestedBlockStmt].body.nonEmpty && (random.nextInt(1) == 0) =>
         getABlocktoPlugAnError(thenBlock.asInstanceOf[Block])
-      case IfStmt(_, _, elseBlock, _)  =>
+      case IfStmt(_, _, Some(elseBlock), _) if elseBlock.asInstanceOf[NestedBlockStmt].body.nonEmpty =>
         getABlocktoPlugAnError(elseBlock.asInstanceOf[Block])
-      case WhileStmt(_, block, _) =>
+      case WhileStmt(_, block, _) if block.asInstanceOf[NestedBlockStmt].body.nonEmpty =>
         getABlocktoPlugAnError(block.asInstanceOf[Block])
       case _ =>
         block
@@ -383,10 +355,14 @@ class ProgramGenerator(loopGenerationProbability: Double = 1.0/6.0, forLoopGener
       functionNames ::= funName
     }
     var funDecls = List[FunDecl]()
-//    for (func <- functionNames) {
-//      funDecls = funDecls :+ (randomFunDecl(func))
-//    }
-    funDecls = funDecls :+ (randomFunDecl("main"))
+    //    for (func <- functionNames) {
+    //      funDecls = funDecls :+ (randomFunDecl(func))
+    //    }
+    var (main, declaredIdentifier) = randomFunDecl("main")
+    if (guaranteedError) {
+      main = plugAnError(main, declaredIdentifier)
+    }
+    funDecls = funDecls :+ main
     if (printProgram) {
       funDecls.foreach(fce => println(new AstPrinter().print(fce)))
     }

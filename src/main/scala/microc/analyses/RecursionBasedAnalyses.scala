@@ -1,4 +1,4 @@
-package microc.symbolic_execution.optimizations.merging
+package microc.analyses
 
 import microc.analysis.Declarations
 import microc.ast.{AssignStmt, FunDecl, Identifier, IfStmt, OutputStmt, ReturnStmt, VarStmt, WhileStmt}
@@ -97,10 +97,17 @@ class RecursionBasedAnalyses(implicit declarations: Declarations, beta: Double =
           return mutable.HashMap()
         }
         val res = mutable.HashMap[String, Double]()
-        for (v <- tmp(cfgNode.succ.minBy(node => node.id), whiles + w)) {
+
+        val newWhiles = mutable.HashSet[WhileStmt]()
+        newWhiles.addAll(whiles)
+        newWhiles.add(w)
+        val newWhiles2 = mutable.HashSet[WhileStmt]()
+        newWhiles2.addAll(whiles)
+        newWhiles2.add(w)
+        for (v <- tmp(cfgNode.succ.minBy(node => node.id), newWhiles)) {
           res.put(v._1, v._2 * kappa)
         }
-        for (v <- tmp(cfgNode.succ.maxBy(node => node.id), whiles + w)) {
+        for (v <- tmp(cfgNode.succ.maxBy(node => node.id), newWhiles2)) {
           res.put(v._1, res.getOrElse(v._1, 0.0) + v._2)
         }
         for (id <- Utility.getAllIdentifierNames(expr)) {

@@ -350,6 +350,8 @@ case class ArrayNode(elems: List[Expr], loc: Loc) extends Expr {
 }
 
 case class ArrayAccess(array: Expr, index: Expr, loc: Loc) extends Expr {
+  override def toString: String = array.toString + '[' + index.toString + ']'
+
   override def children: Iterable[AstNode] = List(array, index)
 
   override def equals(other: Expr): Boolean =

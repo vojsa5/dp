@@ -1,7 +1,7 @@
 package microc.symbolic_execution
 
 import com.microsoft.z3.{ArithExpr, ArithSort, BoolExpr, Context, IntExpr, IntNum, Status}
-import microc.ast.{AndAnd, ArrayAccess, ArrayNode, BinaryOp, CodeLoc, Deref, Divide, Equal, Expr, FieldAccess, GreaterEqual, GreaterThan, Identifier, Input, LowerEqual, LowerThan, Minus, Not, NotEqual, Null, Number, OrOr, Plus, Times}
+import microc.ast.{AndAnd, ArrayAccess, ArrayNode, BinaryOp, CodeLoc, Deref, Divide, Equal, Expr, FieldAccess, GreaterEqual, GreaterThan, Identifier, Input, LowerEqual, LowerThan, Minus, Not, NotEqual, Null, Number, OrOr, Plus, Record, Times}
 import microc.symbolic_execution.Value.{ArrVal, IteVal, NullRef, PointerVal, RecVal, Symbolic, SymbolicExpr, SymbolicVal, UninitializedRef, Val}
 
 import scala.collection.mutable
@@ -46,8 +46,8 @@ class ConstraintSolver(val ctx: Context) {
       case IteVal(val1, val2, cond, _) =>
         ctx.mkITE(
           ConstraintSolver.getCondition(ctx, createConstraint(cond, state, allowNonInitializedVals)),
-          valToExpr(state.getValOnMemoryLocation(val1, true).get, state, allowNonInitializedVals),
-          valToExpr(state.getValOnMemoryLocation(val2, true).get, state, allowNonInitializedVals)
+          ConstraintSolver.getCondition(ctx, valToExpr(state.getValOnMemoryLocation(val1, true).get, state, allowNonInitializedVals)),
+          ConstraintSolver.getCondition(ctx, valToExpr(state.getValOnMemoryLocation(val2, true).get, state, allowNonInitializedVals))
         )
       case UninitializedRef => //TODO merge with symbolic val generation
         ctx.mkIntConst(Utility.generateRandomString())
@@ -140,15 +140,13 @@ class ConstraintSolver(val ctx: Context) {
       case SymbolicExpr(expr, _) => createConstraint(expr, state, allowNonInitializedVals)
       case Null(_) => ctx.mkInt(0)
       case IteVal(trueState, falseState, expr, _) =>
-        state.getValOnMemoryLocation(trueState, true) match {
-          case None =>
-            println("dffds")
-          case _ =>
-        }
+        val a1 = ConstraintSolver.getCondition(ctx, createConstraint(expr, state, allowNonInitializedVals))
+        val a2 = ConstraintSolver.getCondition(ctx, valToExpr(state.getValOnMemoryLocation(trueState, true).get, state, allowNonInitializedVals))
+        val a3 = ConstraintSolver.getCondition(ctx, valToExpr(state.getValOnMemoryLocation(falseState, true).get, state, allowNonInitializedVals))
         ctx.mkITE(
           ConstraintSolver.getCondition(ctx, createConstraint(expr, state, allowNonInitializedVals)),
-          valToExpr(state.getValOnMemoryLocation(trueState, true).get, state, allowNonInitializedVals),
-          valToExpr(state.getValOnMemoryLocation(falseState, true).get, state, allowNonInitializedVals)
+          ConstraintSolver.getCondition(ctx, valToExpr(state.getValOnMemoryLocation(trueState, true).get, state, allowNonInitializedVals)),
+          ConstraintSolver.getCondition(ctx, valToExpr(state.getValOnMemoryLocation(falseState, true).get, state, allowNonInitializedVals))
         )
       case Input(_) =>
         ctx.mkIntConst(SymbolicVal(CodeLoc(0, 0)).name)
@@ -164,14 +162,8 @@ class ConstraintSolver(val ctx: Context) {
         valToExpr(getTarget(a, state, allowNonInitializedVals), state)
       case d@Deref(_, _) =>
         valToExpr(getTarget(d, state, allowNonInitializedVals), state)
-      case FieldAccess(record, field, loc) =>
-        val rec = getTarget(record, state, allowNonInitializedVals)
-        rec match {
-          case RecVal(fields) =>
-            valToExpr(fields(field), state, allowNonInitializedVals)
-          case _ =>
-            throw new Exception("IMPLEMENT")
-        }
+      case f@FieldAccess(_, _, _) =>
+        valToExpr(getTarget(f, state, allowNonInitializedVals), state)
       case _ =>
         throw new Exception("IMPLEMENT")
     }
@@ -205,6 +197,16 @@ class ConstraintSolver(val ctx: Context) {
             throw new Exception("IMPLEMENT")
 
         }
+      case FieldAccess(record, field, loc) =>
+        val rec = getTargetInner(record, symbolicState)
+        rec match {
+          case Record(fields, loc) =>
+            fields.find(f => f.name == field).get.expr
+          case RecVal(fields) =>
+            symbolicState.getValOnMemoryLocation(fields(field), true).get.asInstanceOf[Symbolic]
+          case _ =>
+            throw new Exception("this should never happen")
+        }
       case Deref(pointer, loc) =>
         getTargetInner(pointer, symbolicState) match {
           case p@PointerVal(_) =>
@@ -213,7 +215,9 @@ class ConstraintSolver(val ctx: Context) {
             throw new Exception("IMPLEMENT")
         }
       case a@ArrayNode(_, _) => a
+      case r@Record(fields, loc) => r
       case arrVal: ArrVal => arrVal
+      case recVal: RecVal => recVal
       case _ =>
         throw new Exception("IMPLEMENT")
     }

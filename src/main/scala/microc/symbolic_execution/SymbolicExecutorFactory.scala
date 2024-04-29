@@ -1,13 +1,14 @@
 package microc.symbolic_execution
 
 import com.microsoft.z3.Context
+import microc.analyses.RecursionBasedAnalyses
 import microc.analysis.{QueryCountAnalyses, SemanticAnalysis}
 import microc.ast.{Decl, Program}
 import microc.cfg.{CfgNode, IntraproceduralCfgFactory, ProgramCfg}
 import microc.parser.Parser
-import microc.symbolic_execution.optimizations.merging.{AggressiveStateMerging, HeuristicBasedStateMerging, RecursionBasedAnalyses}
+import microc.symbolic_execution.optimizations.merging.{AggressiveStateMerging, HeuristicBasedStateMerging}
 import microc.symbolic_execution.optimizations.subsumption.PathSubsumption
-import microc.symbolic_execution.optimizations.summarization.LoopSummary
+import microc.symbolic_execution.optimizations.summarization.LoopSummarization
 
 import java.util
 import javax.management.InvalidApplicationException
@@ -21,7 +22,7 @@ class SymbolicExecutorFactory(useSummarizaiton: Boolean, useSubsumption: Boolean
     val ctx = new Context()
     var pathSubsumption: Option[PathSubsumption] = None
     if (useSubsumption) {
-      pathSubsumption = Some(new PathSubsumption(new ConstraintSolver(ctx), ctx))
+      pathSubsumption = Some(new PathSubsumption(new ConstraintSolver(ctx)))
     }
     var stateHistory: Option[StateHistory] = None
     var covered: Option[mutable.HashSet[CfgNode]] = None
@@ -66,7 +67,7 @@ class SymbolicExecutorFactory(useSummarizaiton: Boolean, useSubsumption: Boolean
         }
         new HeuristicBasedStateMerging(new BFSSearchStrategy, variableCosts, smartMergingCost.get)
       }
-      case Some("tmp") => {
+      case Some("recursive") => {
         val kappaI = kappa match {
           case Some(value) => value
           case None => 1
@@ -81,7 +82,7 @@ class SymbolicExecutorFactory(useSummarizaiton: Boolean, useSubsumption: Boolean
 
 
     if (useSummarizaiton) {
-      new LoopSummary(programCfg, pathSubsumption, ctx, possiblyMergingSearchStrategy, stateHistory, covered, printStats = false)
+      new LoopSummarization(programCfg, pathSubsumption, ctx, possiblyMergingSearchStrategy, stateHistory, covered, printStats = false)
     }
     else {
       new SymbolicExecutor(programCfg, pathSubsumption, ctx, possiblyMergingSearchStrategy, stateHistory, covered, printStats = false)

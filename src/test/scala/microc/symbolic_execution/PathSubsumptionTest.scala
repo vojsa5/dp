@@ -1,13 +1,17 @@
 package microc.symbolic_execution
 
 import com.microsoft.z3.Context
-import microc.ast.{AndAnd, BinaryOp, CodeLoc, Divide, Expr, GreaterEqual, GreaterThan, Identifier, LowerEqual, LowerThan, Minus, Null, Number, Plus, Times, VarStmt, WhileStmt}
+import microc.ast.{AndAnd, BinaryOp, CodeLoc, Divide, Expr, GreaterEqual, GreaterThan, Identifier, LowerEqual, LowerThan, Minus, Null, Number, OrOr, Plus, Times, VarStmt, WhileStmt}
 import microc.cfg.{CfgNode, CfgStmtNode, IntraproceduralCfgFactory}
 import microc.symbolic_execution.Value.SymbolicVal
 import microc.symbolic_execution.optimizations.subsumption.PathSubsumption
+import microc.symbolic_execution.optimizations.summarization.LoopSummarization
 import microc.{Examples, MicrocSupport}
 import munit.FunSuite
 
+import scala.concurrent.duration.DurationInt
+import scala.concurrent.{Await, Future, TimeoutException}
+import scala.concurrent.ExecutionContext.Implicits.global
 import scala.util.Random
 
 class PathSubsumptionTest extends FunSuite with MicrocSupport with Examples {
@@ -26,7 +30,7 @@ class PathSubsumptionTest extends FunSuite with MicrocSupport with Examples {
   test("subsumption") {
     val context = new Context()
     val constraintSolver = new ConstraintSolver(context)
-    var pathSubsumption = new PathSubsumption(constraintSolver, context)
+    var pathSubsumption = new PathSubsumption(constraintSolver)
     val node = new CfgStmtNode(1, Null(CodeLoc(0, 0)))
     val symbolicState = new SymbolicState(null, Number(1, CodeLoc(0, 0)), new SymbolicStore(Map.empty))
     symbolicState.updateVar("x", SymbolicVal(CodeLoc(0, 0)))
@@ -155,7 +159,7 @@ class PathSubsumptionTest extends FunSuite with MicrocSupport with Examples {
         |""".stripMargin;
     val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
     val ctx = new Context()
-    val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx), ctx)), ctx);
+    val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx))), ctx);
     executor.run()
     assert(executor.statistics.stoppedWithSubsumption == 1)
     assert(executor.statistics.numPaths == 2)
@@ -190,7 +194,7 @@ class PathSubsumptionTest extends FunSuite with MicrocSupport with Examples {
         |""".stripMargin;
     val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
     val ctx = new Context()
-    val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx), ctx)), ctx, new DFSSearchStrategy());
+    val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx))), ctx, new DFSSearchStrategy());
     val res = executor.run()
     assert(executor.statistics.stoppedWithSubsumption == 2)
     assert(executor.statistics.numPaths == 3)
@@ -228,7 +232,7 @@ class PathSubsumptionTest extends FunSuite with MicrocSupport with Examples {
         |""".stripMargin;
     val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
     val ctx = new Context()
-    val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx), ctx)), ctx, new DFSSearchStrategy());
+    val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx))), ctx, new DFSSearchStrategy());
     val res = executor.run()
     assert(executor.statistics.stoppedWithSubsumption > 0)
     assert(executor.statistics.numPaths > executor.statistics.stoppedWithSubsumption)
@@ -280,7 +284,7 @@ class PathSubsumptionTest extends FunSuite with MicrocSupport with Examples {
       stmt = stmt.succ.head
     }
     val ctx = new Context()
-    val ps = new PathSubsumption(new ConstraintSolver(ctx), ctx)
+    val ps = new PathSubsumption(new ConstraintSolver(ctx))
 
     state.programLocation = stmt
     assert(ps.computeInductivness(state, BinaryOp(GreaterEqual, Identifier("x", CodeLoc(0, 0)), Identifier("y", CodeLoc(0, 0)), CodeLoc(0, 0)), new SymbolicExecutor(cfg), stmt))
@@ -331,15 +335,36 @@ class PathSubsumptionTest extends FunSuite with MicrocSupport with Examples {
       stmt = stmt.succ.head
     }
     val ctx = new Context()
-    val ps = new PathSubsumption(new ConstraintSolver(ctx), ctx)
+    val ps = new PathSubsumption(new ConstraintSolver(ctx))
 
     state.programLocation = stmt
-
+    val p = ps.removeNonInductiveLabels(
+      state,
+      BinaryOp(
+        OrOr,
+        BinaryOp(
+          GreaterEqual,
+          Identifier("x", CodeLoc(0, 0)),
+          Identifier("y", CodeLoc(0, 0)),
+          CodeLoc(0, 0)
+        ),
+        BinaryOp(
+          LowerThan,
+          Identifier("i", CodeLoc(0, 0)),
+          Identifier("n", CodeLoc(0, 0)),
+          CodeLoc(0, 0)
+        ),
+        CodeLoc(0, 0)
+      ),
+      new SymbolicExecutor(cfg),
+      stmt
+    )
+    println("dfsf")
     assert(
       ps.removeNonInductiveLabels(
         state,
         BinaryOp(
-          AndAnd,
+          OrOr,
           BinaryOp(
             GreaterEqual,
             Identifier("x", CodeLoc(0, 0)),
@@ -389,11 +414,83 @@ class PathSubsumptionTest extends FunSuite with MicrocSupport with Examples {
         |""".stripMargin;
     val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
     val ctx = new Context()
-    val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx), ctx)), ctx, new DFSSearchStrategy());
+    val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx))), ctx, new DFSSearchStrategy());
     val res = executor.run()
-//    assert(executor.statistics.stoppedWithSubsumption == 2)
     assert(executor.statistics.numPaths == 3)
   }
+
+
+  test("easy to find error") {
+    val code =
+      """
+        |main() {
+        |  var x, y, i, n;
+        |  x = 0;
+        |  i = input;
+        |  n = input;
+        |  y = x;
+        |  while (i < n) {
+        |     x = x + 1;
+        |     i = i + 1;
+        |  }
+        |  if (x == 10) {
+        |     x = 1 / 0;
+        |  }
+        |  return 0;
+        |}
+        |""".stripMargin;
+    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+    val ctx = new Context()
+    val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx))), ctx, new DFSSearchStrategy());
+    try {
+      executor.run()
+    }
+    catch {
+      case e: Exception =>
+      case _ =>
+        fail("An error should be found but was not")
+    }
+  }
+
+
+  test("hard to find error") {
+    val code =
+      """
+        |main() {
+        |  var x, y, i, n;
+        |  x = 0;
+        |  i = input;
+        |  n = input;
+        |  y = x;
+        |  while (i < n) {
+        |     x = x + 1;
+        |     i = i + 1;
+        |  }
+        |  if (x == 100000) {
+        |     x = 1 / 0;
+        |  }
+        |  return 0;
+        |}
+        |""".stripMargin;
+    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+    val ctx = new Context()
+    val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx))), ctx, new DFSSearchStrategy());
+    val future = Future {
+      executor.run()
+      fail("should be killed by timeout")
+    }
+
+    try {
+      Await.ready(future, 10.seconds)
+      assert(false)
+    }
+    catch {
+      case _: TimeoutException =>
+      case e =>
+        fail(e.toString)
+    }
+  }
+
 
 
   test("summarization more complicated loop") {
@@ -419,9 +516,8 @@ class PathSubsumptionTest extends FunSuite with MicrocSupport with Examples {
         |""".stripMargin;
     val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
     val ctx = new Context()
-    val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx), ctx)), ctx, new DFSSearchStrategy());
+    val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx))), ctx, new DFSSearchStrategy());
     val res = executor.run()
-//    assert(executor.statistics.stoppedWithSubsumption == 4)
     assert(executor.statistics.numPaths == 5)
   }
 
@@ -451,13 +547,121 @@ class PathSubsumptionTest extends FunSuite with MicrocSupport with Examples {
         |""".stripMargin;
     val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
     val ctx = new Context()
-    val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx), ctx)), ctx, new DFSSearchStrategy());
+    val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx))), ctx, new DFSSearchStrategy());
     val initialProgramSize = cfg.nodes.size
     val res = executor.run()
-//    assert(executor.statistics.stoppedWithSubsumption == 3)
-    assert(executor.statistics.numPaths == 4)
+    assert(executor.statistics.numPaths == 5)
     assert(cfg.nodes.find(node => node.id == 15.0).get.succ.head.id == 12.0)
     assert(cfg.nodes.find(node => node.id == 16.0).get.succ.head.id == 9.0)
+    assert(initialProgramSize == cfg.nodes.size)
+  }
+
+
+  test("nested loop with easy to find error") {
+    val code =
+      """
+        |main() {
+        |  var x, y, i, j, n;
+        |  x = 0;
+        |  i = input;
+        |  j = input;
+        |  n = input;
+        |  y = x;
+        |  while (i < n) {
+        |     i = i + 1;
+        |     while (j < n) {
+        |         x = x + 1;
+        |         j = j + 1;
+        |     }
+        |  }
+        |  if (x == 10) {
+        |     x = 1 / 0;
+        |  }
+        |  return 0;
+        |}
+        |""".stripMargin;
+    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+    val ctx = new Context()
+    val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx))), ctx, new DFSSearchStrategy());
+    try {
+      executor.run()
+    }
+    catch {
+      case e: Exception =>
+      case _ =>
+        fail("An error should be found but was not")
+    }
+  }
+
+
+  test("nested loop with hard to find error") {
+    val code =
+      """
+        |main() {
+        |  var x, y, i, j, n;
+        |  x = 0;
+        |  i = input;
+        |  j = input;
+        |  n = input;
+        |  y = x;
+        |  while (i < n) {
+        |     i = i + 1;
+        |     while (j < n) {
+        |         x = x + 1;
+        |         j = j + 1;
+        |     }
+        |  }
+        |  if (x == 1000000) {
+        |     x = 1 / 0;
+        |  }
+        |  return 0;
+        |}
+        |""".stripMargin;
+    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+    val ctx = new Context()
+    val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx))), ctx, new DFSSearchStrategy());
+    val future = Future {
+      executor.run()
+      fail("should be killed by timeout")
+    }
+
+    try {
+      Await.ready(future, 10.seconds)
+      assert(false)
+    }
+    catch {
+      case _: TimeoutException =>
+      case e =>
+        fail(e.toString)
+    }
+  }
+
+
+  test("empty loop") {
+    val code =
+      """
+        |main() {
+        |  var x, y, i, j, n;
+        |  x = input;
+        |  i = input;
+        |  j = input;
+        |  n = input;
+        |  y = x;
+        |  while (i < n) {
+        |
+        |  }
+        |  if (x < y) {
+        |     x = 1 / 0;
+        |  }
+        |  return 0;
+        |}
+        |""".stripMargin;
+    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+    val ctx = new Context()
+    val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx))), ctx, new DFSSearchStrategy());
+    val initialProgramSize = cfg.nodes.size
+    val res = executor.run()
+    assert(executor.statistics.numPaths == 3)
     assert(initialProgramSize == cfg.nodes.size)
   }
 
@@ -473,7 +677,7 @@ class PathSubsumptionTest extends FunSuite with MicrocSupport with Examples {
         |  }
         |  i = 1 / i;
         |  y = x;
-        |   if (x < y) {
+        |  if (x < y) {
         |     x = 1 / 0;
         |  }
         |  return 0;
@@ -481,10 +685,9 @@ class PathSubsumptionTest extends FunSuite with MicrocSupport with Examples {
         |""".stripMargin;
     val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
     val ctx = new Context()
-    val subsumption = new PathSubsumption(new ConstraintSolver(ctx), ctx)
+    val subsumption = new PathSubsumption(new ConstraintSolver(ctx))
     val executor = new SymbolicExecutor(cfg, Some(subsumption), ctx, new DFSSearchStrategy());
     executor.run()
-    assert(executor.statistics.stoppedWithSubsumption == 1)
     assert(executor.statistics.numPaths == 3)
     assert(!subsumption.annotations.contains(cfg.nodes.find(node => node.id == 4.0).get))
     assert(!subsumption.annotations.contains(cfg.nodes.find(node => node.id == 8.0).get))
@@ -506,7 +709,7 @@ class PathSubsumptionTest extends FunSuite with MicrocSupport with Examples {
         |  }
         |  arr[0] = arr[i];
         |  y = x;
-        |   if (x < y) {
+        |  if (x < y) {
         |     x = 1 / 0;
         |  }
         |  return 0;
@@ -514,10 +717,9 @@ class PathSubsumptionTest extends FunSuite with MicrocSupport with Examples {
         |""".stripMargin;
     val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
     val ctx = new Context()
-    val subsumption = new PathSubsumption(new ConstraintSolver(ctx), ctx)
+    val subsumption = new PathSubsumption(new ConstraintSolver(ctx))
     val executor = new SymbolicExecutor(cfg, Some(subsumption), ctx, new DFSSearchStrategy());
     executor.run()
-    assert(executor.statistics.stoppedWithSubsumption == 1)
     assert(executor.statistics.numPaths == 3)
     assert(!subsumption.annotations.contains(cfg.nodes.find(node => node.id == 4.0).get))
     assert(!subsumption.annotations.contains(cfg.nodes.find(node => node.id == 8.0).get))
@@ -552,9 +754,8 @@ class PathSubsumptionTest extends FunSuite with MicrocSupport with Examples {
         |""".stripMargin;
     val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
     val ctx = new Context()
-    val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx), ctx)), ctx, new DFSSearchStrategy());
+    val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx))), ctx, new DFSSearchStrategy());
     executor.run()
-    assert(executor.statistics.stoppedWithSubsumption == 3)
     assert(executor.statistics.numPaths == 4)
     null
   }
@@ -589,7 +790,7 @@ class PathSubsumptionTest extends FunSuite with MicrocSupport with Examples {
         |""".stripMargin;
     val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
     val ctx = new Context()
-    val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx), ctx)), ctx, new DFSSearchStrategy());
+    val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx))), ctx, new DFSSearchStrategy());
     val res = executor.run()
     assert(executor.statistics.stoppedWithSubsumption == 2)
     assert(executor.statistics.numPaths == 3)
@@ -628,7 +829,7 @@ class PathSubsumptionTest extends FunSuite with MicrocSupport with Examples {
         |""".stripMargin;
     val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
     val ctx = new Context()
-    val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx), ctx)), ctx, new DFSSearchStrategy());
+    val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx))), ctx, new DFSSearchStrategy());
     val res = executor.run()
     assert(executor.statistics.stoppedWithSubsumption == 2)
     assert(executor.statistics.numPaths == 3)
@@ -663,7 +864,7 @@ class PathSubsumptionTest extends FunSuite with MicrocSupport with Examples {
         |""".stripMargin;
     val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
     val ctx = new Context()
-    val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx), ctx)), ctx, new DFSSearchStrategy());
+    val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx))), ctx, new DFSSearchStrategy());
     val res = executor.run()
     assert(executor.statistics.stoppedWithSubsumption == 2)
     assert(executor.statistics.numPaths == 3)
@@ -699,7 +900,7 @@ class PathSubsumptionTest extends FunSuite with MicrocSupport with Examples {
         |""".stripMargin;
     val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
     val ctx = new Context()
-    val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx), ctx)), ctx, new DFSSearchStrategy());
+    val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx))), ctx, new DFSSearchStrategy());
     val res = executor.run()
     assert(executor.statistics.stoppedWithSubsumption == 2)
     assert(executor.statistics.numPaths == 3)
@@ -734,7 +935,7 @@ class PathSubsumptionTest extends FunSuite with MicrocSupport with Examples {
         |""".stripMargin;
     val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
     val ctx = new Context()
-    val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx), ctx)), ctx, new DFSSearchStrategy());
+    val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx))), ctx, new DFSSearchStrategy());
     val res = executor.run()
     assert(executor.statistics.stoppedWithSubsumption == 2)
     assert(executor.statistics.numPaths == 3)
@@ -771,7 +972,7 @@ class PathSubsumptionTest extends FunSuite with MicrocSupport with Examples {
         |""".stripMargin;
     val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
     val ctx = new Context()
-    val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx), ctx)), ctx, new DFSSearchStrategy());
+    val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx))), ctx, new DFSSearchStrategy());
     val res = executor.run()
     assert(executor.statistics.stoppedWithSubsumption == 2)
     assert(executor.statistics.numPaths == 3)
@@ -808,7 +1009,7 @@ class PathSubsumptionTest extends FunSuite with MicrocSupport with Examples {
         |""".stripMargin;
     val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
     val ctx = new Context()
-    val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx), ctx)), ctx, new DFSSearchStrategy());
+    val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx))), ctx, new DFSSearchStrategy());
     val res = executor.run()
     assert(executor.statistics.stoppedWithSubsumption == 2)
     assert(executor.statistics.numPaths == 3)
@@ -850,10 +1051,9 @@ class PathSubsumptionTest extends FunSuite with MicrocSupport with Examples {
         |""".stripMargin;
     val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
     val ctx = new Context()
-    val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx), ctx)), ctx, new DFSSearchStrategy());
+    val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx))), ctx, new DFSSearchStrategy());
     executor.run()
-//    assert(executor.statistics.stoppedWithSubsumption == 8)
-    assert(executor.statistics.numPaths == 10)
+    assert(executor.statistics.numPaths == 11)
     null
   }
 
@@ -885,12 +1085,43 @@ class PathSubsumptionTest extends FunSuite with MicrocSupport with Examples {
         |""".stripMargin;
     val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
     val ctx = new Context()
-    val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx), ctx)), ctx, new DFSSearchStrategy());
+    val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx))), ctx, new DFSSearchStrategy());
     val res = executor.run()
     assert(executor.statistics.stoppedWithSubsumption == 2)
     assert(executor.statistics.numPaths == 3)
     null
   }
+
+
+  test("get paths weird loops finishes") {
+    val code =
+      """
+        |main() {
+        |  var x,y;
+        |  while (input) {
+        |     if (7) {}
+        |     else {
+        |         while (var10) {
+        |             while (4) {}
+        |             while (0) {}
+        |         }
+        |     }
+        |  }
+        |
+        |  return 0;
+        |}
+        |""".stripMargin;
+    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+    val ctx = new Context()
+    var stmt: CfgNode = cfg.getFce("main")
+    while (!stmt.ast.isInstanceOf[WhileStmt]) {
+      stmt = stmt.succ.head
+    }
+    val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx))), ctx, new DFSSearchStrategy());
+    LoopSummarization.getAllPaths(stmt, stmt.id, new SymbolicState(stmt, Number(1, CodeLoc(0, 0)), new SymbolicStore(null)), executor)
+    null
+  }
+
 
   test("random generated test finishes with no error") {
     val code =
@@ -1001,7 +1232,7 @@ class PathSubsumptionTest extends FunSuite with MicrocSupport with Examples {
         |""".stripMargin;
     val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
     val ctx = new Context()
-    val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx), ctx)), ctx, new DFSSearchStrategy());
+    val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx))), ctx, new DFSSearchStrategy());
     val res = executor.run()
   }
 

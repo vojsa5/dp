@@ -1,14 +1,14 @@
 package microc.symbolic_execution.optimizations.summarization
 
 import com.microsoft.z3.Status
-import microc.ast.{AndAnd, ArrayAccess, BinaryOp, BinaryOperator, CodeLoc, Expr, FieldAccess, Identifier, IdentifierDecl, Not, Number, VarRef}
+import microc.ast.{AndAnd, ArrayAccess, BinaryOp, BinaryOperator, CodeLoc, Deref, Expr, FieldAccess, Identifier, IdentifierDecl, Not, Number, VarRef}
 import microc.symbolic_execution.Value._
 import microc.symbolic_execution.optimizations._
 import microc.symbolic_execution.{ConstraintSolver, SymbolicState, Utility}
 
 import scala.collection.mutable
 
-case class PDA(loopSummary: LoopSummary, vertices: List[Vertex], variables: List[IdentifierDecl],
+case class PDA(loopSummary: LoopSummarization, vertices: List[Vertex], variables: List[IdentifierDecl],
                solver: ConstraintSolver, precond: Expr, symbolicState: SymbolicState, mapping: mutable.HashMap[Val, Expr]) {
 
   val edges = new mutable.HashMap[Path, mutable.HashSet[Edge]]()
@@ -27,13 +27,17 @@ case class PDA(loopSummary: LoopSummary, vertices: List[Vertex], variables: List
                 SymbolicExpr(change._2.apply(Number(1, CodeLoc(0, 0))).apply(Number(1, CodeLoc(0, 0))), CodeLoc(0, 0)))
               )
             }
+          case d@Deref(pointer, loc) =>
+            newState.updateMemoryLocation(newState.getMemoryLoc(d), Utility.removeUnnecessarySymbolicExpr(
+              SymbolicExpr(change._2.apply(Number(1, CodeLoc(0, 0))).apply(newState.getValAtMemoryLoc(d).asInstanceOf[Symbolic]), CodeLoc(0, 0)))
+            )
           case a@ArrayAccess(_, _, _) =>
             newState.updateMemoryLocation(newState.getMemoryLoc(a), Utility.removeUnnecessarySymbolicExpr(
-              SymbolicExpr(change._2.apply(Number(1, CodeLoc(0, 0))).apply(Number(1, CodeLoc(0, 0))), CodeLoc(0, 0)))
+              SymbolicExpr(change._2.apply(Number(1, CodeLoc(0, 0))).apply(newState.getValAtMemoryLoc(a).asInstanceOf[Symbolic]), CodeLoc(0, 0)))
             )
           case f@FieldAccess(_, _, _) =>
             newState.updateMemoryLocation(newState.getMemoryLoc(f), Utility.removeUnnecessarySymbolicExpr(
-              SymbolicExpr(change._2.apply(Number(1, CodeLoc(0, 0))).apply(Number(1, CodeLoc(0, 0))), CodeLoc(0, 0)))
+              SymbolicExpr(change._2.apply(Number(1, CodeLoc(0, 0))).apply(newState.getValAtMemoryLoc(f).asInstanceOf[Symbolic]), CodeLoc(0, 0)))
             )
         }
       }
@@ -65,39 +69,17 @@ case class PDA(loopSummary: LoopSummary, vertices: List[Vertex], variables: List
   }
 
 
-  def summarizeType1Loop(symbolicState: SymbolicState, precond: Expr): (Expr, mutable.HashMap[Expr, mutable.HashSet[Expr => Expr]]) = {
-    var res: (Expr, mutable.HashMap[Expr, mutable.HashSet[Expr => Expr]]) = (Number(1, CodeLoc(0, 0)), new mutable.HashMap[Expr, mutable.HashSet[Expr => Expr]]())
-    for (path <- entryStates) {
-      val trace = Trace()
-      trace.summarizeTrace(
-        this,
-        symbolicState,
-        path,
-        BinaryOp(AndAnd, path.condition, precond, CodeLoc(0, 0)),
-        new mutable.HashMap[Expr, Expr => Expr](),
-        new mutable.LinkedHashMap[Vertex, (Expr, mutable.HashMap[Expr, Expr => Expr])]()
-      ) //TODO add precond
-      for (changes <- trace.resChanges) {
-        res._2.put(changes._1, changes._2)
-      }
-      res = (BinaryOp(AndAnd, trace.resCondition, res._1, CodeLoc(0, 0)), res._2)
-    }
-    res
-  }
-
-
   def summarizeType1Loop2(symbolicState: SymbolicState): Option[mutable.HashSet[(Expr, mutable.HashMap[Expr, Expr => Expr])]] = {
     var res: mutable.HashSet[(Expr, mutable.HashMap[Expr, Expr => Expr])] = mutable.HashSet()
     for (path <- entryStates) {
       val constraint = solver.createConstraint(BinaryOp(AndAnd, path.condition, symbolicState.pathCondition, CodeLoc(0, 0)), symbolicState, true)
       solver.solveConstraint(constraint) match {
         case Status.SATISFIABLE =>
-          val trace = Trace()
+          val trace = Traces()
           val summarizable = trace.summarizeTrace(
             this,
             symbolicState,
             path,
-            //applyIterationsCount(solver.applyTheState(path.condition, symbolicState), path.iterationsVal, Number(0, CodeLoc(0, 0))),//initially 0 iterations performed
             Number(1, CodeLoc(0, 0)),
             new mutable.HashMap[Expr, Expr => Expr](),
             new mutable.LinkedHashMap[Vertex, (Expr, mutable.HashMap[Expr, Expr => Expr])]()
@@ -201,8 +183,4 @@ case class PDA(loopSummary: LoopSummary, vertices: List[Vertex], variables: List
     expr => BinaryOp(operation, oldFunction.apply(expr), newFunction.apply(expr), CodeLoc(0, 0))
   }
 
-
-  //  def combineFunctions(expr: Expr, expr2: Expr): Expr = {
-  //    expr => BinaryOp(Plus, expr, expr2, CodeLoc(0, 0))
-  //  }
 }

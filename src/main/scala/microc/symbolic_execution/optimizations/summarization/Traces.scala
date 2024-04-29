@@ -7,23 +7,10 @@ import microc.symbolic_execution.{SymbolicState, Utility}
 
 import scala.collection.mutable
 
-case class Trace() {
+case class Traces() {
 
-  var resCondition: Expr = Number(1, CodeLoc(0, 0))
-  var resChanges = new mutable.HashMap[Expr, mutable.HashSet[Expr => Expr]]()
   var res = new mutable.HashSet[(Expr, mutable.HashMap[Expr, Expr => Expr])]()
 
-
-  def summarizeTrace2(
-                       pda: PDA,
-                       symbolicState: SymbolicState,
-                       currPath: Vertex,
-                       traceCondition: Expr,
-                       updated_variables: mutable.HashMap[Expr, Expr => Expr],
-                       rec: mutable.LinkedHashMap[Vertex, (Expr, mutable.HashMap[Expr, Expr => Expr])]
-                     ): Boolean = {
-    summarizeTrace(pda, symbolicState, currPath, traceCondition, updated_variables, rec)
-  }
 
 
   def summarizeTrace(
@@ -48,7 +35,7 @@ case class Trace() {
     }
     else if (pda.exitStates.contains(currPath.path)) {
       if (rec.isEmpty) {
-        res.add(BinaryOp(AndAnd, Utility.applyTheState(Not(currPath.condition, CodeLoc(0, 0)), symbolicState, true), traceCondition, CodeLoc(0, 0)), updated_variables)
+        res.add(BinaryOp(AndAnd, Utility.applyTheState(Utility.applyPointers(Not(currPath.condition, CodeLoc(0, 0)), symbolicState), symbolicState, true), traceCondition, CodeLoc(0, 0)), updated_variables)
       }
       else {
         res.add(traceCondition, updated_variables)
@@ -57,7 +44,7 @@ case class Trace() {
     else {
       for (edge <- pda.edges(currPath.path)) {
         val newState = symbolicState.deepCopy()
-        val condition = Utility.simplifyArithExpr(BinaryOp(AndAnd, traceCondition, Utility.applyTheState(edge.condition, symbolicState, true), edge.condition.loc))
+        val condition = Utility.simplifyArithExpr(BinaryOp(AndAnd, traceCondition, Utility.applyTheState(Utility.applyPointers(edge.condition, symbolicState), symbolicState, true), edge.condition.loc))
         pda.solver.solveConstraint(pda.solver.createConstraint(condition, symbolicState, true)) match {
           case Status.SATISFIABLE =>
             val ncond = condition
@@ -86,7 +73,7 @@ case class Trace() {
         }
       }
     }
-    return true
+    true
   }
 
   def constructCycleState(pda: PDA, rec: mutable.LinkedHashMap[Vertex, (Expr, mutable.HashMap[Expr, Expr => Expr])],

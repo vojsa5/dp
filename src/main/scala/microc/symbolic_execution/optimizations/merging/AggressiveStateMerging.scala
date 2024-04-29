@@ -12,7 +12,7 @@ class AggressiveStateMerging(strategy: SearchStrategy) extends StateMerging {
       case Some(alreadyExisting) => {
         statesToRemove.add(alreadyExisting.last)
         val merged = alreadyExisting.last.mergeStates(state)
-        strategy.updateStateHistory(state, merged)
+        strategy.updateExecutionTree(state, merged)
         merged
       }
       case None => state

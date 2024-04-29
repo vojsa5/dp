@@ -1,6 +1,7 @@
 package microc.symbolic_execution
 
-import microc.ast.{Alloc, AndAnd, ArrayAccess, ArrayNode, AssignStmt, AstPrinter, BinaryOp, CallFuncExpr, CodeLoc, Decl, Deref, Divide, Equal, Expr, FieldAccess, GreaterEqual, GreaterThan, Identifier, IfStmt, Input, LowerEqual, LowerThan, Minus, Not, NotEqual, Null, Number, OrOr, OutputStmt, Plus, Record, RecordField, ReturnStmt, Stmt, Times, VarRef, WhileStmt}
+import microc.ast.{Alloc, AndAnd, ArrayAccess, ArrayNode, AssignStmt, AstPrinter, BinaryOp, CallFuncExpr, CodeLoc, Decl, Deref, Divide, Equal, Expr, FieldAccess, GreaterEqual, GreaterThan, Identifier, IfStmt, Input, LowerEqual, LowerThan, Minus, NestedBlockStmt, Not, NotEqual, Null, Number, OrOr, OutputStmt, Plus, Record, RecordField, ReturnStmt, Stmt, Times, VarRef, WhileStmt}
+import microc.cfg.CfgNode
 import microc.symbolic_execution.Value.{ArrVal, IteVal, NullRef, PointerVal, RecVal, Symbolic, SymbolicExpr, SymbolicVal, Val}
 
 import scala.collection.immutable.HashSet
@@ -17,6 +18,7 @@ object Utility {
       case Identifier(name, _) => name
       case ArrayAccess(array, index, loc) => getName(array)
       case FieldAccess(record, field, loc) => getName(record)
+      case Deref(pointer, loc) => getName(pointer)
     }
   }
 
@@ -69,6 +71,9 @@ object Utility {
       case Null(_) => false
       case ArrayNode(elems, _) => elems.exists(elem => expressionCanCauseError(elem))
       case ArrayAccess(array, index, _) => expressionCanCauseError(array) || expressionCanCauseError(index) || containsUnpredictability(index)
+      case Record(fields, loc) => fields.exists(field => expressionCanCauseError(field.expr))
+      case FieldAccess(record, field, loc) => expressionCanCauseError(record)
+      case Deref(pointer, loc) => expressionCanCauseError(pointer)
       case _ => false
     }
   }
@@ -94,8 +99,11 @@ object Utility {
       case Identifier(_, _) => Set.empty
       case Number(_, _) => Set.empty
       case Null(_) => Set.empty
+      case Deref(pointer, _) => getIdentifiersThatCanCauseError(pointer)
       case ArrayNode(elems, _) => elems.flatMap(elem => getIdentifiersThatCanCauseError(elem)).toSet
       case ArrayAccess(array, index, _) => getAllIdentifierNames(array) ++ getAllIdentifierNames(index)
+      case Record(fields, _) => fields.flatMap(field => getIdentifiersThatCanCauseError(field.expr)).toSet
+      case FieldAccess(record, _, _) => getIdentifiersThatCanCauseError(record)
       case _ => Set.empty
     }
   }
@@ -109,6 +117,9 @@ object Utility {
       case ArrayNode(elems, loc) => elems.flatMap(elem => getAllIdentifierNames(elem)).toSet
       case i@Input(_) => Set.empty
       case ArrayAccess(array, index, loc) => getAllIdentifierNames(array) ++ getAllIdentifierNames(index)
+      case Record(fields, loc) => fields.flatMap(field => getAllIdentifierNames(field.expr)).toSet
+      case FieldAccess(record, field, loc) => getAllIdentifierNames(record)
+      case Deref(pointer, loc) => getAllIdentifierNames(pointer)
       case _ => Set.empty
     }
   }
@@ -182,9 +193,7 @@ object Utility {
           case (a, b) => IteVal(state.addAlloc(SymbolicExpr(a, loc)), state.addAlloc(SymbolicExpr(b, loc)), applyTheState(cond, state, allowReturnNonInitialized), loc)
         }
       case r@RecVal(fields) => r
-      //RecVal(fields.map(field => (field._1, SymbolicExpr(applyVal(field._2, state, allowReturnNonInitialized), CodeLoc(0, 0)))))
       case a@ArrVal(elems) => a
-      //        ArrVal(elems.map(elem => applyVal(state.getVal(elem).get, state, allowReturnNonInitialized)))
       case _ =>
         throw new Exception("IMPLEMENT")
     }
@@ -204,10 +213,16 @@ object Utility {
       case r@RecVal(_) => r
       case a@ArrVal(_) => a
       case i@Input(loc) => SymbolicVal(CodeLoc(0, 0))
+      case Deref(pointer, loc) =>
+        Deref(applyTheState(pointer, state, allowReturnNonInitialized), loc)
       case ArrayAccess(array, index, loc) =>
         ArrayAccess(applyTheState(array, state, allowReturnNonInitialized), applyTheState(index, state, allowReturnNonInitialized), loc)
       case ArrayNode(elems, loc) =>
         ArrayNode(elems.map(elem => applyTheState(elem, state, allowReturnNonInitialized)), loc)
+      case FieldAccess(record, field, loc) =>
+        FieldAccess(applyTheState(record, state, allowReturnNonInitialized), field, loc)
+      case Record(fields, loc) =>
+        Record(fields.map(field => RecordField(field.name, applyTheState(field.expr, state, allowReturnNonInitialized), field.loc)), loc)
       case _ =>
         throw new Exception("")
     }
@@ -307,9 +322,17 @@ object Utility {
         val res = mutable.HashSet[Expr]()
         res.add(id)
         res
+      case d@Deref(_, _) =>
+        val res = mutable.HashSet[Expr]()
+        res.add(d)
+        res
       case a@ArrayAccess(_, _, _) =>
         val res = mutable.HashSet[Expr]()
         res.add(a)
+        res
+      case f@FieldAccess(_, _, _) =>
+        val res = mutable.HashSet[Expr]()
+        res.add(f)
         res
       case SymbolicExpr(expr, _) =>
         getMemoryCellsFromAnExpr(expr)
@@ -428,4 +451,138 @@ object Utility {
     }
     simplifyArithExpr(res)
   }
+
+  def removeIteVal(e: Expr, state: SymbolicState): Expr = {
+    e match {
+      case IteVal(trueState, falseState, expr, _) =>
+        val e1 = removeIteVal(state.getValOnMemoryLocation(trueState).get.asInstanceOf[Symbolic], state)
+        val e2 = removeIteVal(state.getValOnMemoryLocation(falseState).get.asInstanceOf[Symbolic], state)
+        BinaryOp(OrOr, BinaryOp(AndAnd, e1, expr, CodeLoc(0, 0)), BinaryOp(AndAnd, e2, Not(expr, CodeLoc(0, 0)), CodeLoc(0, 0)), CodeLoc(0, 0))
+      case BinaryOp(operator, left, right, loc) =>
+        BinaryOp(operator, removeIteVal(left, state), removeIteVal(right, state), loc)
+      case Not(expr, loc) =>
+        Not(removeIteVal(expr, state), loc)
+      case _ => e
+    }
+  }
+
+  def applyToVarsFromStartingProgram(expr: Expr, idMapping: mutable.HashMap[Identifier, Expr]): Expr = {
+    expr match {
+      case id@Identifier(name, _) if Utility.varIsFromOriginalProgram(name) => id
+      case id@Identifier(_, _) =>
+        if (!idMapping.contains(id)) {
+          println("fds")
+        }
+        applyToVarsFromStartingProgram(idMapping(id), idMapping)
+      case BinaryOp(operator, left, right, loc) =>
+        BinaryOp(operator, applyToVarsFromStartingProgram(left, idMapping), applyToVarsFromStartingProgram(right, idMapping), loc)
+      case Not(expr, loc) =>
+        Not(applyToVarsFromStartingProgram(expr, idMapping), loc)
+      case Deref(pointer, loc) =>
+        Deref(applyToVarsFromStartingProgram(pointer, idMapping), loc)
+      case ArrayAccess(array, index, loc) =>
+        ArrayAccess(applyToVarsFromStartingProgram(array, idMapping), index, loc)
+      case FieldAccess(record, field, loc) =>
+        FieldAccess(applyToVarsFromStartingProgram(record, idMapping), field, loc)
+      case other => other
+    }
+  }
+
+  def applyPointers(expr: Expr, state: SymbolicState): Expr = {
+    expr match {
+      case BinaryOp(operator, left, right, loc) => BinaryOp(operator, applyPointers(left, state), applyPointers(right, state), loc)
+      case Not(expr, loc) => Not(applyPointers(expr, state), loc)
+      case d@Deref(_, _) => state.getValAtMemoryLoc(d).asInstanceOf[Symbolic]
+      case a@ArrayAccess(array, _, _) =>
+        array match {
+          case arr: ArrayNode =>//Hardcoded arrays in code
+            a
+          case _ =>
+            state.getValAtMemoryLoc(a).asInstanceOf[Symbolic]
+        }
+      case f@FieldAccess(record, _, _) =>
+        record match {
+          case r: Record => //Hardcoded records in code
+            f
+          case _ =>
+            state.getValAtMemoryLoc(f).asInstanceOf[Symbolic]
+        }
+      case other => other
+    }
+  }
+
+
+  def getTrueBranch(node: CfgNode): CfgNode = {
+    val ast = node.ast
+    ast match {
+      case WhileStmt(_, thenBranch, loc) =>
+        val next = if (thenBranch.asInstanceOf[NestedBlockStmt].body.isEmpty) {
+          node.succ.find(s => s.ast == ast).get
+        }
+        else {
+          val firstThenStatement = thenBranch.asInstanceOf[NestedBlockStmt].body.head
+          node.succ.find(s => s.ast == firstThenStatement).get
+        }
+        next
+      case IfStmt(guard, thenBranch, None, loc) =>
+        val next = if (thenBranch.asInstanceOf[NestedBlockStmt].body.isEmpty) {
+          node.succ.find(s => s.ast == ast).get
+        }
+        else {
+          val firstThenStatement = thenBranch.asInstanceOf[NestedBlockStmt].body.head
+          node.succ.find(s => s.ast == firstThenStatement).get
+        }
+        next
+      case IfStmt(guard, thenBranch, Some(NestedBlockStmt(elseBranch, loc)), _) =>
+        if (elseBranch.isEmpty) {
+          val next = if (thenBranch.asInstanceOf[NestedBlockStmt].body.isEmpty) {
+            node.succ.head
+          }
+          else {
+            val firstThenStatement = thenBranch.asInstanceOf[NestedBlockStmt].body.head
+              node.succ.find(s => s.ast == firstThenStatement).get
+            }
+          return next
+        }
+        node.succ.find(s => s.ast != elseBranch.head).get
+    }
+  }
+
+
+  def getFalseBranch(node: CfgNode): CfgNode = {
+    val ast = node.ast;
+    ast match {
+      case WhileStmt(guard, thenBranch, loc) =>
+        val next = if (thenBranch.asInstanceOf[NestedBlockStmt].body.isEmpty) {
+          node.succ.find(s => s.ast != ast).get
+        }
+        else {
+          val firstThenStatement = thenBranch.asInstanceOf[NestedBlockStmt].body.head
+          node.succ.find(s => s.ast != firstThenStatement).get
+        }
+        next
+      case IfStmt(guard, thenBranch, None, loc) =>
+        val next = if (thenBranch.asInstanceOf[NestedBlockStmt].body.isEmpty) {
+          node.succ.find(s => s.ast != ast).get
+        }
+        else {
+          val firstThenStatement = thenBranch.asInstanceOf[NestedBlockStmt].body.head
+          node.succ.find(s => s.ast != firstThenStatement).get
+        }
+        next
+      case IfStmt(guard, thenBranch, Some(NestedBlockStmt(elseBranch, loc)), _) =>
+        if (elseBranch.isEmpty) {
+          val next = if (thenBranch.asInstanceOf[NestedBlockStmt].body.isEmpty) {
+            node.succ.head
+          }
+          else {
+            val firstThenStatement = thenBranch.asInstanceOf[NestedBlockStmt].body.head
+            node.succ.find(s => s.ast != firstThenStatement).get
+          }
+          return next
+        }
+        node.succ.find(s => s.ast == elseBranch.head).get
+    }
+  }
+
 }

@@ -52,7 +52,7 @@ trait SearchStrategy {
 
   def statesCount(): Int
 
-  def updateStateHistory(oldState: SymbolicState, newState: SymbolicState): Unit = {}
+  def updateExecutionTree(oldState: SymbolicState, newState: SymbolicState): Unit = {}
 }
 
 
@@ -143,7 +143,7 @@ class CoverageSearchStrategy(covered: mutable.HashSet[CfgNode]) extends SearchSt
     set.add(symbolicState)
 
   override def getState(): SymbolicState = {
-    val res = set.maxBy(nextUncoveredDistance)
+    val res = set.minBy(nextUncoveredDistance)
     set.remove(res)
     res
   }
@@ -183,7 +183,7 @@ class KleeSearchStrategy(stateHistory: StateHistory, covered: mutable.HashSet[Cf
     randomPathSearchStrategy.statesCount()
   }
 
-  override def updateStateHistory(oldState: SymbolicState, newState: SymbolicState): Unit = {
+  override def updateExecutionTree(oldState: SymbolicState, newState: SymbolicState): Unit = {
     stateHistory.addState(stateHistory.getParent(oldState), newState)
     stateHistory.removeState(oldState)
   }

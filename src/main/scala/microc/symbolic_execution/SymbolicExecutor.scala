@@ -87,7 +87,7 @@ class SymbolicExecutor(program: ProgramCfg,
                        searchStrategy: SearchStrategy = new BFSSearchStrategy,
                        stateHistory: Option[StateHistory] = None,
                        covered: Option[mutable.HashSet[CfgNode]] = None,
-                       createNewStateAtSymbolicArrayAccess: Boolean = false,
+                       createITEAtSymbolicArrayAccess: Boolean = false,
                        printStats: Boolean = true
                       ) {
 
@@ -177,11 +177,15 @@ class SymbolicExecutor(program: ProgramCfg,
 
   def runFunction(name: String, symbolicState: SymbolicState, args: List[Expr]): Option[Val] = {
     val fce = program.getFce(name)
+    val changes = mutable.HashMap[String, Val]()
+    for ((arg, param) <- args.zip(fce.ast.asInstanceOf[FunDecl].params)) {
+      changes.put(param.name, evaluate(arg, symbolicState))
+    }
     symbolicState.callStack = symbolicState.callStack.appended((symbolicState.programLocation, fce.ast.asInstanceOf[FunDecl].params))
     symbolicState.symbolicStore.pushFrame()
     val tmpNextStatement = symbolicState.programLocation
-    for ((arg, param) <- args.zip(fce.ast.asInstanceOf[FunDecl].params)) {
-      symbolicState.updateVar(param.name, evaluate(arg, symbolicState))
+    for ((name, v) <- changes) {
+      symbolicState.updateVar(name, v)
     }
     symbolicState.goTo(fce, fce.fun.params)
     step(symbolicState)
@@ -235,9 +239,9 @@ class SymbolicExecutor(program: ProgramCfg,
               inSubsumptionIteration = true
               goOutOfSubsumptionIteration = true
             }
-            val loopIterCond = BinaryOp(LowerThan, loopIter, Number(0, CodeLoc(0, 0)), CodeLoc(0, 0))
+            val loopIterCond = BinaryOp(LowerEqual, loopIter, Number(0, CodeLoc(0, 0)), CodeLoc(0, 0))
             val lastLoopStmt = loop.pred.maxBy(node => node.id)
-            subsumption.get.addAnnotationsToALoop(program.nodes.filter(node => node.id > loop.id && node.id <= lastLoopStmt.id).toList, loopIterCond)
+            subsumption.get.addAnnotations(program.nodes.filter(node => node.id > loop.id && node.id <= lastLoopStmt.id).toList, loopIterCond)
             //subsumption.get.addAnnotation(loop, loopIterCond)
             val decreaseLoopIter = AssignStmt(loopIter, BinaryOp(Minus, loopIter, Number(1, CodeLoc(0, 0)), CodeLoc(0, 0)), CodeLoc(0, 0))
             val lastBody = loopAst.block.asInstanceOf[NestedBlockStmt].body
@@ -254,26 +258,17 @@ class SymbolicExecutor(program: ProgramCfg,
             newStmt.pred.add(lastLoopStmt)
 
             nextState.addVar(IdentifierDecl(loops(loop).name, CodeLoc(0, 0)))
-            nextState.updateVar(loops(loop).name, Number(0, CodeLoc(0, 0)))
+            nextState.updateVar(loops(loop).name, Number(1, CodeLoc(0, 0)))
 
             step(nextState)
 
-            subsumption.get.replaceSubsumptionIdentifier(
+            subsumption.get.performInduction(
               program.nodes.filter(node => node.id >= loop.id && node.id <= newStmt.id).toList,
               loopIter,
-              Number(0, CodeLoc(0, 0)),
               nextState,
               this,
               loop
             )
-
-//            lastLoopStmt.succ.clear()
-//            lastLoopStmt.succ.addAll(tmpSuccs)
-//            lastLoopStmt.succ.foreach(s => {
-//              s.pred.remove(newStmt)
-//              s.pred.add(lastLoopStmt)
-//              newStmt.succ.add(s)
-//            })
 
             lastLoopStmt.succ.add(loop)
             lastLoopStmt.succ.remove(newStmt)
@@ -287,7 +282,7 @@ class SymbolicExecutor(program: ProgramCfg,
 
             loop.ast = loopAst
 
-            subsumption.get.computeAnnotation(symbolicState.programLocation, true)
+            subsumption.get.computeAnnotationFromSuccessors(symbolicState.programLocation, true)
             if (subsumption.get.checkSubsumption(symbolicState)) {
               statistics.stoppedWithSubsumption += 1
               currentPathStopped = true
@@ -302,7 +297,7 @@ class SymbolicExecutor(program: ProgramCfg,
             }
 
           case Status.UNSATISFIABLE =>//TODO look at this
-            subsumption.get.computeAnnotation(symbolicState.programLocation)
+            subsumption.get.computeAnnotationFromSuccessors(symbolicState.programLocation)
         }
       }
     }
@@ -318,25 +313,24 @@ class SymbolicExecutor(program: ProgramCfg,
       case Status.UNSATISFIABLE =>
         currentPathStopped = true
     }
-    if (subsumption.isEmpty) {
-      solver.solveCondition(symbolicState.pathCondition, loopAst.guard, symbolicState) match {
-        case Status.SATISFIABLE | Status.UNKNOWN =>
-          val nextState = symbolicState.getIfTrueState()
-          //        if (inSubsumptionIteration) {
-          //          statistics.numPaths += 1
-          //          step(nextState)
-          //        }
-          if (stateHistory.nonEmpty) {
-            stateHistory.get.addState(symbolicState, nextState)
-          }
+    solver.solveCondition(symbolicState.pathCondition, loopAst.guard, symbolicState) match {
+      case Status.SATISFIABLE | Status.UNKNOWN =>
+        val nextState = symbolicState.getIfTrueState()
+        if (stateHistory.nonEmpty) {
+          stateHistory.get.addState(symbolicState, nextState)
+        }
+        if (inSubsumptionIteration) {
+          statistics.numPaths += 1
+          step(nextState)
+        }
+        else {
           searchStrategy.addState(nextState)
+        }
 
-
-        case Status.UNSATISFIABLE =>
-      }
+      case Status.UNSATISFIABLE =>
     }
-    if (subsumption.nonEmpty) {
-      subsumption.get.computeAnnotation(symbolicState.programLocation)
+    if (subsumption.nonEmpty && inSubsumptionIteration) {
+      subsumption.get.computeAnnotationFromSuccessors(symbolicState.programLocation)
     }
     if (whileLeavingState.nonEmpty) {
       symbolicState.pathCondition = whileLeavingState.get.pathCondition
@@ -372,7 +366,7 @@ class SymbolicExecutor(program: ProgramCfg,
       ast match {
         case stmt: AssignStmt if Utility.statementCanCauseError(stmt) =>
         case _ =>
-          subsumption.get.computeAnnotation(statement)
+          subsumption.get.computeAnnotationFromSuccessors(statement)
       }
     }
   }
@@ -409,10 +403,10 @@ class SymbolicExecutor(program: ProgramCfg,
             if (stateHistory.nonEmpty) {
               stateHistory.get.addState(symbolicState, path)
             }
-            if (inSubsumptionIteration) {
+            if (subsumption.nonEmpty) {
               currentPathStopped = false
               step(path)
-              subsumption.get.computeAnnotation(symbolicState.programLocation)
+              subsumption.get.computeAnnotationFromSuccessors(symbolicState.programLocation)
               statistics.numPaths += 1
             }
             else {
@@ -420,7 +414,7 @@ class SymbolicExecutor(program: ProgramCfg,
             }
           case Status.UNSATISFIABLE =>
             if (subsumption.nonEmpty) {
-              subsumption.get.computeAnnotation(symbolicState.programLocation)
+              subsumption.get.computeAnnotationFromSuccessors(symbolicState.programLocation)
             }
         }
         if (ifState.nonEmpty) {
@@ -502,7 +496,8 @@ class SymbolicExecutor(program: ProgramCfg,
                   case Status.SATISFIABLE =>
                     throw errorDivByZero(loc, symbolicState)
                   case Status.UNSATISFIABLE => SymbolicExpr(BinaryOp(Divide, e1, e2, loc), loc)
-                  case Status.UNKNOWN => throw new Exception("IMPLEMENT")
+                  case Status.UNKNOWN =>
+                    throw new Exception("IMPLEMENT")
                 }
             }
 
@@ -621,7 +616,7 @@ class SymbolicExecutor(program: ProgramCfg,
                   case Status.SATISFIABLE | Status.UNKNOWN =>
                     throw errorArrayOutOfBounds(loc, elems.length, symbolicState)
                   case Status.UNSATISFIABLE =>
-                    if (createNewStateAtSymbolicArrayAccess) {
+                    if (createITEAtSymbolicArrayAccess) {
                       var v: Val = null
                       var ptr2: PointerVal = null
                       for (i <- elems.indices) {
@@ -701,11 +696,7 @@ class SymbolicExecutor(program: ProgramCfg,
           case RecVal(fields) =>
             fields.get(field) match {
               case Some(PointerVal(res)) =>
-                symbolicState.getValOnMemoryLocation(PointerVal(res)) match {
-                  case Some(r) => r
-                  case None =>
-                    throw new Exception("IMPLEMENT")
-                }
+                symbolicState.getValOnMemoryLocation(PointerVal(res)).get
               case None => throw errorNonExistingFieldAccess(loc, RecVal(fields).toString, field, symbolicState)
             }
           case v => throw errorNonRecordFieldAccess(loc, v.toString, symbolicState)
@@ -749,14 +740,6 @@ class SymbolicExecutor(program: ProgramCfg,
                   case None => throw errorUninitializedReference(loc, symbolicState)
                 }
               case s: Symbolic =>
-                val tmp = solver.createConstraint(
-                  BinaryOp(
-                    OrOr,
-                    BinaryOp(AndAnd, BinaryOp(LowerThan, s, Number(0, loc), loc), symbolicState.pathCondition, loc),
-                    BinaryOp(AndAnd, BinaryOp(GreaterEqual, s, Number(elems.length, loc), loc), symbolicState.pathCondition, loc),
-                    loc),
-                  symbolicState)
-                System.out.println(tmp)
                 solver.solveConstraint(
                   solver.createConstraint(
                     BinaryOp(
@@ -768,7 +751,7 @@ class SymbolicExecutor(program: ProgramCfg,
                   case Status.SATISFIABLE =>
                     throw errorArrayOutOfBounds(loc, elems.length, symbolicState)
                   case Status.UNSATISFIABLE | Status.UNKNOWN =>
-                    if (createNewStateAtSymbolicArrayAccess) {
+                    if (createITEAtSymbolicArrayAccess) {
                       var ptr: PointerVal = null
                       for (i <- elems.indices) {
                         solver.solveConstraint(

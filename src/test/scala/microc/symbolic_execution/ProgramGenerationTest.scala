@@ -4,8 +4,9 @@ import com.microsoft.z3.Context
 import microc.analysis.{QueryCountAnalyses, SemanticAnalysis}
 import microc.ast.AstNormalizer
 import microc.cfg.{CfgNode, IntraproceduralCfgFactory, ProgramCfg}
+import microc.symbolic_execution.experiments.{ExperimentRunner, ProgramGenerator}
 import microc.symbolic_execution.optimizations.subsumption.PathSubsumption
-import microc.symbolic_execution.optimizations.summarization.LoopSummary
+import microc.symbolic_execution.optimizations.summarization.LoopSummarization
 import microc.symbolic_execution.optimizations.merging.HeuristicBasedStateMerging
 import microc.{Examples, MicrocSupport}
 import munit.FunSuite
@@ -71,7 +72,7 @@ class ProgramGenerationTest extends FunSuite with MicrocSupport with Examples {
     val cfg = new IntraproceduralCfgFactory().fromProgram(program);
     val ctx = new Context()
     try {
-      new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx), ctx))).run()
+      new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx)))).run()
     }
     catch {
       case e@ExecutionException(_, _, _) =>
@@ -91,7 +92,7 @@ class ProgramGenerationTest extends FunSuite with MicrocSupport with Examples {
         val program = new AstNormalizer().normalize(new ProgramGenerator().generateRandomProgram())
         val cfg = new IntraproceduralCfgFactory().fromProgram(program);
         val ctx = new Context()
-        new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx), ctx)), printStats = false).run()
+        new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx))), printStats = false).run()
       }
 
       try {
@@ -106,10 +107,35 @@ class ProgramGenerationTest extends FunSuite with MicrocSupport with Examples {
     }
   }
 
+
+  test("test generation of guaranteed errors") {
+
+    for (i <- 0 until 50) {
+      println(i)
+
+      val future = Future {
+        val program = new AstNormalizer().normalize(new ProgramGenerator(guaranteedError = true).generateRandomProgram())
+        val cfg = new IntraproceduralCfgFactory().fromProgram(program);
+        new SymbolicExecutor(cfg).run()
+      }
+
+      try {
+        Await.result(future, 5.seconds)
+      }
+      catch {
+        case _: TimeoutException =>
+          fail("every program should fail")
+        case e =>
+          fail(e.toString)
+      }
+
+    }
+  }
+
   test("test generation with loop summaries") {
     val program = new AstNormalizer().normalize(new ProgramGenerator().generateRandomProgram())
     val cfg = new IntraproceduralCfgFactory().fromProgram(program);
-    val executor = new LoopSummary(cfg)
+    val executor = new LoopSummarization(cfg)
     executor.run()
     null
   }
@@ -122,7 +148,7 @@ class ProgramGenerationTest extends FunSuite with MicrocSupport with Examples {
       val future = Future {
         val program = new AstNormalizer().normalize(new ProgramGenerator().generateRandomProgram())
         val cfg = new IntraproceduralCfgFactory().fromProgram(program);
-        val executor = new LoopSummary(cfg, printStats = false).run()
+        val executor = new LoopSummarization(cfg, printStats = false).run()
       }
 
       try {
@@ -240,6 +266,10 @@ class ProgramGenerationTest extends FunSuite with MicrocSupport with Examples {
     System.out.println(errors)
     System.out.println(pathsExplored)
     null
+  }
+
+  test("generate program like in the experiments") {
+    new ProgramGenerator(0.15, 0.10, 3, 10, 5).generateRandomProgram(true)
   }
 
 

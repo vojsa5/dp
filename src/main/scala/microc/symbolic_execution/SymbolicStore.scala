@@ -180,16 +180,11 @@ class SymbolicStore(functionDeclarations: Map[String, FunVal]) {
 
   var storage: Storage = Storage()
 
-  private var frames: Array[Map[String, PointerVal]] = Array(Map.empty)
+  private var frames: Array[mutable.HashMap[String, PointerVal]] = Array(mutable.HashMap.empty)
 
-  def pushFrame(): Unit = frames = frames.appended(Map.empty)
+  def pushFrame(): Unit = frames = frames.appended(mutable.HashMap.empty)
 
   def popFrame(): Unit = {
-//    for (value <- frames.last.values) {
-//      value match {
-//        case PointerVal(address) => storage.deleteVal(PointerVal(address))
-//      }
-//    }
     frames = frames.dropRight(1)
   }
 
@@ -198,26 +193,23 @@ class SymbolicStore(functionDeclarations: Map[String, FunVal]) {
   }
 
   def addVar(name: String, ref: PointerVal): Unit = {
-    val frame = frames.last
-    frames = frames.dropRight(1)
-    frames = frames.appended(frame.updated(name, ref))
+    frames.last.put(name, ref)
   }
 
   def addNewVar(name: String): PointerVal = {
     val res = storage.getAddress
-    val frame = frames.last
-    frames = frames.dropRight(1)
-    frames = frames.appended(frame.updated(name, res))
+    frames.last.put(name, res)
     res
   }
 
   def findVar(name: String): Option[PointerVal] = {
-    for (frame <- frames.reverse) {
-      if (frame.contains(name)) {
-        return Some(frame(name))
-      }
-    }
-    None
+//    for (frame <- frames.reverse) {
+//      if (frame.contains(name)) {
+//        return Some(frame(name))
+//      }
+//    }
+//    None
+    frames.last.get(name)
   }
 
   def contains(name: String): Boolean = {
@@ -295,7 +287,7 @@ class SymbolicStore(functionDeclarations: Map[String, FunVal]) {
               case (Some(_), Some(_)) =>
               case (None, None) =>
               case _ =>
-                throw new Exception("IMPLEMENT")
+                return false
             }
           }
           return true
@@ -489,7 +481,74 @@ class SymbolicStore(functionDeclarations: Map[String, FunVal]) {
           (added, added)
         }
         else {
-          throw  new Exception("this should never happen")
+          if (elems1.length < elems2.length) {
+            var arr = Array[PointerVal]()
+            for (i <- elems1.indices) {
+              val (addr1: PointerVal, addr2: PointerVal) = {
+                moveValues(res, store1, store2, elems1(i), elems2(i), pointerMapping1, pointerMapping2, pathCondition)
+              }
+              if (addr1 == addr2) {
+                arr = arr.appended(addr1)
+              }
+              else {
+                val ite = IteVal(addr1, addr2, pathCondition, CodeLoc(0, 0))
+                arr = arr.appended(res.storage.addNewVal(ite))
+              }
+            }
+            for (i <- elems2.indices) {
+              if (elems1.length <= i) {
+                arr = arr.appended(
+                  res.storage.addNewVal(
+                    IteVal(
+                      moveValue(res, store2, elems2(i), pointerMapping2),
+                      res.storage.addNewVal(UninitializedRef),
+                      pathCondition,
+                      CodeLoc(0, 0)
+                    )
+                  )
+                )
+              }
+            }
+            val a = ArrVal(arr)
+            val added = res.storage.addNewVal(a)
+            pointerMapping1.put(ptr1.address, added.address)
+            pointerMapping2.put(ptr2.address, added.address)
+            (added, added)
+          }
+          else {
+            var arr = Array[PointerVal]()
+            for (i <- elems2.indices) {
+              val (addr1: PointerVal, addr2: PointerVal) = {
+                moveValues(res, store1, store2, elems1(i), elems2(i), pointerMapping1, pointerMapping2, pathCondition)
+              }
+              if (addr1 == addr2) {
+                arr = arr.appended(addr1)
+              }
+              else {
+                val ite = IteVal(addr1, addr2, pathCondition, CodeLoc(0, 0))
+                arr = arr.appended(res.storage.addNewVal(ite))
+              }
+            }
+            for (i <- elems1.indices) {
+              if (elems2.length <= i) {
+                arr = arr.appended(
+                  res.storage.addNewVal(
+                    IteVal(
+                      moveValue(res, store1, elems1(i), pointerMapping1),
+                      res.storage.addNewVal(UninitializedRef),
+                      pathCondition,
+                      CodeLoc(0, 0)
+                    )
+                  )
+                )
+              }
+            }
+            val a = ArrVal(arr)
+            val added = res.storage.addNewVal(a)
+            pointerMapping1.put(ptr1.address, added.address)
+            pointerMapping2.put(ptr2.address, added.address)
+            (added, added)
+          }
         }
       case (Some(RecVal(fields1)), Some(RecVal(fields2))) =>
         if (fields1.keys == fields2.keys) {
@@ -512,7 +571,7 @@ class SymbolicStore(functionDeclarations: Map[String, FunVal]) {
           (added, added)
         }
         else {
-          throw new Exception("IMPLEMENT")
+          throw new Exception("this should never happen.")
         }
       case (Some(IteVal(trueState1, falseState1, expr1, loc1)), Some(IteVal(trueState2, falseState2, expr2, loc2))) if expr1 == expr2 =>
         val t1 = moveValues(res, store1, store2, trueState1, trueState2, pointerMapping1, pointerMapping2, pathCondition)
@@ -605,12 +664,7 @@ class SymbolicStore(functionDeclarations: Map[String, FunVal]) {
         res.pushFrame()
       }
     }
-    val r = Some(res,
-      Utility.simplifyADisjunction(
-        SymbolicStore.mergePathCondition(pathCondition, this, res, thisPointerMapping),
-        SymbolicStore.mergePathCondition(pathCondition2, other, res, otherPointerMapping)
-      )
-    )
-    r
+    val r = Utility.simplifyADisjunction(pathCondition, pathCondition2)
+    Some(res, r)
   }
 }

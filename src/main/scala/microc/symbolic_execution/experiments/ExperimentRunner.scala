@@ -1,17 +1,19 @@
-package microc.symbolic_execution
+package microc.symbolic_execution.experiments
 
 import com.microsoft.z3.Context
+import microc.analyses.RecursionBasedAnalyses
 import microc.analysis.{QueryCountAnalyses, SemanticAnalysis}
 import microc.ast.{AstNormalizer, Program}
 import microc.cfg.{CfgNode, IntraproceduralCfgFactory, ProgramCfg}
-import microc.symbolic_execution.optimizations.merging.{AggressiveStateMerging, HeuristicBasedStateMerging, RecursionBasedAnalyses}
+import microc.symbolic_execution.optimizations.merging.{AggressiveStateMerging, HeuristicBasedStateMerging}
 import microc.symbolic_execution.optimizations.subsumption.PathSubsumption
-import microc.symbolic_execution.optimizations.summarization.LoopSummary
+import microc.symbolic_execution.optimizations.summarization.LoopSummarization
+import microc.symbolic_execution._
 
 import scala.collection.mutable
-import scala.concurrent.{Await, Future, TimeoutException}
-import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.duration._
+import scala.concurrent.{Await, Future, TimeoutException}
 
 class ExperimentRunner {
 
@@ -94,7 +96,7 @@ class ExperimentRunner {
       }
 
       ctx = new Context()
-      executor = new LoopSummary(cfg, None, ctx, mergeStrategy._2, Some(stateHistory), covered, false)
+      executor = new LoopSummarization(cfg, None, ctx, mergeStrategy._2, Some(stateHistory), covered, false)
       future = Future {
         executor.run()
       }
@@ -113,7 +115,7 @@ class ExperimentRunner {
       }
 
       ctx = new Context()
-      executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx), ctx)), ctx, mergeStrategy._2, Some(stateHistory), covered, false)
+      executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx))), ctx, mergeStrategy._2, Some(stateHistory), covered, false)
 
       future = Future {
         executor.run()
@@ -133,7 +135,7 @@ class ExperimentRunner {
       }
 
       ctx = new Context()
-      executor = new LoopSummary(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx), ctx)), ctx, mergeStrategy._2, Some(stateHistory), covered, false)
+      executor = new LoopSummarization(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx))), ctx, mergeStrategy._2, Some(stateHistory), covered, false)
 
       future = Future {
         executor.run()

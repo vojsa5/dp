@@ -35,13 +35,37 @@ object Main {
                         @arg(name = "timeout", doc = "Timeout for the program is s (optional int argument)")
                         timeout: Option[Int] = None,
                         @arg(name = "output", doc = "Output file (optional string argument)")
+                        outputFile: Option[String] = None,
+                        @arg(name = "time-output", doc = "Time output file (optional string argument)")
+                        timeOutputFile: Option[String] = None): Int = {
+    val programInput = new FileInputStream(program)
+    val output = outputFile match {
+      case Some(file) => new FileOutputStream(file)
+      case None => System.out
+    }
+    val timeOutput = timeOutputFile match {
+      case Some(file) => new FileOutputStream(file)
+      case None => System.out
+    }
+    new SymbolicExecuteAction(programInput, searchStrategy, smartMerging, smartMergingCost, kappa, summarization, subsumption, timeout, output, timeOutput).run()
+  }
+
+  @main(doc = "precomputeVariableCosts")
+  def precomputeVariableCosts(program: String,
+                        @arg(name = "smart-merging", doc = "Enable smart merging strategy (optional string argument)")
+                        smartMerging: Option[String] = None,
+                        @arg(name = "kappa", doc = "kappa for smart merging (optional int argument)")
+                        kappa: Option[Int] = None,
+                        @arg(name = "timeout", doc = "Timeout for the program is s (optional int argument)")
+                        timeout: Option[Int] = None,
+                        @arg(name = "output", doc = "Output file (optional string argument)")
                         outputFile: Option[String] = None): Int = {
     val programInput = new FileInputStream(program)
     val output = outputFile match {
       case Some(file) => new FileOutputStream(file)
       case None => System.out
     }
-    new SymbolicExecuteAction(programInput, searchStrategy, smartMerging, smartMergingCost, kappa, summarization, subsumption, timeout, output).run()
+    new PrecomputeVariableCosts(programInput, smartMerging, kappa, timeout, output).run()
   }
 
   @main(doc = "Generate program")
@@ -57,9 +81,13 @@ object Main {
                        @arg(name = "maxTopLvlStmtsCount", doc = "Maximum number of top-level statements")
                        maxTopLvlStmtsCount: Int = 15,
                        @arg(name = "maxStmtsWithinABlock", doc = "Maximum number of statements within a block")
-                       maxStmtsWithinABlock: Int = 7
+                       maxStmtsWithinABlock: Int = 7,
+                       @arg(name = "errorGuaranteed", doc = "An error is guaranteed")
+                       errorGuaranteed: Boolean = false,
+                       @arg(name = "tryNotToGenerateError", doc = "The generator tries to not generate errors")
+                       tryNotToGenerateRandomError: Boolean = true
                      ): Int = {
-    new GenerateProgramAction(file, loopGenProb, forLoopGenProb, maxStmtDepth, maxTopLvlStmtsCount, maxStmtsWithinABlock).run()
+    new GenerateProgramAction(file, loopGenProb, forLoopGenProb, maxStmtDepth, maxTopLvlStmtsCount, maxStmtsWithinABlock, errorGuaranteed, tryNotToGenerateRandomError).run()
   }
 
 

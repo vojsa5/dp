@@ -2,7 +2,7 @@ package microc.symbolic_execution
 
 import microc.cfg.IntraproceduralCfgFactory
 import microc.symbolic_execution.optimizations.merging.AggressiveStateMerging
-import microc.symbolic_execution.optimizations.summarization.LoopSummary
+import microc.symbolic_execution.optimizations.summarization.LoopSummarization
 import microc.{Examples, MicrocSupport}
 import munit.FunSuite
 
@@ -44,7 +44,7 @@ class SpecialCasesTest extends FunSuite with MicrocSupport with Examples {
 
 
     cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    executor = new LoopSummary(cfg, searchStrategy = new AggressiveStateMerging(new RandomSearchStrategy()));
+    executor = new LoopSummarization(cfg, searchStrategy = new AggressiveStateMerging(new RandomSearchStrategy()));
     try {
       executor.run()
       fail("Expected a ExecutionException but it did not occur.")
@@ -93,7 +93,7 @@ class SpecialCasesTest extends FunSuite with MicrocSupport with Examples {
 
     //loop summary is very fast
     cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code))
-    executor = new LoopSummary(cfg)
+    executor = new LoopSummarization(cfg)
     executor.run()
   }
 
@@ -245,7 +245,7 @@ class SpecialCasesTest extends FunSuite with MicrocSupport with Examples {
         |""".stripMargin;
 
     var cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    var executor = new SymbolicExecutor(cfg, createNewStateAtSymbolicArrayAccess = true);
+    var executor = new SymbolicExecutor(cfg, createITEAtSymbolicArrayAccess = true);
     executor.run()
   }
 
@@ -289,7 +289,7 @@ class SpecialCasesTest extends FunSuite with MicrocSupport with Examples {
         |""".stripMargin;
 
     var cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    var executor = new SymbolicExecutor(cfg, createNewStateAtSymbolicArrayAccess = true);
+    var executor = new SymbolicExecutor(cfg, createITEAtSymbolicArrayAccess = true);
     executor.run()
   }
 
@@ -333,7 +333,7 @@ class SpecialCasesTest extends FunSuite with MicrocSupport with Examples {
         |""".stripMargin;
 
     var cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    var executor = new SymbolicExecutor(cfg, createNewStateAtSymbolicArrayAccess = true);
+    var executor = new SymbolicExecutor(cfg, createITEAtSymbolicArrayAccess = true);
     executor.run()
   }
 

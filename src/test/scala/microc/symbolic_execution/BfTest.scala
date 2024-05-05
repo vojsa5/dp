@@ -414,8 +414,8 @@ class BfTest extends FunSuite with MicrocSupport with Examples {
     val code = bfCodeNoWhile
     val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
     val covered = Some(mutable.HashSet[CfgNode]())
-    val stateHistory = new StateHistory()
-    val executor = new SymbolicExecutor(cfg, stateHistory = Some(stateHistory), searchStrategy = new RandomPathSelectionStrategy(stateHistory), covered = covered)
+    val stateHistory = new ExecutionTree()
+    val executor = new SymbolicExecutor(cfg, executionTree = Some(stateHistory), searchStrategy = new RandomPathSelectionStrategy(stateHistory), covered = covered)
     executor.run()
   }
 
@@ -424,8 +424,8 @@ class BfTest extends FunSuite with MicrocSupport with Examples {
     val code = bfCodeNoWhile
     val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
     val covered = Some(mutable.HashSet[CfgNode]())
-    val stateHistory = new StateHistory()
-    val executor = new SymbolicExecutor(cfg, stateHistory = Some(stateHistory), searchStrategy = new KleeSearchStrategy(stateHistory, covered.get), covered = covered)
+    val stateHistory = new ExecutionTree()
+    val executor = new SymbolicExecutor(cfg, executionTree = Some(stateHistory), searchStrategy = new KleeSearchStrategy(stateHistory, covered.get), covered = covered)
     executor.run()
   }
 
@@ -477,7 +477,7 @@ class BfTest extends FunSuite with MicrocSupport with Examples {
     }
     val limitCost = 3.0
     val depth = 3
-    val stateHistory = new StateHistory()
+    val stateHistory = new ExecutionTree()
     val dynamicStateMerging = new DynamicStateMerging(
       new HeuristicBasedStateMerging(new BFSSearchStrategy, variableCosts, limitCost),
       stateHistory,

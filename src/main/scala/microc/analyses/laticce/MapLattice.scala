@@ -1,4 +1,4 @@
-package microc.lattice
+package microc.analyses.laticce
 
 /** A map lattice from a set of type `A` to sub-lattice of type `Lattice[B]`, ordered point-wise.
  *

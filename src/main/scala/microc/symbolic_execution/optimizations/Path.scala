@@ -1,8 +1,10 @@
 package microc.symbolic_execution.optimizations
 
 import microc.ast.{AndAnd, BinaryOp, CodeLoc, Expr, Stmt}
-import microc.symbolic_execution.Utility
+import microc.symbolic_execution.{SymbolicState, Utility}
 import microc.symbolic_execution.Value.SymbolicVal
+
+import scala.collection.mutable
 
 //class Path(val statements: List[Stmt], var condition: Expr) {
 //
@@ -27,7 +29,7 @@ import microc.symbolic_execution.Value.SymbolicVal
 //}
 
 
-class Path(var statements: List[Stmt], var condition: Expr, var changes: List[(Expr, (Expr) => ((Expr) => Expr))]) {
+class Path(var statements: List[Stmt], var condition: Expr, var changes: List[(Expr, Expr => Expr => SymbolicState => Expr)], var incrementedVariables: mutable.HashSet[Expr]) {
 
   val iterations = SymbolicVal(CodeLoc(0, 0))
 
@@ -42,14 +44,14 @@ class Path(var statements: List[Stmt], var condition: Expr, var changes: List[(E
   }
 
   def appendedAsPath(path: Path): Path = {
-    var newChanges = List[(Expr, (Expr) => ((Expr) => Expr))]()
+    var newChanges = List[(Expr, Expr => Expr => SymbolicState => Expr)]()
     newChanges = newChanges.appendedAll(changes)
     newChanges = newChanges.appendedAll(path.changes)
 //    changes = newChanges
 //    condition = BinaryOp(AndAnd, condition, path.condition, condition.loc)
 //    statements = statements.appendedAll(path.statements)
 //    this
-    new Path(statements.appendedAll(path.statements), BinaryOp(AndAnd, condition, path.condition, condition.loc), newChanges)
+    new Path(statements.appendedAll(path.statements), BinaryOp(AndAnd, condition, path.condition, condition.loc), newChanges, incrementedVariables)
   }
 
   def simplifiedCondition(): Path = {
@@ -57,7 +59,7 @@ class Path(var statements: List[Stmt], var condition: Expr, var changes: List[(E
     this
   }
 
-  def updatedChanges(name: Expr, change: (Expr) => ((Expr) => Expr)): Path = {
+  def updatedChanges(name: Expr, change: Expr => Expr => SymbolicState => Expr): Path = {
     changes = changes.filter(change => !change._1.equals(name))
     changes = changes.appended(name, change)
     condition = Utility.simplifyArithExpr(condition)

@@ -1,8 +1,8 @@
 package microc.analysis
 
+import microc.analyses.laticce.PowerSetLattice
 import microc.ast.{Alloc, AssignStmt, AstNode, BinaryOp, CallFuncExpr, Decl, Divide, Expr, Identifier, IfStmt, Input, Not, Null, Number, OutputStmt, ReturnStmt, VarStmt, WhileStmt}
 import microc.cfg.{CfgFunExitNode, CfgNode, CfgStmtNode, ProgramCfg}
-import microc.lattice.PowerSetLattice
 import microc.symbolic_execution.Utility
 
 
@@ -24,13 +24,6 @@ class QueryCountAnalyses(cfg: ProgramCfg)(implicit declarations: Declarations) e
     fixPoint(new ProgLattice(Set.empty, new PowerSetLattice[(Decl, Double)](decls)), Directions.Backward)
   }
 
-
-//  override def mergeTheSameStates(state: Set[(Decl, Double)]): Set[(Decl, Double)] = {
-//    HashSet(state.groupBy(_._1).map{
-//      case (key, tuples) =>
-//        tuples.maxBy(_._2)
-//    }.toSeq: _*)
-//  }
 
   override def mergeTheSameStates(state: Set[(Decl, Double)]): Set[(Decl, Double)] = {
     HashSet(state.groupBy(_._1).view.mapValues(_.map(_._2).sum).map(t => (t._1, if (t._2 > 10) 10 else t._2)).toSeq: _*)
@@ -72,15 +65,13 @@ class QueryCountAnalyses(cfg: ProgramCfg)(implicit declarations: Declarations) e
           res = res + ((v, basic + (if (Utility.expressionCanCauseError(expr)) 1 else 0)))
         }
         res
-//      case CfgStmtNode(e: Expr) if node.pred.size > 1 =>
-//        state ++ vars(e)
       case CfgStmtNode(IfStmt(expr, _, _, _)) =>
         for (v <- vars(expr)) {
           val basic = res.find(_._1.name == v.name) match {
             case Some(value) => value._2 + 1
             case None => 1.0
           }
-          res = res + ((v, basic + (if (Utility.expressionCanCauseError(expr)) 1 else 0)))
+          res = res + ((v, basic + (if (Utility.expressionCanCauseError(expr)) 2 else 0)))
         }
         res
       case CfgStmtNode(WhileStmt(expr, _, _)) =>
@@ -89,7 +80,7 @@ class QueryCountAnalyses(cfg: ProgramCfg)(implicit declarations: Declarations) e
             case Some(value) => value._2 + 1
             case None => 1.0
           }
-          res = res + ((v, basic + (if (Utility.expressionCanCauseError(expr)) 1 else 0)))
+          res = res + ((v, basic + (if (Utility.expressionCanCauseError(expr)) 2 else 0)))
         }
         res
       case CfgFunExitNode(_) =>

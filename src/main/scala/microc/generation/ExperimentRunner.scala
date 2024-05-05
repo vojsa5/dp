@@ -1,4 +1,4 @@
-package microc.symbolic_execution.experiments
+package microc.generation
 
 import com.microsoft.z3.Context
 import microc.analyses.RecursionBasedAnalyses
@@ -24,7 +24,7 @@ class ExperimentRunner {
     }
   }
 
-  def getSearchStrategies(covered: Option[mutable.HashSet[CfgNode]], stateHistory: StateHistory): Array[(String, SearchStrategy)] = {
+  def getSearchStrategies(covered: Option[mutable.HashSet[CfgNode]], stateHistory: ExecutionTree): Array[(String, SearchStrategy)] = {
     Array(
 //      ("random", new RandomSearchStrategy()),
 //      ("dfs", new DFSSearchStrategy()),
@@ -35,7 +35,7 @@ class ExperimentRunner {
     )
   }
 
-  def getMergeStrategies(program: Program, cfg: ProgramCfg, covered: Option[mutable.HashSet[CfgNode]], stateHistory: StateHistory): Array[(String, SearchStrategy)] = {
+  def getMergeStrategies(program: Program, cfg: ProgramCfg, covered: Option[mutable.HashSet[CfgNode]], stateHistory: ExecutionTree): Array[(String, SearchStrategy)] = {
     var res = Array[(String, SearchStrategy)]()
     for (searchStrategy <- getSearchStrategies(covered, stateHistory)) {
       res = res.appended(searchStrategy)
@@ -67,7 +67,7 @@ class ExperimentRunner {
 
     println("Experiment started")
     val covered = Some(mutable.HashSet[CfgNode]())
-    val stateHistory = new StateHistory()
+    val stateHistory = new ExecutionTree()
 
 
     val tmp = new RecursionBasedAnalyses()(new SemanticAnalysis().analyze(program))

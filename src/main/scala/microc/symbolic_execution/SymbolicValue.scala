@@ -217,16 +217,16 @@ object Value {
       }
   }
 
-  case class IteVal(trueState: PointerVal, falseState: PointerVal, expr: Expr, loc: Loc) extends Symbolic {
+  case class IteVal(trueVal: PointerVal, falseVal: PointerVal, expr: Expr, loc: Loc) extends Symbolic {
     override def equalsVal(other: Val): Boolean =
       other match {
-        case v@IteVal(t, f, e, _) => trueState.equalsVal(t) && falseState.equalsVal(f) && expr.equals(e)
+        case v@IteVal(t, f, e, _) => trueVal.equalsVal(t) && falseVal.equalsVal(f) && expr.equals(e)
         case _ => false
       }
 
     override def equals(other: Expr): Boolean =
       other match {
-        case v@IteVal(t, f, e, _) => trueState.equalsVal(t) && falseState.equalsVal(f) && expr.equals(e)
+        case v@IteVal(t, f, e, _) => trueVal.equalsVal(t) && falseVal.equalsVal(f) && expr.equals(e)
         case _ => false
       }
   }

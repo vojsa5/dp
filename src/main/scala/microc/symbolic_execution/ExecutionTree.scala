@@ -6,7 +6,7 @@ import scala.collection.mutable
 import scala.util.Random
 
 
-class StateHistory {
+class ExecutionTree {
   val children = mutable.HashMap[SymbolicState, mutable.HashSet[SymbolicState]]()
   var unfinishedPaths = mutable.HashMap[SymbolicState, mutable.HashSet[SymbolicState]]()
   val preds = mutable.HashMap[SymbolicState, SymbolicState]()

@@ -7,7 +7,7 @@ import microc.symbolic_execution.Utility
 
 import scala.collection.mutable
 
-class RecursionBasedAnalyses(implicit declarations: Declarations, beta: Double = 0.7, kappa: Double = 1.0) {
+class RecursionBasedAnalyses(implicit declarations: Declarations, beta: Double = 1.0, kappa: Double = 1.0) {
 
   val mapping = new mutable.HashMap[CfgNode, mutable.HashMap[String, Double]]
 
@@ -81,12 +81,23 @@ class RecursionBasedAnalyses(implicit declarations: Declarations, beta: Double =
         for (id <- Utility.getIdentifiersThatCanCauseError(right)) {
           res.put(id.name, res.getOrElse(id.name, 0.0) + 1.0)
         }
+        var removeLeft = true
         left match {
-          case id@Identifier(_, _) =>
+          case id@Identifier(name, _) =>
             for (idToUpdate <- Utility.getAllIdentifierNames(right)) {
-              res.put(idToUpdate.name, res.getOrElse(id.name, 0.0) + res.getOrElse(idToUpdate.name, 0.0))
+              if (name == idToUpdate.name) {
+                removeLeft = false
+              }
+              else {
+                val newVal = res.getOrElse(id.name, 0.0) + res.getOrElse(idToUpdate.name, 0.0)
+                if (newVal != 0) {
+                  res.put(idToUpdate.name, newVal)
+                }
+              }
             }
-            res.remove(id.name)
+            if (removeLeft) {
+              res.remove(id.name)
+            }
           case _ =>
         }
         mapping.put(cfgNode, res)
@@ -94,38 +105,35 @@ class RecursionBasedAnalyses(implicit declarations: Declarations, beta: Double =
       }
       case w@WhileStmt(expr, _, _) => {
         if (whiles.contains(w)) {
-          return mutable.HashMap()
+          if (mapping.contains(cfgNode)) {
+            return mapping(cfgNode)
+          }
+          return mutable.HashMap[String, Double]()
         }
         val res = mutable.HashMap[String, Double]()
 
         val newWhiles = mutable.HashSet[WhileStmt]()
         newWhiles.addAll(whiles)
         newWhiles.add(w)
-        val newWhiles2 = mutable.HashSet[WhileStmt]()
-        newWhiles2.addAll(whiles)
-        newWhiles2.add(w)
-        for (v <- tmp(cfgNode.succ.minBy(node => node.id), newWhiles)) {
-          res.put(v._1, v._2 * kappa)
+        for (id <- Utility.getAllIdentifierNames(expr)) {
+          res.put(id.name, 1.0)
         }
-        for (v <- tmp(cfgNode.succ.maxBy(node => node.id), newWhiles2)) {
+        for (v <- tmp(cfgNode.succ.maxBy(node => node.id), newWhiles)) {
           res.put(v._1, res.getOrElse(v._1, 0.0) + v._2)
         }
-        for (id <- Utility.getAllIdentifierNames(expr)) {
-          res.put(id.name, res.getOrElse(id.name, 0.0) + 1.0)
+        mapping.put(cfgNode, res)
+        for (v <- tmp(cfgNode.succ.minBy(node => node.id), newWhiles)) {
+          res.put(v._1, res.getOrElse(v._1, 0.0) + v._2 * kappa)
         }
         mapping.put(cfgNode, res)
         res
       }
       case IfStmt(expr, _, _, _) =>
         val res = mutable.HashMap[String, Double]()
-        res.addAll(
-          cfgNode.succ.map(node => tmp(node, whiles))
-            .flatMap(_.toList)
-            .groupBy(_._1)
-            .view
-            .mapValues(_.map(_._2).sum * beta)
-            .toMap
-        )
+        res.addAll(tmp(cfgNode.succ.head, whiles))
+        for (v <- tmp(cfgNode.succ.tail.head, whiles)) {
+          res.put(v._1, res.getOrElse(v._1, 0.0) + v._2)
+        }
         for (id <- Utility.getAllIdentifierNames(expr)) {
           res.put(id.name, res.getOrElse(declarations(id).name, 0.0) + 1.0)
         }

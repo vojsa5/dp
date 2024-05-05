@@ -188,6 +188,12 @@ class SymbolicStore(functionDeclarations: Map[String, FunVal]) {
     frames = frames.dropRight(1)
   }
 
+  def lastFrameVars(): mutable.HashSet[String] = {
+    val res = mutable.HashSet[String]()
+    res.addAll(frames.last.keys)
+    res
+  }
+
   def framesCnt(): Int = {
     frames.length
   }
@@ -621,13 +627,14 @@ class SymbolicStore(functionDeclarations: Map[String, FunVal]) {
     val res = new SymbolicStore(functionDeclarations)
     val thisPointerMapping: mutable.HashMap[Int, Int] = new mutable.HashMap[Int, Int]()
     val otherPointerMapping: mutable.HashMap[Int, Int] = new mutable.HashMap[Int, Int]()
+    val start = System.currentTimeMillis()
     for (i <- 0 until this.frames.size) {
       val thisFrame = this.frames(i)
       val otherFrame = other.frames(i)
       for (variable <- thisFrame.keys) {
         if (otherFrame.contains(variable)) {
           (thisFrame(variable), otherFrame(variable)) match {
-            case (PointerVal(ptr1), PointerVal(ptr2)) => {
+            case (PointerVal(ptr1), PointerVal(ptr2)) =>
               val (addr1, addr2) = moveValues(res, this, other, PointerVal(ptr1), PointerVal(ptr2), thisPointerMapping, otherPointerMapping, pathCondition)
               if (addr1.address == addr2.address) {
                 res.addVar(variable, addr1)
@@ -638,25 +645,7 @@ class SymbolicStore(functionDeclarations: Map[String, FunVal]) {
                 val ite = IteVal(addr1, addr2, pathCondition, CodeLoc(0, 0))
                 res.updateRef(addr, ite)
               }
-            }
-          }
-        }
-        else {
-          thisFrame(variable) match {
-            case PointerVal(ptr) =>
-              val addr = res.storage.getAddress
-              res.addVar(variable, addr)
-              res.updateRef(addr, storage.getVal(PointerVal(ptr)).get)
-          }
-        }
-      }
-      for (variable <- otherFrame.keys) {
-        if (!thisFrame.contains(variable)) {
-          otherFrame(variable) match {
-            case PointerVal(ptr) =>
-              val addr = res.storage.getAddress
-              res.addVar(variable, addr)
-              res.updateRef(addr, other.storage.getVal(PointerVal(ptr)).get)
+
           }
         }
       }
@@ -664,7 +653,9 @@ class SymbolicStore(functionDeclarations: Map[String, FunVal]) {
         res.pushFrame()
       }
     }
-    val r = Utility.simplifyADisjunction(pathCondition, pathCondition2)
-    Some(res, r)
+    val end = System.currentTimeMillis()
+    //val r = Utility.simplifyADisjunction(pathCondition, pathCondition2)//this proved to be too slow
+    System.out.println("MERGING2: ", end - start)
+    Some(res, BinaryOp(OrOr, pathCondition, pathCondition2, CodeLoc(0, 0)))
   }
 }

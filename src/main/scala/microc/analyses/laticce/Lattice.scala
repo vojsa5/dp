@@ -1,4 +1,4 @@
-package microc.lattice
+package microc.analyses.laticce
 
 /** A complete lattice of elements of type 'A'.
  *

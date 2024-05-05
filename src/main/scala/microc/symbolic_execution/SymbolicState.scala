@@ -51,7 +51,7 @@ class SymbolicState(
     this
   }
 
-  def addAlloc(v: Val): PointerVal = {
+  def addVal(v: Val): PointerVal = {
     val ptr = symbolicStore.storage.getAddress
     symbolicStore.storage.addVal(ptr, v)
     ptr
@@ -132,7 +132,7 @@ class SymbolicState(
     res
   }
 
-  def addedLoopTrace(trace: (Expr, mutable.HashMap[Expr, Expr => Expr])): SymbolicState = {
+  def addLoopTrace(trace: (Expr, mutable.LinkedHashMap[Expr, Expr => SymbolicState => Expr], mutable.HashSet[Expr])): SymbolicState = {
     if (programLocation.succ.nonEmpty) {
       programLocation = programLocation.succ.maxBy(node => node.id)
       pathCondition = BinaryOp(AndAnd, pathCondition, trace._1, CodeLoc(0, 0))
@@ -267,9 +267,9 @@ class SymbolicState(
     this
   }
 
-  def applyChange(memoryLoc: Expr, change: Expr => Expr, mapping: mutable.HashMap[Val, Expr]): SymbolicState = {
+  def applyChange(memoryLoc: Expr, change: Expr => SymbolicState => Expr, mapping: mutable.HashMap[Val, Expr]): SymbolicState = {
     val ptr = getMemoryLoc(memoryLoc)
-    val n = SymbolicExpr(change.apply(symbolicStore.getValOfPtr(ptr).get.asInstanceOf[Symbolic]), CodeLoc(0, 0))
+    val n = SymbolicExpr(change.apply(symbolicStore.getValOfPtr(ptr).get.asInstanceOf[Symbolic]).apply(this), CodeLoc(0, 0))
     updateMemoryLocation(ptr, Utility.removeUnnecessarySymbolicExpr(SymbolicExpr(Utility.replaceWithMapping(n.asInstanceOf[Symbolic], mapping, this), CodeLoc(0, 0))))
     this
   }
@@ -279,8 +279,10 @@ class SymbolicState(
   }
 
   def mergeStates(other: SymbolicState): SymbolicState = {
-    Utility.simplifyADisjunction(this.pathCondition, other.pathCondition)
+    val start = System.currentTimeMillis()
     val (symbolicStore, expr) = this.symbolicStore.mergeStores(other.symbolicStore, pathCondition, other.pathCondition).get
+    val end = System.currentTimeMillis()
+    System.out.println("MERGING3: ", end - start)
     new MergedSymbolicState(
       programLocation,
       expr,

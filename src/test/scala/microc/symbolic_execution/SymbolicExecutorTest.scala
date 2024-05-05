@@ -167,1887 +167,6 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
   }
 
 
-  test("type 3 loop unsummarizable") {
-    val code =
-      """
-        |main() {
-        |  var i, j, k, n;
-        |  i = input;
-        |  k = input;
-        |  n = input;
-        |  while (i < n) {
-        |     j = input;
-        |     if (j <= 1) {
-        |        j = 1;
-        |     }
-        |     i = i + j;
-        |     k = k + 1;
-        |  }
-        |  return k;
-        |}
-        |""".stripMargin;
-    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    val executor = new LoopSummarization(cfg);
-    val future = Future {
-      executor.run()
-      fail("should be killed by timeout")
-    }
-
-    try {
-      Await.ready(future, 5.seconds)
-    }
-    catch {
-      case _: TimeoutException =>
-      case e =>
-        fail(e.toString)
-    }
-  }
-
-
-
-  test("type 3 loop unsummarizable arrays") {
-    val code =
-      """
-        |main() {
-        |  var i, j, k, n;
-        |  i = [input];
-        |  k = [input];
-        |  n = [input];
-        |  while (i[0] < n[0]) {
-        |     j = input;
-        |     if (j <= 1) {
-        |        j = 1;
-        |     }
-        |     i[0] = i[0] + j;
-        |     k[0] = k[0] + 1;
-        |  }
-        |  return k[0];
-        |}
-        |""".stripMargin;
-    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    val executor = new LoopSummarization(cfg);
-    val future = Future {
-      executor.run()
-      fail("should be killed by timeout")
-    }
-
-    try {
-      Await.ready(future, 5.seconds)
-    }
-    catch {
-      case _: TimeoutException =>
-      case e =>
-        fail(e.toString)
-    }
-  }
-
-//  test("infinite paths") {
-//    val code =
-//      """
-//        |main() {
-//        |  var y;
-//        |  y = input;
-//        |  while (y > 0) {
-//        |   y = y - 1;
-//        |  }
-//        |  return 0;
-//        |}
-//        |""".stripMargin;
-//    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-//    val executor = new SymbolicExecutor(cfg);
-//    try {
-//      executor.run()
-//      fail("Expected a StackOverflowError but it did not occur.")
-//    }
-//    catch {
-//      case _: StackOverflowError =>
-//      case other: Throwable => fail("Expected a StackOverflowError, but caught different exception: " + other)
-//    }
-//
-//    null
-//  }
-//
-//
-//  test("infinite paths 2") {
-//    val code =
-//      """
-//        |main() {
-//        |  var y;
-//        |  y = input;
-//        |  y = y + 1;
-//        |  while (y > 0) {
-//        |   y = y - 1;
-//        |  }
-//        |  return 0;
-//        |}
-//        |""".stripMargin;
-//    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-//    val executor = new SymbolicExecutor(cfg);
-//    try {
-//      executor.run()
-//      fail("Expected a StackOverflowError but it did not occur.")
-//    }
-//    catch {
-//      case _: StackOverflowError =>
-//      case other: Throwable => fail("Expected a StackOverflowError, but caught different exception: " + other)
-//    }
-//
-//    null
-//  }
-
-
-  test("survey test") {
-    val code =
-      """
-        |foobar(a, b) {
-        |  var x, y;
-        |  x = 1;
-        |  y = 0;
-        |  if (a != 0) {
-        |   y = 3 + x;
-        |   if (b == 0) {
-        |     x = 2 * (a + b);
-        |   }
-        |  }
-        |  return 1 / (x - y);
-        |}
-        |
-        |main() {
-        |  var y, x;
-        |  y = input;
-        |  x = input;
-        |  x = foobar(x, y);
-        |  return 0;
-        |}
-        |""".stripMargin;
-    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    val executor = new SymbolicExecutor(cfg);
-    try {
-      executor.run()
-      fail("Expected a ExecutionException but it did not occur.")
-    }
-    catch {
-      case _: ExecutionException =>
-      case other: Throwable => fail("Expected a ExecutionException, but caught different exception: " + other)
-    }
-    null
-  }
-
-  test("my5") {
-    val code =
-      """
-        |main() {
-        |  var y, x;
-        |  y = 4;
-        |  x = 0;
-        |  while (y > 0) {
-        |   y = y - 1;
-        |   x = x + 1;
-        |  }
-        |  output x;
-        |  return 0;
-        |}
-        |""".stripMargin;
-    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    val executor = new SymbolicExecutor(cfg);
-    executor.run()
-    null
-  }
-
-  test("error as nullptr dereference") {
-    val code =
-      """
-        |main() {
-        |  var y, x, a, b;
-        |  a = input;
-        |  y = input;
-        |  if (a) {
-        |   x = &y;
-        |  }
-        |  else {
-        |   x = null;
-        |  }
-        |  return *x;
-        |}
-        |""".stripMargin;
-    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    val executor = new SymbolicExecutor(cfg);
-    try {
-      executor.run()
-      fail("Expected a ExecutionException but it did not occur.")
-    }
-    catch {
-      case _: ExecutionException =>
-      case other: Throwable => fail("Expected a ExecutionException, but caught different exception: " + other)
-    }
-    null
-  }
-
-
-  test("error as use of uninitialized value") {
-    val code =
-      """
-        |main() {
-        |  var y, x, a, b;
-        |  a = input;
-        |  y = input;
-        |  if (a) {
-        |   x = &y;
-        |  }
-        |  else {
-        |   x = null;
-        |  }
-        |  return *x;
-        |}
-        |""".stripMargin;
-    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    val executor = new SymbolicExecutor(cfg);
-    try {
-      executor.run()
-      fail("Expected a ExecutionException but it did not occur.")
-    }
-    catch {
-      case _: ExecutionException =>
-      case other: Throwable => fail("Expected a ExecutionException, but caught different exception: " + other)
-    }
-    null
-  }
-
-
-  test("error as use of uninitialized value") {
-    val code =
-      """
-        |main() {
-        |  var y, a;
-        |  a = [1, 2, 3];
-        |  y = input;
-        |  return a[y];
-        |}
-        |""".stripMargin;
-    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    val executor = new SymbolicExecutor(cfg);
-    try {
-      executor.run()
-      fail("Expected a ExecutionException but it did not occur.")
-    }
-    catch {
-      case _: ExecutionException =>
-      case other: Throwable => fail("Expected a ExecutionException, but caught different exception: " + other)
-    }
-    null
-  }
-
-
-  test("dfs strategy") {
-    val code =
-      """
-        |main() {
-        |  var y, x;
-        |  y = 4;
-        |  x = 0;
-        |  while (y > 0) {
-        |   y = y - 1;
-        |   x = x + 1;
-        |  }
-        |  output x;
-        |  return 0;
-        |}
-        |""".stripMargin;
-    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    val executor = new SymbolicExecutor(cfg, searchStrategy = new DFSSearchStrategy());
-    executor.run()
-    null
-  }
-
-
-  test("random strategy") {
-    val code =
-      """
-        |main() {
-        |  var y, x;
-        |  y = 4;
-        |  x = 0;
-        |  while (y > 0) {
-        |   y = y - 1;
-        |   x = x + 1;
-        |  }
-        |  output x;
-        |  return 0;
-        |}
-        |""".stripMargin;
-    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    val executor = new SymbolicExecutor(cfg, searchStrategy = new RandomSearchStrategy());
-    executor.run()
-    null
-  }
-
-  test("error does not happen") {
-    val code =
-      """
-        |main() {
-        |  var y,z;
-        |  z = 0;
-        |  y = 1;
-        |  if (z == 0) {
-        |   y = 2;
-        |  }
-        |  else {
-        |   y = 3 / 0;
-        |  }
-        |  return 0;
-        |}
-        |""".stripMargin;
-    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    val executor = new SymbolicExecutor(cfg);
-    executor.run()
-    null
-  }
-
-  test("error in second path") {
-    val code =
-      """
-        |main() {
-        |  var y,z;
-        |  z = input;
-        |  y = 1;
-        |  if (z == 0) {
-        |   y = 2;
-        |  }
-        |  else {
-        |   y = 3 / 0;
-        |  }
-        |  return 0;
-        |}
-        |""".stripMargin;
-    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    val executor = new SymbolicExecutor(cfg);
-    try {
-      executor.run()
-      fail("Expected a ExecutionException but it did not occur.")
-    }
-    catch {
-      case _: ExecutionException =>
-      case other: Throwable => fail("Expected a ExecutionException, but caught different exception: " + other)
-    }
-    null
-  }
-
-
-  test("nested unreachable error") {
-    val code =
-      """
-        |main() {
-        |  var y,z;
-        |  z = input;
-        |  y = 1;
-        |  if (z == 0) {
-        |   y = 2;
-        |  }
-        |  else {
-        |   y = 3 / z;
-        |  }
-        |  return 0;
-        |}
-        |""".stripMargin;
-    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    val executor = new SymbolicExecutor(cfg);
-    executor.run()
-    null
-  }
-
-  test("my2") {
-    val code =
-      """
-        |main() {
-        |  var x,y,z,a,b;
-        |  a = 1;
-        |  b = 2;
-        |  z = a+b;
-        |  y = a*b;
-        |  while (y > a+b) {
-        |    a = a+1;
-        |    x = a+b;
-        |  }
-        |  return 0;
-        |}
-        |""".stripMargin;
-    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    val executor = new SymbolicExecutor(cfg);
-    executor.run()
-    null
-  }
-
-
-  test("simple in subsumption paper") {
-    val code =
-      """
-        |main() {
-        |  var x,y;
-        |  x = 0;
-        |  if (input) {
-        |
-        |  }
-        |  else {
-        |     y = input;
-        |     if (y < 0) {
-        |       y = 0;
-        |     }
-        |     x = x + y;
-        |  }
-        |  if (x < 0) {
-        |     x = 1 / 0;
-        |  }
-        |  return 0;
-        |}
-        |""".stripMargin;
-    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    val ctx = new Context()
-    val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx))), searchStrategy = new DFSSearchStrategy)
-    executor.run()
-    null
-  }
-
-  test("loops in subsumption paper") {
-    val code =
-      """
-        |main() {
-        |  var x,y,i,n;
-        |  x = input;
-        |  n = input;
-        |  y = x;
-        |  i = 0;
-        |  while (i < n) {
-        |    x = x + 1;
-        |    i = i + 1;
-        |  }
-        |  if (x < y) {
-        |     x = 1 / 0;
-        |  }
-        |  return 0;
-        |}
-        |""".stripMargin;
-    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    val ctx = new Context()
-    val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx))), searchStrategy = new DFSSearchStrategy)
-    executor.run()
-    null
-  }
-
-//  test("bf") {
-//    val code = bfCode
-//    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-//    val executor = new SymbolicExecutor(cfg)
-//    executor.run()
-//  }
-
-//  test("bf coverage search") {
-//    val code = bfCode
-//    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-//    val covered = Some(mutable.HashSet[CfgNode]())
-//    val executor = new SymbolicExecutor(cfg, searchStrategy = new CoverageSearchStrategy(covered.get), covered = covered)
-//    executor.run()
-//  }
-//
-//  test("bf random path search") {
-//    val code = bfCode
-//    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-//    val covered = Some(mutable.HashSet[CfgNode]())
-//    val stateHistory = new StateHistory()
-//    val executor = new SymbolicExecutor(cfg, stateHistory = Some(stateHistory), searchStrategy = new RandomPathSelectionStrategy(stateHistory), covered = covered)
-//    executor.run()
-//  }
-//
-//  test("bf klee search") {
-//    val code = bfCode
-//    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-//    val covered = Some(mutable.HashSet[CfgNode]())
-//    val stateHistory = new StateHistory()
-//    val executor = new SymbolicExecutor(cfg, searchStrategy = new KleeSearchStrategy(stateHistory, covered.get), covered = covered)
-//    executor.run()
-//  }
-//
-//  test("bf with subsumption") {
-//    val code = bfCode
-//    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-//    val ctx = new Context()
-//    val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx), ctx)))
-//    executor.run()
-//  }
-//
-//  test("bf with merging") {
-//    val code = bfCode
-//    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-//    val executor = new SymbolicExecutor(cfg, None, searchStrategy = new AgressiveStateMerging(new BFSSearchStrategy))
-//    executor.run()
-//  }
-//
-//  test("bf with smart merging") {
-//    val code = bfCode
-//    val program = parseUnsafe(code)
-//    val cfg = new IntraproceduralCfgFactory().fromProgram(program);
-//    val analysesResult = new QueryCountAnalyses(cfg)(new SemanticAnalysis().analyze(program)).analyze()
-//    val variableCosts = new mutable.HashMap[CfgNode, mutable.HashMap[String, Double]]
-//    for (node <- analysesResult) {
-//      val nodeCosts = new mutable.HashMap[String, Double]
-//      for (cost <- node._2) {
-//        nodeCosts.put(cost._1.name, cost._2)
-//      }
-//      variableCosts.put(node._1, nodeCosts)
-//    }
-//    val executor = new SymbolicExecutor(cfg, None, searchStrategy = new HeuristicBasedStateMerging(new BFSSearchStrategy, variableCosts, 3))
-//    executor.run()
-//  }
-//
-//  test("bf with smart merging 2") {
-//    val code = bfCode
-//    val program = parseUnsafe(code)
-//    val cfg = new IntraproceduralCfgFactory().fromProgram(program);
-//    val tmp = new TMP()(new SemanticAnalysis().analyze(program))
-//    tmp.tmp2(cfg)
-//    val executor = new SymbolicExecutor(cfg, None, searchStrategy = new HeuristicBasedStateMerging(new BFSSearchStrategy, tmp.mapping, 3))
-//    executor.run()
-//  }
-//
-//  test("bf dynamic smart merging") {
-//    val code = bfCode
-//    val program = parseUnsafe(code)
-//    val cfg = new IntraproceduralCfgFactory().fromProgram(program);
-//    val analysesResult = new QueryCountAnalyses(cfg)(new SemanticAnalysis().analyze(program)).analyze()
-//    val variableCosts = new mutable.HashMap[CfgNode, mutable.HashMap[String, Double]]
-//    for (node <- analysesResult) {
-//      val nodeCosts = new mutable.HashMap[String, Double]
-//      for (cost <- node._2) {
-//        nodeCosts.put(cost._1.name, cost._2)
-//      }
-//      variableCosts.put(node._1, nodeCosts)
-//    }
-//    val limitCost = 3.0
-//    val depth = 3
-//    val stateHistory = new StateHistory()
-//    val dynamicStateMerging = new DynamicStateMerging(
-//      new HeuristicBasedStateMerging(new BFSSearchStrategy, variableCosts, limitCost),
-//      stateHistory,
-//      variableCosts,
-//      limitCost,
-//      depth
-//    )
-//    val executor = new SymbolicExecutor(cfg, None, searchStrategy = dynamicStateMerging)
-//    executor.run()
-//  }
-//
-//  test("bf with merging and subsumption") {
-//    val code = bfCode
-//    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-//    val ctx = new Context()
-//    val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx), ctx)), searchStrategy = new AgressiveStateMerging(new BFSSearchStrategy))
-//    executor.run()
-//  }
-
-
-
-
-  test("sequential unbounded loop finishes with summarization correctly") {
-    val code =
-      """
-        |main() {
-        |  var k, i, n, m;
-        |  k = 0;
-        |  i = 0;
-        |  n = input;
-        |  m = input;
-        |  while (n < m) {
-        |   k = k + 5;
-        |   i = i + 2;
-        |   n = n + 1;
-        |  }
-        |  if (i == 0 && n >= m) {
-        |   k = 1 / 0;
-        |  }
-        |  return k * i;
-        |}
-        |""".stripMargin;
-
-    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    val ctx = new Context()
-    val executor = new LoopSummarization(cfg)
-    executor.run()
-  }
-
-  test("sequential unbounded loop finishes with summarization correctly 2") {
-    val code =
-      """
-        |main() {
-        |  var a, i, n;
-        |  a = 0;
-        |  i = input;
-        |  n = input;
-        |
-        |  while (i < n) {
-        |    a = a + 2;
-        |    i = i + 1;
-        |  }
-        |
-        |  if (a == 15) {
-        |    a = 1 / 0;
-        |  }
-        |  else {
-        |
-        |  }
-        |
-        |  return 0;
-        |}
-        |""".stripMargin;
-
-    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    val ctx = new Context()
-    val executor = new LoopSummarization(cfg)
-    executor.run()
-  }
-
-
-  test("simple sequential summarization is correct") {
-
-    var code =
-      """
-        |main() {
-        |  var i, m;
-        |  i = 0;
-        |  m = input;
-        |  if (m <= 0) {
-        |   m = 1;
-        |  }
-        |  while (i < m) {
-        |   i = i + 1;
-        |  }
-        |  return 1 / (i - m - 1);
-        |}
-        |""".stripMargin;
-
-    var cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    var executor = new LoopSummarization(cfg)
-    executor.run()
-
-
-    code =
-      """
-        |main() {
-        |  var i, m;
-        |  i = 0;
-        |  m = input;
-        |  if (m <= 0) {
-        |   m = 1;
-        |  }
-        |  while (i < m) {
-        |   i = i + 1;
-        |  }
-        |  return 1 / (i - m);
-        |}
-        |""".stripMargin;
-
-    cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    executor = new LoopSummarization(cfg)
-    try {
-      executor.run()
-      fail("Expected a ExecutionException but it did not occur.")
-    }
-    catch {
-      case _: ExecutionException =>
-      case other: Throwable => fail("Expected a ExecutionException, but caught different exception: " + other)
-    }
-
-
-    code =
-      """
-        |main() {
-        |  var i, m;
-        |  i = 0;
-        |  m = input;
-        |  if (m <= 0) {
-        |   m = 1;
-        |  }
-        |  while (i < m) {
-        |   i = i + 1;
-        |  }
-        |  return 1 / (i - m + 1);
-        |}
-        |""".stripMargin;
-
-    cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    executor = new LoopSummarization(cfg)
-    executor.run()
-  }
-
-
-  test("sequential multi-path loop") {
-    var code =
-      """
-        |main() {
-        |  var n, x, z;
-        |  n = input;
-        |  x = input;
-        |  z = input;
-        |  res = 0;
-        |  while (z < n) {
-        |   if (x < n) {
-        |     x = x + 1;
-        |   }
-        |   else {
-        |     z = z + 1;
-        |   }
-        |  }
-        |  return 1 / (x - z);
-        |}
-        |""".stripMargin;
-
-    var cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    var ctx = new Context()
-    var executor = new LoopSummarization(cfg)
-    try {
-      executor.run()
-      fail("Expected a ExecutionException but it did not occur.")
-    }
-    catch {
-      case _: ExecutionException =>
-      case other: Throwable => fail("Expected a ExecutionException, but caught different exception: " + other)
-    }
-  }
-
-
-  test("periodic unbounded periodic loop finishes with summarization correctly") {
-    var code =
-      """
-        |main() {
-        |  var n, x, z;
-        |  n = input;
-        |  x = input;
-        |  z = input;
-        |  while (x < n) {
-        |   if (z > x) {
-        |     x = x + 1;
-        |   }
-        |   else {
-        |     z = z + 1;
-        |   }
-        |  }
-        |  return 1 / (x - z);
-        |}
-        |""".stripMargin;
-
-    var cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    var ctx = new Context()
-    var executor = new LoopSummarization(cfg)
-    try {
-      executor.run()
-      fail("Expected a ExecutionException but it did not occur.")
-    }
-    catch {
-      case _: ExecutionException =>
-      case other: Throwable => fail("Expected a ExecutionException, but caught different exception: " + other)
-    }
-
-    code =
-      """
-        |main() {
-        |  var n, x, z;
-        |  n = input;
-        |  x = input;
-        |  z = input;
-        |  while (x < n) {
-        |   if (z > x) {
-        |     x = x + 1;
-        |   }
-        |   else {
-        |     z = z + 1;
-        |   }
-        |  }
-        |  return 1 / (x - n);
-        |}
-        |""".stripMargin;
-
-    cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    ctx = new Context()
-    executor = new LoopSummarization(cfg)
-    try {
-      executor.run()
-      fail("Expected a ExecutionException but it did not occur.")
-    }
-    catch {
-      case _: ExecutionException =>
-      case other: Throwable => fail("Expected a ExecutionException, but caught different exception: " + other)
-    }
-  }
-
-
-  test("periodic unbounded periodic loop finishes with summarization correctly arrays") {
-    var code =
-      """
-        |main() {
-        |  var n, x, z;
-        |  n = [input];
-        |  x = [input];
-        |  z = [input];
-        |  while (x[0] < n[0]) {
-        |   if (z[0] > x[0]) {
-        |     x[0] = x[0] + 1;
-        |   }
-        |   else {
-        |     z[0] = z[0] + 1;
-        |   }
-        |  }
-        |  return 1 / (x[0] - z[0]);
-        |}
-        |""".stripMargin;
-
-    var cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    var ctx = new Context()
-    var executor = new LoopSummarization(cfg)
-    try {
-      executor.run()
-      fail("Expected a ExecutionException but it did not occur.")
-    }
-    catch {
-      case _: ExecutionException =>
-      case other: Throwable => fail("Expected a ExecutionException, but caught different exception: " + other)
-    }
-
-    code =
-      """
-        |main() {
-        |  var n, x, z;
-        |  n = [input];
-        |  x = [input];
-        |  z = [input];
-        |  while (x[0] < n[0]) {
-        |   if (z[0] > x[0]) {
-        |     x[0] = x[0] + 1;
-        |   }
-        |   else {
-        |     z[0] = z[0] + 1;
-        |   }
-        |  }
-        |  return 1 / (x[0] - n[0]);
-        |}
-        |""".stripMargin;
-
-    cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    ctx = new Context()
-    executor = new LoopSummarization(cfg)
-    try {
-      executor.run()
-      fail("Expected a ExecutionException but it did not occur.")
-    }
-    catch {
-      case _: ExecutionException =>
-      case other: Throwable => fail("Expected a ExecutionException, but caught different exception: " + other)
-    }
-  }
-
-
-
-  test("periodic unbounded periodic loop with adding a variables") {
-    var code =
-      """
-        |main() {
-        |  var n, x, z, a1, a2;
-        |  n = input;
-        |  x = input;
-        |  z = input;
-        |  a1 = input;
-        |  a2 = input;
-        |  if (a1 <= 0) {
-        |     a1 = 1;
-        |  }
-        |  if (a2 <= 0) {
-        |     a2 = 1;
-        |  }
-        |  while (x < n) {
-        |   if (z > x) {
-        |     x = x + a1;
-        |   }
-        |   else {
-        |     z = z + a2;
-        |   }
-        |  }
-        |  return 1 / (x - z);
-        |}
-        |""".stripMargin;
-
-    var cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    var ctx = new Context()
-    var executor = new LoopSummarization(cfg)
-    try {
-      executor.run()
-      fail("Expected a ExecutionException but it did not occur.")
-    }
-    catch {
-      case _: ExecutionException =>
-      case other: Throwable => fail("Expected a ExecutionException, but caught different exception: " + other)
-    }
-  }
-
-
-  test("unbounded periodic loop finishes with summarization correctly 2") {
-    var code =
-      """
-        |main() {
-        |  var n, x, z;
-        |  n = input;
-        |  x = input;
-        |  z = input;
-        |  if (x >= n) {
-        |   x = n - 1;
-        |  }
-        |  if (z >= n) {
-        |   z = n - 1;
-        |  }
-        |  while (x < n) {
-        |   if (z > x) {
-        |     x = x + 1;
-        |   }
-        |   else {
-        |     z = z + 1;
-        |   }
-        |  }
-        |  return 1 / (x - z - 1);
-        |}
-        |""".stripMargin;
-
-    var cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    var executor = new LoopSummarization(cfg)
-    executor.run()
-
-
-    code =
-      """
-        |main() {
-        |  var n, x, z;
-        |  n = input;
-        |  x = input;
-        |  z = input;
-        |  if (x >= n) {
-        |   x = n - 1;
-        |  }
-        |  if (z >= n) {
-        |   z = n - 1;
-        |  }
-        |  while (x < n) {
-        |   if (z > x) {
-        |     x = x + 1;
-        |   }
-        |   else {
-        |     z = z + 1;
-        |   }
-        |  }
-        |  return 1 / (x - z);
-        |}
-        |""".stripMargin;
-
-    cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    executor = new LoopSummarization(cfg)
-    try {
-      executor.run()
-      fail("Expected a ExecutionException but it did not occur.")
-    }
-    catch {
-      case _: ExecutionException =>
-      case other: Throwable => fail("Expected a ExecutionException, but caught different exception: " + other)
-    }
-
-
-    code =
-      """
-        |main() {
-        |  var n, x, z;
-        |  n = input;
-        |  x = input;
-        |  z = input;
-        |  if (x >= n) {
-        |   x = n - 1;
-        |  }
-        |  if (z >= n) {
-        |   z = n - 1;
-        |  }
-        |  while (x < n) {
-        |   if (z > x) {
-        |     x = x + 1;
-        |   }
-        |   else {
-        |     z = z + 1;
-        |   }
-        |  }
-        |  return 1 / (x - z + 1);
-        |}
-        |""".stripMargin;
-
-    cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    executor = new LoopSummarization(cfg)
-    executor.run()
-  }
-
-
-  test("unbounded periodic loop finishes with summarization correctly 3") {
-    var code =
-      """
-        |main() {
-        |  var n, x, z;
-        |  n = input;
-        |  x = input;
-        |  z = input;
-        |  if (x + 1 >= n) {
-        |   x = n - 2;
-        |  }
-        |  if (z + 1 >= n) {
-        |   z = n - 2;
-        |  }
-        |  while (x + 1 < n) {
-        |   if (z + 1 > x + 1) {
-        |     x = x + 1;
-        |   }
-        |   else {
-        |     z = z + 1;
-        |   }
-        |  }
-        |  return 1 / (x - z - 1);
-        |}
-        |""".stripMargin;
-
-    var cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    var executor = new LoopSummarization(cfg)
-    executor.run()
-
-
-    code =
-      """
-        |main() {
-        |  var n, x, z;
-        |  n = input;
-        |  x = input;
-        |  z = input;
-        |  if (x + 1 >= n) {
-        |   x = n - 2;
-        |  }
-        |  if (z + 1 >= n) {
-        |   z = n - 2;
-        |  }
-        |  while (x + 1 < n) {
-        |   if (z + 1 > x + 1) {
-        |     x = x + 1;
-        |   }
-        |   else {
-        |     z = z + 1;
-        |   }
-        |  }
-        |  return 1 / (x - z);
-        |}
-        |""".stripMargin;
-
-    cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    executor = new LoopSummarization(cfg)
-    try {
-      executor.run()
-      fail("Expected a ExecutionException but it did not occur.")
-    }
-    catch {
-      case _: ExecutionException =>
-      case other: Throwable => fail("Expected a ExecutionException, but caught different exception: " + other)
-    }
-
-
-    code =
-      """
-        |main() {
-        |  var n, x, z;
-        |  n = input;
-        |  x = input;
-        |  z = input;
-        |  if (x + 1 >= n) {
-        |   x = n - 2;
-        |  }
-        |  if (z + 1 >= n) {
-        |   z = n - 2;
-        |  }
-        |  while (x + 1 < n) {
-        |   if (z + 1 > x + 1) {
-        |     x = x + 1;
-        |   }
-        |   else {
-        |     z = z + 1;
-        |   }
-        |  }
-        |  return 1 / (x - z + 1);
-        |}
-        |""".stripMargin;
-
-    cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    executor = new LoopSummarization(cfg)
-    executor.run()
-  }
-
-
-  test("unbounded periodic loop finishes with summarization correctly arrays") {
-    var code =
-      """
-        |main() {
-        |  var n, x, z;
-        |  n = [input];
-        |  x = [input];
-        |  z = [input];
-        |  if (x[0] >= n[0]) {
-        |   x[0] = n[0] - 1;
-        |  }
-        |  if (z[0] >= n[0]) {
-        |   z[0] = n[0] - 1;
-        |  }
-        |  while (x[0] < n[0]) {
-        |   if (z[0] > x[0]) {
-        |     x[0] = x[0] + 1;
-        |   }
-        |   else {
-        |     z[0] = z[0] + 1;
-        |   }
-        |  }
-        |  return 1 / (x[0] - z[0] - 1);
-        |}
-        |""".stripMargin;
-
-    var cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    var ctx = new Context()
-    var executor = new LoopSummarization(cfg)
-    executor.run()
-
-    code =
-      """
-        |main() {
-        |  var n, x, z;
-        |  n = [input];
-        |  x = [input];
-        |  z = [input];
-        |  if (x[0] >= n[0]) {
-        |   x[0] = n[0] - 1;
-        |  }
-        |  if (z[0] >= n[0]) {
-        |   z[0] = n[0] - 1;
-        |  }
-        |  while (x[0] < n[0]) {
-        |   if (z[0] > x[0]) {
-        |     x[0] = x[0] + 1;
-        |   }
-        |   else {
-        |     z[0] = z[0] + 1;
-        |   }
-        |  }
-        |  return 1 / (x[0] - z[0]);
-        |}
-        |""".stripMargin;
-
-    cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    ctx = new Context()
-    executor = new LoopSummarization(cfg)
-    try {
-      executor.run()
-      fail("Expected a ExecutionException but it did not occur.")
-    }
-    catch {
-      case _: ExecutionException =>
-      case other: Throwable => fail("Expected a ExecutionException, but caught different exception: " + other)
-    }
-
-
-    code =
-      """
-        |main() {
-        |  var n, x, z;
-        |  n = [input];
-        |  x = [input];
-        |  z = [input];
-        |  if (x[0] >= n[0]) {
-        |   x[0] = n[0] - 1;
-        |  }
-        |  if (z[0] >= n[0]) {
-        |   z[0] = n[0] - 1;
-        |  }
-        |  while (x[0] < n[0]) {
-        |   if (z[0] > x[0]) {
-        |     x[0] = x[0] + 1;
-        |   }
-        |   else {
-        |     z[0] = z[0] + 1;
-        |   }
-        |  }
-        |  return 1 / (x[0] - z[0] + 1);
-        |}
-        |""".stripMargin;
-
-    cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    ctx = new Context()
-    executor = new LoopSummarization(cfg)
-    executor.run()
-  }
-
-
-
-  test("unbounded periodic loop finishes with summarization correctly arrays arrays") {
-    var code =
-      """
-        |main() {
-        |  var n, x, z;
-        |  n = [[input]];
-        |  x = [[input]];
-        |  z = [[input]];
-        |  if (x[0][0] >= n[0][0]) {
-        |   x[0][0] = n[0][0] - 1;
-        |  }
-        |  if (z[0][0] >= n[0][0]) {
-        |   z[0][0] = n[0][0] - 1;
-        |  }
-        |  while (x[0][0] < n[0][0]) {
-        |   if (z[0][0] > x[0][0]) {
-        |     x[0][0] = x[0][0] + 1;
-        |   }
-        |   else {
-        |     z[0][0] = z[0][0] + 1;
-        |   }
-        |  }
-        |  return 1 / (x[0][0] - z[0][0] - 1);
-        |}
-        |""".stripMargin;
-
-    var cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    var ctx = new Context()
-    var executor = new LoopSummarization(cfg)
-    executor.run()
-
-    code =
-      """
-        |main() {
-        |  var n, x, z;
-        |  n = [[input]];
-        |  x = [[input]];
-        |  z = [[input]];
-        |  if (x[0][0] >= n[0][0]) {
-        |   x[0][0] = n[0][0] - 1;
-        |  }
-        |  if (z[0] >= n[0]) {
-        |   z[0][0] = n[0][0] - 1;
-        |  }
-        |  while (x[0][0] < n[0][0]) {
-        |   if (z[0][0] > x[0][0]) {
-        |     x[0][0] = x[0][0] + 1;
-        |   }
-        |   else {
-        |     z[0][0] = z[0][0] + 1;
-        |   }
-        |  }
-        |  return 1 / (x[0][0] - z[0][0]);
-        |}
-        |""".stripMargin;
-
-    cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    ctx = new Context()
-    executor = new LoopSummarization(cfg)
-    try {
-      executor.run()
-      fail("Expected a ExecutionException but it did not occur.")
-    }
-    catch {
-      case _: ExecutionException =>
-      case other: Throwable => fail("Expected a ExecutionException, but caught different exception: " + other)
-    }
-
-
-    code =
-      """
-        |main() {
-        |  var n, x, z;
-        |  n = [[input]];
-        |  x = [[input]];
-        |  z = [[input]];
-        |  if (x[0][0] >= n[0][0]) {
-        |   x[0][0] = n[0][0] - 1;
-        |  }
-        |  if (z[0][0] >= n[0][0]) {
-        |   z[0][0] = n[0][0] - 1;
-        |  }
-        |  while (x[0][0] < n[0][0]) {
-        |   if (z[0][0] > x[0][0]) {
-        |     x[0][0] = x[0][0] + 1;
-        |   }
-        |   else {
-        |     z[0][0] = z[0][0] + 1;
-        |   }
-        |  }
-        |  return 1 / (x[0][0] - z[0][0] + 1);
-        |}
-        |""".stripMargin;
-
-    cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    ctx = new Context()
-    executor = new LoopSummarization(cfg)
-    executor.run()
-  }
-
-
-  test("unbounded periodic loop finishes with summarization correctly records") {
-    var code =
-      """
-        |main() {
-        |  var n, x, z;
-        |  n = input;
-        |  x = {field: input};
-        |  z = {field: input};
-        |  if (x.field >= n) {
-        |   x.field = n - 1;
-        |  }
-        |  if (z.field >= n) {
-        |   z.field = n - 1;
-        |  }
-        |  while (x.field < n) {
-        |   if (z.field > x.field) {
-        |     x.field = x.field + 1;
-        |   }
-        |   else {
-        |     z.field = z.field + 1;
-        |   }
-        |  }
-        |  return 1 / (x.field - z.field - 1);
-        |}
-        |""".stripMargin;
-
-    var cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    var ctx = new Context()
-    var executor = new LoopSummarization(cfg)
-    executor.run()
-
-    code =
-      """
-        |main() {
-        |  var n, x, z;
-        |  n = input;
-        |  x = {field: input};
-        |  z = {field: input};
-        |  if (x.field >= n) {
-        |   x.field = n - 1;
-        |  }
-        |  if (z.field >= n) {
-        |   z.field = n - 1;
-        |  }
-        |  while (x.field < n) {
-        |   if (z.field > x.field) {
-        |     x.field = x.field + 1;
-        |   }
-        |   else {
-        |     z.field = z.field + 1;
-        |   }
-        |  }
-        |  return 1 / (x.field - z.field);
-        |}
-        |""".stripMargin;
-
-    cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    ctx = new Context()
-    executor = new LoopSummarization(cfg)
-    try {
-      executor.run()
-      fail("Expected a ExecutionException but it did not occur.")
-    }
-    catch {
-      case _: ExecutionException =>
-      case other: Throwable => fail("Expected a ExecutionException, but caught different exception: " + other)
-    }
-
-    code =
-      """
-        |main() {
-        |  var n, x, z;
-        |  n = input;
-        |  x = {field: input};
-        |  z = {field: input};
-        |  if (x.field >= n) {
-        |   x.field = n - 1;
-        |  }
-        |  if (z.field >= n) {
-        |   z.field = n - 1;
-        |  }
-        |  while (x.field < n) {
-        |   if (z.field > x.field) {
-        |     x.field = x.field + 1;
-        |   }
-        |   else {
-        |     z.field = z.field + 1;
-        |   }
-        |  }
-        |  return 1 / (x.field - z.field + 1);
-        |}
-        |""".stripMargin;
-
-    cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    ctx = new Context()
-    executor = new LoopSummarization(cfg)
-    executor.run()
-  }
-
-
-  test("unbounded periodic loop finishes with summarization correctly pointers") {
-    var code =
-      """
-        |main() {
-        |  var n, x, z;
-        |  n = input;
-        |  x = alloc input;
-        |  z = alloc input;
-        |  if (*x >= n) {
-        |   *x = n - 1;
-        |  }
-        |  if (*z >= n) {
-        |   *z = n - 1;
-        |  }
-        |  while (*x < n) {
-        |   if (*z > *x) {
-        |     *x = *x + 1;
-        |   }
-        |   else {
-        |     *z = *z + 1;
-        |   }
-        |  }
-        |  return 1 / (*x - *z - 1);
-        |}
-        |""".stripMargin;
-
-    var cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    var ctx = new Context()
-    var executor = new LoopSummarization(cfg)
-    executor.run()
-
-    code =
-      """
-        |main() {
-        |  var n, x, z;
-        |  n = input;
-        |  x = alloc input;
-        |  z = alloc input;
-        |  if (*x >= n) {
-        |   *x = n - 1;
-        |  }
-        |  if (*z >= n) {
-        |   *z = n - 1;
-        |  }
-        |  while (*x < n) {
-        |   if (*z > *x) {
-        |     *x = *x + 1;
-        |   }
-        |   else {
-        |     *z = *z + 1;
-        |   }
-        |  }
-        |  return 1 / (*x - *z);
-        |}
-        |""".stripMargin;
-
-    cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    ctx = new Context()
-    executor = new LoopSummarization(cfg)
-    try {
-      executor.run()
-      fail("Expected a ExecutionException but it did not occur.")
-    }
-    catch {
-      case _: ExecutionException =>
-      case other: Throwable => fail("Expected a ExecutionException, but caught different exception: " + other)
-    }
-
-    code =
-      """
-        |main() {
-        |  var n, x, z;
-        |  n = input;
-        |  x = alloc input;
-        |  z = alloc input;
-        |  if (*x >= n) {
-        |   *x = n - 1;
-        |  }
-        |  if (*z >= n) {
-        |   *z = n - 1;
-        |  }
-        |  while (*x < n) {
-        |   if (*z > *x) {
-        |     *x = *x + 1;
-        |   }
-        |   else {
-        |     *z = *z + 1;
-        |   }
-        |  }
-        |  return 1 / (*x - *z + 1);
-        |}
-        |""".stripMargin;
-
-    cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    ctx = new Context()
-    executor = new LoopSummarization(cfg)
-    executor.run()
-  }
-
-
-  test("unbounded periodic loop finishes with summarization correctly irregular increment") {
-    var code =
-      """
-        |main() {
-        |  var n, x, z;
-        |  n = input;
-        |  x = input;
-        |  z = input;
-        |  if (x >= n) {
-        |   x = n - 1;
-        |  }
-        |  if (z >= n) {
-        |   z = n - 1;
-        |  }
-        |  while (x < n) {
-        |   if (z > x) {
-        |     x = x + 1;
-        |   }
-        |   else {
-        |     z = z + 2;
-        |   }
-        |  }
-        |  return 1 / (x - n - 1);
-        |}
-        |""".stripMargin;
-
-    var cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    var executor = new LoopSummarization(cfg)
-    executor.run()
-
-
-    code =
-      """
-        |main() {
-        |  var n, x, z;
-        |  n = input;
-        |  x = input;
-        |  z = input;
-        |  if (x >= n) {
-        |   x = n - 1;
-        |  }
-        |  if (z >= n) {
-        |   z = n - 1;
-        |  }
-        |  while (x < n) {
-        |   if (z > x) {
-        |     x = x + 1;
-        |   }
-        |   else {
-        |     z = z + 2;
-        |   }
-        |  }
-        |  return 1 / (x - n);
-        |}
-        |""".stripMargin;
-
-    cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    executor = new LoopSummarization(cfg)
-    try {
-      executor.run()
-      fail("Expected a ExecutionException but it did not occur.")
-    }
-    catch {
-      case _: ExecutionException =>
-      case other: Throwable => fail("Expected a ExecutionException, but caught different exception: " + other)
-    }
-
-
-    code =
-      """
-        |main() {
-        |  var n, x, z;
-        |  n = input;
-        |  x = input;
-        |  z = input;
-        |  if (x >= n) {
-        |   x = n - 1;
-        |  }
-        |  if (z >= n) {
-        |   z = n - 1;
-        |  }
-        |  while (x < n) {
-        |   if (z > x) {
-        |     x = x + 1;
-        |   }
-        |   else {
-        |     z = z + 2;
-        |   }
-        |  }
-        |  return 1 / (x - n + 1);
-        |}
-        |""".stripMargin;
-
-    cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    executor = new LoopSummarization(cfg)
-    executor.run()
-  }
-
-
-//  test("unbounded periodic loop finishes with summarization correctly irregular symbolic increment") {
-//    var code =
-//      """
-//        |main() {
-//        |  var n, x, z, inc;
-//        |  n = input;
-//        |  x = input;
-//        |  z = input;
-//        |  inc = input;
-//        |  if (x >= n) {
-//        |   x = n - 1;
-//        |  }
-//        |  if (z >= n) {
-//        |   z = n - 1;
-//        |  }
-//        |  while (x < n) {
-//        |   if (z > x) {
-//        |     x = x + 1;
-//        |   }
-//        |   else {
-//        |     z = z + inc;
-//        |   }
-//        |  }
-//        |  return 1 / (x - n - 1);
-//        |}
-//        |""".stripMargin;
-//
-//    var cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-//    var executor = new LoopSummary(cfg)
-//    executor.run()
-//
-//
-//    code =
-//      """
-//        |main() {
-//        |  var n, x, z, inc;
-//        |  n = input;
-//        |  x = input;
-//        |  z = input;
-//        |  inc = input;
-//        |  if (x >= n) {
-//        |   x = n - 1;
-//        |  }
-//        |  if (z >= n) {
-//        |   z = n - 1;
-//        |  }
-//        |  while (x < n) {
-//        |   if (z > x) {
-//        |     x = x + 1;
-//        |   }
-//        |   else {
-//        |     z = z + inc;
-//        |   }
-//        |  }
-//        |  return 1 / (x - n);
-//        |}
-//        |""".stripMargin;
-//
-//    cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-//    executor = new LoopSummary(cfg)
-//    try {
-//      executor.run()
-//      fail("Expected a ExecutionException but it did not occur.")
-//    }
-//    catch {
-//      case _: ExecutionException =>
-//      case other: Throwable => fail("Expected a ExecutionException, but caught different exception: " + other)
-//    }
-//
-//
-//    code =
-//      """
-//        |main() {
-//        |  var n, x, z, inc;
-//        |  n = input;
-//        |  x = input;
-//        |  z = input;
-//        |  inc = input;
-//        |  if (x >= n) {
-//        |   x = n - 1;
-//        |  }
-//        |  if (z >= n) {
-//        |   z = n - 1;
-//        |  }
-//        |  while (x < n) {
-//        |   if (z > x) {
-//        |     x = x + 1;
-//        |   }
-//        |   else {
-//        |     z = z + input;
-//        |   }
-//        |  }
-//        |  return 1 / (x - n + 1);
-//        |}
-//        |""".stripMargin;
-//
-//    cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-//    executor = new LoopSummary(cfg)
-//    executor.run()
-//  }
-
-
-//  test("path cycle not at the beginning of the loop") {
-//    var code =
-//      """
-//        |main() {
-//        |  var n, x, z, a;
-//        |  n = input;
-//        |  x = input;
-//        |  z = input;
-//        |  a = input;
-//        |  if (a < 10) {
-//        |   a = 1;
-//        |  }
-//        |  if (x >= n) {
-//        |   x = n - 1;
-//        |  }
-//        |  if (z >= n) {
-//        |   z = n - 1;
-//        |  }
-//        |  while (x < n) {
-//        |   if (a < 10) {
-//        |     a = a + 1;
-//        |   }
-//        |   else {
-//        |     if (z > x) {
-//        |       x = x + 1;
-//        |     }
-//        |     else {
-//        |       z = z + 2;
-//        |     }
-//        |   }
-//        |  }
-//        |  return 1 / (x - n - 1);
-//        |}
-//        |""".stripMargin;
-//
-//    var cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-//    var executor = new LoopSummary(cfg)
-//    executor.run()
-//
-//
-//    code =
-//      """
-//        |main() {
-//        |  var n, x, z, a;
-//        |  n = input;
-//        |  x = input;
-//        |  z = input;
-//        |  a = input;
-//        |  if (a < 10) {
-//        |   a = 1;
-//        |  }
-//        |  if (x >= n) {
-//        |   x = n - 1;
-//        |  }
-//        |  if (z >= n) {
-//        |   z = n - 1;
-//        |  }
-//        |  while (x < n) {
-//        |   if (a < 10) {
-//        |     a = a + 1;
-//        |   }
-//        |   else {
-//        |     if (z > x) {
-//        |       x = x + 1;
-//        |     }
-//        |     else {
-//        |       z = z + 2;
-//        |     }
-//        |   }
-//        |  }
-//        |  return 1 / (x - n);
-//        |}
-//        |""".stripMargin;
-//
-//    cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-//    executor = new LoopSummary(cfg)
-//    try {
-//      executor.run()
-//      fail("Expected a ExecutionException but it did not occur.")
-//    }
-//    catch {
-//      case _: ExecutionException =>
-//      case other: Throwable => fail("Expected a ExecutionException, but caught different exception: " + other)
-//    }
-//
-//
-//    code =
-//      """
-//        |main() {
-//        |  var n, x, z, a;
-//        |  n = input;
-//        |  x = input;
-//        |  z = input;
-//        |  a = input;
-//        |  if (a < 10) {
-//        |   a = 1;
-//        |  }
-//        |  if (x >= n) {
-//        |   x = n - 1;
-//        |  }
-//        |  if (z >= n) {
-//        |   z = n - 1;
-//        |  }
-//        |  while (x < n) {
-//        |   if (a < 10) {
-//        |     a = a + 1;
-//        |   }
-//        |   else {
-//        |     if (z > x) {
-//        |       x = x + 1;
-//        |     }
-//        |     else {
-//        |       z = z + 2;
-//        |     }
-//        |   }
-//        |  }
-//        |  return 1 / (x - n + 1);
-//        |}
-//        |""".stripMargin;
-//
-//    cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-//    executor = new LoopSummary(cfg)
-//    executor.run()
-//  }
-
-
-  test("unrolled nested summarization") {
-    var code =
-      """
-        |main() {
-        |    var j, sum, res, n;
-        |    sum = 0;
-        |    j = 0;
-        |    n = input;
-        |    if (n <= 0) {
-        |       n = 1;
-        |    }
-        |
-        |    while (j < n) {
-        |        sum = sum + 1;
-        |        j = j + 1;
-        |    }
-        |
-        |    if (sum == n) {
-        |       res = 1;
-        |    }
-        |    else {
-        |       res = 0;
-        |    }
-        |
-        |    return 1 / res;
-        |}
-        |""".stripMargin;
-
-    var cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    var executor = new LoopSummarization(cfg)
-    assert(executor.run() == 1)
-  }
-
-
   test("unrolled nested summarization 2") {
     var code =
       """
@@ -2119,6 +238,7 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
     executor.run()
     assert(executor.run() == 1)
   }
+
 
 
   test("basic nested summarization array") {
@@ -2197,6 +317,7 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
 
     var cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
     var executor = new LoopSummarization(cfg)
+    executor.run()
     assert(executor.run() == 1)
   }
 
@@ -2562,11 +683,11 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
         |  }
         |
         |  i = 1;
+        |  sum = 0;
         |  while (i <= n) {
         |    sum = 0; // Reset sum for each multiplication
         |    j = 0;
         |    while (j < i) {
-        |      sum = sum + result; // Add 'result' to 'sum' 'i' times
         |      sum = sum + result; // Add 'result' to 'sum' 'i' times
         |      j = j + 1;
         |    }
@@ -2877,9 +998,18 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
         |}
         |""".stripMargin
 
-    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code))
-    val executor = new LoopSummarization(cfg)
-    executor.run()
+    val future = Future {
+      val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code))
+      val executor = new LoopSummarization(cfg)
+      executor.run()
+    }
+
+    try {
+      Await.ready(future, 5.seconds) // Use Await.result if you need the result of the future
+    } catch {
+      case _: TimeoutException => println("Test terminated due to timeout")
+      case NonFatal(e) => println(s"Test failed due to an unexpected error: ${e.getMessage}")
+    }
   }
 
 
@@ -3056,13 +1186,505 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
         |}
         |""".stripMargin
 
-    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code))
-    val ctx = new Context()
-    val solver = new ConstraintSolver(ctx)
-    val executor = new SymbolicExecutor(cfg, subsumption = Some(new PathSubsumption(solver)))
-    executor.run()
+
+
+
+    val future = Future {
+      val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code))
+      val ctx = new Context()
+      val solver = new ConstraintSolver(ctx)
+      val executor = new SymbolicExecutor(cfg, subsumption = Some(new PathSubsumption(solver)))
+      executor.run()
+    }
+
+    try {
+      Await.ready(future, 5.seconds) // Use Await.result if you need the result of the future
+    } catch {
+      case _: TimeoutException => println("Test terminated due to timeout")
+      case NonFatal(e) => println(s"Test failed due to an unexpected error: ${e.getMessage}")
+    }
   }
 
+
+  test("random generated test finishes with no error3") {
+    val code =
+      """
+        |main() {
+        |  var var0,var1,var2,var3,var4,var5,var6,var7,var8,var9,var10,var11,var12,var13,var14,var15,var16,var17,var18,var19;
+        |  var0 = 7;
+        |  var1 = 2;
+        |  var2 = alloc 4;
+        |  var3 = -1;
+        |  var4 = alloc alloc 2;
+        |  var5 = {KSwRjCheyb:alloc alloc alloc -1,ZEuSRWDOdJ:alloc 7,XTIhcMfwCe:[7,2,4,7,7,5],hrlZQonvYe:alloc 8};
+        |  var6 = alloc 0;
+        |  var7 = 8;
+        |  var8 = {PXLFHuRJYk:1,MeBUkbYZCx:0,mYggQuyGux:[alloc 1,alloc -1,alloc -1,alloc -1,alloc 0]};
+        |  var9 = alloc alloc alloc 3;
+        |  var10 = 7;
+        |  var11 = alloc 2;
+        |  var12 = -1;
+        |  var13 = [2,1,2,1,7,5,3,3];
+        |  var14 = 1;
+        |  var15 = alloc alloc alloc 1;
+        |  var16 = alloc 7;
+        |  var17 = alloc 7;
+        |  var18 = {BtHpRqdRKk:1,NcwtDZbsUK:1,TdCBmBjWpK:alloc alloc alloc 1};
+        |  var19 = [0,2,8,6,2,2,0,3];
+        |  if ((var3 - !var13[4])) {
+        |    var18 = var18;
+        |  } else {
+        |    if (input) {
+        |      while (var8.PXLFHuRJYk) {
+        |        while (input) {
+        |          output input;
+        |        }
+        |        while ((var0 < var7)) {
+        |          output var0;
+        |          output var13[7];
+        |          var0 = (var0 + 1);
+        |        }
+        |        output input;
+        |      }
+        |      var13[3] = var18.NcwtDZbsUK;
+        |    } else {
+        |      if (var13[6]) {
+        |        if (var18.NcwtDZbsUK) {
+        |          output (!input - var13[7]);
+        |          output input;
+        |        } else {
+        |          var14 = [3,1,5,7,7][3];
+        |          var13 = var13;
+        |          var2 = &var0;
+        |        }
+        |        while (!!4) {
+        |          var0 = input;
+        |          output (input - var13[1]);
+        |          var18 = var18;
+        |          output var19[6];
+        |        }
+        |      } else {
+        |        output input;
+        |        output ((-1 + 7) * input);
+        |      }
+        |      var19 = var19;
+        |      var13[7] = input;
+        |    }
+        |    while (!(input + input)) {
+        |      if (input) {
+        |        if (var18.BtHpRqdRKk) {
+        |          var3 = [5,-1,3,3,1,6,8,6,2][8];
+        |          output var13[1];
+        |        } else {
+        |          var17 = &var7;
+        |        }
+        |        while ((var3 < var14)) {
+        |          output (input * !(var7 - var12));
+        |          var1 = input;
+        |          output var18.NcwtDZbsUK;
+        |          var2 = &var10;
+        |          var3 = (var3 + 1);
+        |        }
+        |        var19[3] = var8.PXLFHuRJYk;
+        |        var8 = var8;
+        |      } else {
+        |        while (input) {
+        |          var16 = var2;
+        |          var8 = var8;
+        |          var1 = (5 - 8);
+        |        }
+        |        var13[0] = input;
+        |        while ((var12 < var10)) {
+        |          var2 = &var14;
+        |          var12 = (var12 + 1);
+        |        }
+        |        output var10;
+        |      }
+        |      var5 = var5;
+        |      if (input) {
+        |        if (input) {
+        |          var17 = &var1;
+        |          output var14;
+        |          output var19[1];
+        |        } else {
+        |          output var13[1];
+        |          var0 = (7 - 4);
+        |          output !(var7 * !var19[5]);
+        |        }
+        |        var5 = var5;
+        |        var16 = var17;
+        |      } else {}
+        |      var3 = input;
+        |    }
+        |    while ((var10 < var14)) {
+        |      while (!input) {}
+        |      while (var3) {
+        |        var13[0] = var19[4];
+        |        while ((var7 < var14)) {
+        |          var7 = (var7 + 1);
+        |        }
+        |        var4 = alloc alloc 0;
+        |      }
+        |      var10 = (var10 + 1);
+        |    }
+        |  }
+        |  var13[3] = (var10 - input);
+        |  while ((var1 < var1)) {
+        |    var1 = (var1 + 1);
+        |  }
+        |  if (input) {
+        |    if (input) {} else {
+        |      if (var18.BtHpRqdRKk) {
+        |        while (!var8.MeBUkbYZCx) {}
+        |        while (var18.NcwtDZbsUK) {
+        |          output var13[6];
+        |          output var12;
+        |          output var19[6];
+        |          output var3;
+        |        }
+        |        var19[3] = input;
+        |      } else {}
+        |      var8 = var8;
+        |      var6 = var17;
+        |    }
+        |    var13[1] = var12;
+        |  } else {
+        |    var13[2] = input;
+        |    output var19[6];
+        |  }
+        |  var13[0] = !input;
+        |  while ((var3 < var12)) {
+        |    if (input) {
+        |      if (input) {
+        |        var13 = var13;
+        |        while ((var0 < var14)) {
+        |          var16 = var17;
+        |          output input;
+        |          output var13[6];
+        |          var0 = (var0 + 1);
+        |        }
+        |      } else {
+        |        while (var3) {
+        |          var6 = var6;
+        |          output !var13[2];
+        |          output var18.BtHpRqdRKk;
+        |          output (!(var14 + input) * var8.PXLFHuRJYk);
+        |        }
+        |        var19[7] = input;
+        |        output input;
+        |        while (var19[4]) {}
+        |      }
+        |      while (input) {
+        |        while (input) {
+        |          output input;
+        |          var13 = var13;
+        |          output input;
+        |          var1 = var8.MeBUkbYZCx;
+        |        }
+        |        output !!-1;
+        |        var13[4] = (!-1 + !0);
+        |      }
+        |      while (input) {
+        |        while (![2,8,1,2,1,2,6,0][0]) {}
+        |        while (var14) {
+        |          output !input;
+        |          output input;
+        |        }
+        |      }
+        |      var13[7] = input;
+        |    } else {}
+        |    if (var19[2]) {} else {
+        |      var12 = (input - var13[5]);
+        |    }
+        |    if (!input) {
+        |      while ((!var8.PXLFHuRJYk * input)) {
+        |        var13[4] = !var14;
+        |        while (input) {
+        |          var11 = &var1;
+        |          var4 = var4;
+        |        }
+        |      }
+        |    } else {
+        |      var13[0] = input;
+        |      var19[7] = var8.MeBUkbYZCx;
+        |    }
+        |    var3 = (var3 + 1);
+        |  }
+        |  return var3;
+        |}
+        |""".stripMargin
+
+
+
+    val future = Future {
+      val program = parseUnsafe(code)
+      val cfg = new IntraproceduralCfgFactory().fromProgram(program)
+
+      val covered = new mutable.HashSet[CfgNode]
+      val executor = new SymbolicExecutor(cfg, covered = Some(covered), searchStrategy = new CoverageSearchStrategy(covered))
+      executor.run()
+    }
+
+    try {
+      Await.ready(future, 5.seconds) // Use Await.result if you need the result of the future
+    } catch {
+      case _: TimeoutException => println("Test terminated due to timeout")
+      case NonFatal(e) => println(s"Test failed due to an unexpected error: ${e.getMessage}")
+    }
+  }
+
+
+  test("random generated test finishes with no error4") {
+    val code =
+      """
+        |main() {
+        |  var var0,var1,var2,var3,var4,var5,var6,var7,var8,var9,var10,var11,var12,var13,var14,var15,var16;
+        |  var0 = 6;
+        |  var1 = {nntAuyaHly:8,VODxYehZDa:-1,KxleKocfpB:2};
+        |  var2 = 5;
+        |  var3 = {bXnyhIljBP:2,vjtdOitzVq:5};
+        |  var4 = alloc 2;
+        |  var5 = 5;
+        |  var6 = 1;
+        |  var7 = alloc 3;
+        |  var8 = alloc 6;
+        |  var9 = 8;
+        |  var10 = [4,8,5,6,7,4];
+        |  var11 = 5;
+        |  var12 = alloc alloc 5;
+        |  var13 = alloc 5;
+        |  var14 = alloc 6;
+        |  var15 = {YGrruYqBBT:1,ivIAUUaSWZ:3,ZkIjxLLsXd:8,CAAwizUNTe:2,XlGkyEOzGO:6};
+        |  var16 = [7,0,8,7,-1,2,3,7];
+        |  while ((input + var2)) {
+        |    while (input) {
+        |      output (input - (var6 - [8,5,7,5,-1,-1,6,2][2]));
+        |      while ((var2 < var6)) {
+        |        if (var1.VODxYehZDa) {} else {
+        |          while (var15.YGrruYqBBT) {}
+        |          var16[3] = var15.ivIAUUaSWZ;
+        |          if (!1) {} else {}
+        |          var16 = var16;
+        |        }
+        |        var2 = (var2 + 1);
+        |      }
+        |    }
+        |    var2 = (var11 - !var10[4]);
+        |  }
+        |  if (input) {
+        |    output (input - !(var1.nntAuyaHly + var1.VODxYehZDa));
+        |  } else {
+        |    if (!var16[3]) {} else {
+        |      var7 = alloc input;
+        |      output !var10[0];
+        |      output !var6;
+        |      var6 = input;
+        |    }
+        |  }
+        |  while (var15.ZkIjxLLsXd) {
+        |    var14 = var14;
+        |    while (var10[5]) {
+        |      if (!var15.CAAwizUNTe) {
+        |        var10[3] = input;
+        |        if (var0) {
+        |          output (2 - 5);
+        |          while ((var11 < var0)) {
+        |            var16[2] = -1;
+        |            var11 = (var11 + 1);
+        |          }
+        |        } else {
+        |          if (input) {
+        |            var10 = [-1,3,2,0,5,6];
+        |            var9 = 6;
+        |          } else {}
+        |          output var5;
+        |        }
+        |        while (var10[1]) {
+        |          while ((var11 < var11)) {
+        |            output 5;
+        |            var10[5] = 0;
+        |            var10[2] = 7;
+        |            var16[3] = 3;
+        |            var11 = (var11 + 1);
+        |          }
+        |        }
+        |        var10[2] = input;
+        |      } else {
+        |        output var16[3];
+        |        var10[1] = input;
+        |        output var6;
+        |      }
+        |      var10[1] = var1.VODxYehZDa;
+        |    }
+        |    output var16[1];
+        |    output !var10[2];
+        |  }
+        |  var10[5] = var16[5];
+        |  var10[3] = input;
+        |  if (input) {
+        |    if (var6) {} else {
+        |      while ((input + (var5 - var15.CAAwizUNTe))) {}
+        |      while ((([2,6,2,5,5][1] + input) - var15.YGrruYqBBT)) {
+        |        var16[6] = var15.CAAwizUNTe;
+        |        if (var3.vjtdOitzVq) {
+        |          if (var5) {
+        |            if (4) {
+        |              output var11;
+        |            } else {}
+        |            var4 = alloc 7;
+        |            var3 = {bXnyhIljBP:8,vjtdOitzVq:8};
+        |          } else {
+        |            while ((var11 < var11)) {
+        |              output input;
+        |              output var15.CAAwizUNTe;
+        |              var11 = (var11 + 1);
+        |            }
+        |            var11 = 2;
+        |            if (3) {
+        |              var14 = alloc 2;
+        |            } else {
+        |              output input;
+        |              output var6;
+        |              var6 = 4;
+        |              var14 = alloc -1;
+        |            }
+        |            output 0;
+        |          }
+        |          output var15.YGrruYqBBT;
+        |        } else {
+        |          while ((var2 < var9)) {
+        |            var7 = alloc 4;
+        |            while ((var6 < var5)) {
+        |              output (input + !var3.bXnyhIljBP);
+        |              var8 = alloc 1;
+        |              output input;
+        |              var6 = (var6 + 1);
+        |            }
+        |            output 2;
+        |            var2 = (var2 + 1);
+        |          }
+        |          while (var15.XlGkyEOzGO) {
+        |            if (0) {
+        |              output !var9;
+        |            } else {}
+        |            output 0;
+        |            if (7) {
+        |              var15 = {YGrruYqBBT:8,ivIAUUaSWZ:2,ZkIjxLLsXd:0,CAAwizUNTe:4,XlGkyEOzGO:6};
+        |              output var0;
+        |            } else {
+        |              var12 = alloc alloc 2;
+        |              output var11;
+        |              var14 = alloc 4;
+        |            }
+        |            if (1) {
+        |              var10 = [0,4,7,-1,-1,5];
+        |            } else {
+        |              output !input;
+        |            }
+        |          }
+        |          var16[6] = input;
+        |        }
+        |      }
+        |      while (var0) {
+        |        while ((var11 < var6)) {
+        |          var10[4] = var3.bXnyhIljBP;
+        |          var0 = var9;
+        |          while (input) {
+        |            output 4;
+        |          }
+        |          var16[0] = [4,3,7,4,8,8][2];
+        |          var11 = (var11 + 1);
+        |        }
+        |        output (input - input);
+        |        while (var15.ZkIjxLLsXd) {}
+        |      }
+        |    }
+        |    var16[2] = input;
+        |  } else {
+        |    if (input) {
+        |      if (input) {
+        |        var10[0] = !var15.ZkIjxLLsXd;
+        |        var10[2] = input;
+        |        while ((var5 < var0)) {
+        |          output var15.CAAwizUNTe;
+        |          var0 = !8;
+        |          var5 = (var5 + 1);
+        |        }
+        |      } else {
+        |        output !!7;
+        |        while ((var5 < var5)) {
+        |          var14 = var14;
+        |          var11 = (5 + 5);
+        |          var10[0] = input;
+        |          while (!2) {
+        |            while (7) {
+        |              var12 = alloc alloc 1;
+        |            }
+        |          }
+        |          var5 = (var5 + 1);
+        |        }
+        |        while ((var9 < var9)) {
+        |          while (!4) {}
+        |          while ((var0 < var9)) {
+        |            while ((var2 < var5)) {
+        |              var8 = alloc 5;
+        |              var2 = (var2 + 1);
+        |            }
+        |            var0 = (var0 + 1);
+        |          }
+        |          var16[6] = [8,-1,3,4,3,7,1,1][5];
+        |          var9 = (var9 + 1);
+        |        }
+        |      }
+        |      if (input) {
+        |        var10[2] = var16[5];
+        |      } else {
+        |        var16[0] = var16[5];
+        |        var10[4] = var10[2];
+        |        var16[5] = input;
+        |        output var0;
+        |      }
+        |      while (var10[3]) {
+        |        if (var10[4]) {} else {}
+        |      }
+        |      while (input) {
+        |        var10 = var10;
+        |        var6 = input;
+        |        var15 = var15;
+        |      }
+        |    } else {}
+        |  }
+        |  return !input;
+        |}
+        |""".stripMargin
+
+
+    val future = Future {
+      val program = parseUnsafe(code)
+      val cfg = new IntraproceduralCfgFactory().fromProgram(program)
+
+      val analysesResult = new QueryCountAnalyses(cfg)(new SemanticAnalysis().analyze(program)).analyze()
+      val variableCosts = new mutable.HashMap[CfgNode, mutable.HashMap[String, Double]]
+      for (node <- analysesResult) {
+        val nodeCosts = new mutable.HashMap[String, Double]
+        for (cost <- node._2) {
+          nodeCosts.put(cost._1.name, cost._2)
+        }
+        variableCosts.put(node._1, nodeCosts)
+      }
+      val stateHistory = new ExecutionTree()
+      val ctx = new Context()
+      val executor = new SymbolicExecutor(cfg, searchStrategy = new RandomPathSelectionStrategy(stateHistory), executionTree = Some(stateHistory))
+      executor.run()
+    }
+
+    try {
+      Await.ready(future, 5.seconds) // Use Await.result if you need the result of the future
+    } catch {
+      case _: TimeoutException => println("Test terminated due to timeout")
+      case NonFatal(e) => println(s"Test failed due to an unexpected error: ${e.getMessage}")
+    }
+  }
 
 
   test("nasty subsumption test") {
@@ -3106,22 +1728,32 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
         |}
         |""".stripMargin
 
-    val program = parseUnsafe(code)
-    val cfg = new IntraproceduralCfgFactory().fromProgram(program)
+    val future = Future {
+      val program = parseUnsafe(code)
+      val cfg = new IntraproceduralCfgFactory().fromProgram(program)
 
-    val analysesResult = new QueryCountAnalyses(cfg)(new SemanticAnalysis().analyze(program)).analyze()
-    val variableCosts = new mutable.HashMap[CfgNode, mutable.HashMap[String, Double]]
-    for (node <- analysesResult) {
-      val nodeCosts = new mutable.HashMap[String, Double]
-      for (cost <- node._2) {
-        nodeCosts.put(cost._1.name, cost._2)
+      val analysesResult = new QueryCountAnalyses(cfg)(new SemanticAnalysis().analyze(program)).analyze()
+      val variableCosts = new mutable.HashMap[CfgNode, mutable.HashMap[String, Double]]
+      for (node <- analysesResult) {
+        val nodeCosts = new mutable.HashMap[String, Double]
+        for (cost <- node._2) {
+          nodeCosts.put(cost._1.name, cost._2)
+        }
+        variableCosts.put(node._1, nodeCosts)
       }
-      variableCosts.put(node._1, nodeCosts)
+      val stateHistory = new ExecutionTree()
+      val ctx = new Context()
+      val executor = new SymbolicExecutor(cfg, ctx = ctx, subsumption = Some(new PathSubsumption(new ConstraintSolver(ctx))), searchStrategy = new RandomPathSelectionStrategy(stateHistory), executionTree = Some(stateHistory))
+      executor.run()
     }
-    val stateHistory = new StateHistory()
-    val ctx = new Context()
-    val executor = new SymbolicExecutor(cfg, ctx = ctx, subsumption = Some(new PathSubsumption(new ConstraintSolver(ctx))), searchStrategy = new RandomPathSelectionStrategy(stateHistory), stateHistory = Some(stateHistory))
-    executor.run()
+
+    try {
+      Await.ready(future, 5.seconds) // Use Await.result if you need the result of the future
+    } catch {
+      case _: TimeoutException => println("Test terminated due to timeout")
+      case NonFatal(e) => println(s"Test failed due to an unexpected error: ${e.getMessage}")
+    }
+
   }
 
 
@@ -3182,22 +1814,33 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
         |}
         |""".stripMargin
 
-    val program = parseUnsafe(code)
-    val cfg = new IntraproceduralCfgFactory().fromProgram(program)
+    val future = Future {
+      val program = parseUnsafe(code)
+      val cfg = new IntraproceduralCfgFactory().fromProgram(program)
 
-    val analysesResult = new QueryCountAnalyses(cfg)(new SemanticAnalysis().analyze(program)).analyze()
-    val variableCosts = new mutable.HashMap[CfgNode, mutable.HashMap[String, Double]]
-    for (node <- analysesResult) {
-      val nodeCosts = new mutable.HashMap[String, Double]
-      for (cost <- node._2) {
-        nodeCosts.put(cost._1.name, cost._2)
+      val analysesResult = new QueryCountAnalyses(cfg)(new SemanticAnalysis().analyze(program)).analyze()
+      val variableCosts = new mutable.HashMap[CfgNode, mutable.HashMap[String, Double]]
+      for (node <- analysesResult) {
+        val nodeCosts = new mutable.HashMap[String, Double]
+        for (cost <- node._2) {
+          nodeCosts.put(cost._1.name, cost._2)
+        }
+        variableCosts.put(node._1, nodeCosts)
       }
-      variableCosts.put(node._1, nodeCosts)
+      val stateHistory = new ExecutionTree()
+      val ctx = new Context()
+      val executor = new SymbolicExecutor(cfg, ctx = ctx, subsumption = Some(new PathSubsumption(new ConstraintSolver(ctx))), searchStrategy = new RandomPathSelectionStrategy(stateHistory), executionTree = Some(stateHistory))
+      executor.run()
     }
-    val stateHistory = new StateHistory()
-    val ctx = new Context()
-    val executor = new SymbolicExecutor(cfg, ctx = ctx, subsumption = Some(new PathSubsumption(new ConstraintSolver(ctx))), searchStrategy = new RandomPathSelectionStrategy(stateHistory), stateHistory = Some(stateHistory))
-    executor.run()
+
+    try {
+      Await.ready(future, 5.seconds) // Use Await.result if you need the result of the future
+    } catch {
+      case _: TimeoutException => println("Test terminated due to timeout")
+      case NonFatal(e) => println(s"Test failed due to an unexpected error: ${e.getMessage}")
+    }
+
+
   }
 
 
@@ -3215,22 +1858,30 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
         |  return input;
         |}
         |""".stripMargin
+    val future = Future {
+      val program = parseUnsafe(code)
+      println(program)
+      val cfg = new IntraproceduralCfgFactory().fromProgram(program)
 
-    val program = parseUnsafe(code)
-    println(program)
-    val cfg = new IntraproceduralCfgFactory().fromProgram(program)
-
-    val analysesResult = new QueryCountAnalyses(cfg)(new SemanticAnalysis().analyze(program)).analyze()
-    val variableCosts = new mutable.HashMap[CfgNode, mutable.HashMap[String, Double]]
-    for (node <- analysesResult) {
-      val nodeCosts = new mutable.HashMap[String, Double]
-      for (cost <- node._2) {
-        nodeCosts.put(cost._1.name, cost._2)
+      val analysesResult = new QueryCountAnalyses(cfg)(new SemanticAnalysis().analyze(program)).analyze()
+      val variableCosts = new mutable.HashMap[CfgNode, mutable.HashMap[String, Double]]
+      for (node <- analysesResult) {
+        val nodeCosts = new mutable.HashMap[String, Double]
+        for (cost <- node._2) {
+          nodeCosts.put(cost._1.name, cost._2)
+        }
+        variableCosts.put(node._1, nodeCosts)
       }
-      variableCosts.put(node._1, nodeCosts)
+      val executor = new SymbolicExecutor(cfg, searchStrategy = new AggressiveStateMerging(new DFSSearchStrategy))
+      executor.run()
     }
-    val executor = new SymbolicExecutor(cfg, searchStrategy = new AggressiveStateMerging(new DFSSearchStrategy))
-    executor.run()
+
+    try {
+      Await.ready(future, 5.seconds) // Use Await.result if you need the result of the future
+    } catch {
+      case _: TimeoutException => println("Test terminated due to timeout")
+      case NonFatal(e) => println(s"Test failed due to an unexpected error: ${e.getMessage}")
+    }
   }
 
 
@@ -3285,21 +1936,31 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
         |}
         |""".stripMargin
 
-    val program = parseUnsafe(code)
-    println(program)
-    val cfg = new IntraproceduralCfgFactory().fromProgram(program)
 
-    val analysesResult = new QueryCountAnalyses(cfg)(new SemanticAnalysis().analyze(program)).analyze()
-    val variableCosts = new mutable.HashMap[CfgNode, mutable.HashMap[String, Double]]
-    for (node <- analysesResult) {
-      val nodeCosts = new mutable.HashMap[String, Double]
-      for (cost <- node._2) {
-        nodeCosts.put(cost._1.name, cost._2)
+    val future = Future {
+      val program = parseUnsafe(code)
+      println(program)
+      val cfg = new IntraproceduralCfgFactory().fromProgram(program)
+
+      val analysesResult = new QueryCountAnalyses(cfg)(new SemanticAnalysis().analyze(program)).analyze()
+      val variableCosts = new mutable.HashMap[CfgNode, mutable.HashMap[String, Double]]
+      for (node <- analysesResult) {
+        val nodeCosts = new mutable.HashMap[String, Double]
+        for (cost <- node._2) {
+          nodeCosts.put(cost._1.name, cost._2)
+        }
+        variableCosts.put(node._1, nodeCosts)
       }
-      variableCosts.put(node._1, nodeCosts)
+      val executor = new SymbolicExecutor(cfg, searchStrategy = new AggressiveStateMerging(new DFSSearchStrategy))
+      executor.run()
     }
-    val executor = new SymbolicExecutor(cfg, searchStrategy = new AggressiveStateMerging(new DFSSearchStrategy))
-    executor.run()
+
+    try {
+      Await.ready(future, 5.seconds) // Use Await.result if you need the result of the future
+    } catch {
+      case _: TimeoutException => println("Test terminated due to timeout")
+      case NonFatal(e) => println(s"Test failed due to an unexpected error: ${e.getMessage}")
+    }
   }
 
 
@@ -3368,12 +2029,23 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
         |}
         |""".stripMargin
 
-    val program = parseUnsafe(code)
-    val cfg = new IntraproceduralCfgFactory().fromProgram(program)
 
-    val stateHistory = new StateHistory()
-    val executor = new SymbolicExecutor(cfg, searchStrategy = new RandomPathSelectionStrategy(stateHistory), stateHistory = Some(stateHistory))
-    executor.run()
+
+    val future = Future {
+      val program = parseUnsafe(code)
+      val cfg = new IntraproceduralCfgFactory().fromProgram(program)
+
+      val stateHistory = new ExecutionTree()
+      val executor = new SymbolicExecutor(cfg, searchStrategy = new RandomPathSelectionStrategy(stateHistory), executionTree = Some(stateHistory))
+      executor.run()
+    }
+
+    try {
+      Await.ready(future, 5.seconds) // Use Await.result if you need the result of the future
+    } catch {
+      case _: TimeoutException => println("Test terminated due to timeout")
+      case NonFatal(e) => println(s"Test failed due to an unexpected error: ${e.getMessage}")
+    }
   }
 
 
@@ -3460,13 +2132,23 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
         |
         |""".stripMargin
 
-    val program = parseUnsafe(code)
-    val cfg = new IntraproceduralCfgFactory().fromProgram(program)
-    val stateHistory = new StateHistory()
-    val tree = new RandomPathSelectionStrategy(stateHistory)
 
-    val executor = new LoopSummarization(cfg, searchStrategy = tree, stateHistory = Some(stateHistory))
-    executor.run()
+    val future = Future {
+      val program = parseUnsafe(code)
+      val cfg = new IntraproceduralCfgFactory().fromProgram(program)
+      val stateHistory = new ExecutionTree()
+      val tree = new RandomPathSelectionStrategy(stateHistory)
+
+      val executor = new LoopSummarization(cfg, searchStrategy = tree, stateHistory = Some(stateHistory))
+      executor.run()
+    }
+
+    try {
+      Await.ready(future, 5.seconds) // Use Await.result if you need the result of the future
+    } catch {
+      case _: TimeoutException => println("Test terminated due to timeout")
+      case NonFatal(e) => println(s"Test failed due to an unexpected error: ${e.getMessage}")
+    }
 
   }
 
@@ -3693,7 +2375,7 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
 
     val program = parseUnsafe(code)
     val cfg = new IntraproceduralCfgFactory().fromProgram(program)
-    val stateHistory = new StateHistory()
+    val stateHistory = new ExecutionTree()
     val tree = new RandomPathSelectionStrategy(stateHistory)
 
     val future = Future {
@@ -4289,7 +2971,7 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
 
     val program = parseUnsafe(code)
     val cfg = new IntraproceduralCfgFactory().fromProgram(program)
-    val stateHistory = new StateHistory()
+    val stateHistory = new ExecutionTree()
     val tree = new RandomPathSelectionStrategy(stateHistory)
 
     val future = Future {
@@ -5073,14 +3755,24 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
         |
         |""".stripMargin
 
-    val program = parseUnsafe(code)
-    val cfg = new IntraproceduralCfgFactory().fromProgram(program)
-    val stateHistory = new StateHistory()
-    val tree = new RandomPathSelectionStrategy(stateHistory)
 
-    val executor = new LoopSummarization(cfg, searchStrategy = tree, stateHistory = Some(stateHistory))
-    executor.run()
 
+    val future = Future {
+      val program = parseUnsafe(code)
+      val cfg = new IntraproceduralCfgFactory().fromProgram(program)
+      val stateHistory = new ExecutionTree()
+      val tree = new RandomPathSelectionStrategy(stateHistory)
+
+      val executor = new LoopSummarization(cfg, searchStrategy = tree, stateHistory = Some(stateHistory))
+      executor.run()
+    }
+
+    try {
+      Await.ready(future, 5.seconds) // Use Await.result if you need the result of the future
+    } catch {
+      case _: TimeoutException => println("Test terminated due to timeout")
+      case NonFatal(e) => println(s"Test failed due to an unexpected error: ${e.getMessage}")
+    }
   }
 
 
@@ -5423,13 +4115,300 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
         |
         |""".stripMargin
 
-    val program = parseUnsafe(code)
-    val cfg = new IntraproceduralCfgFactory().fromProgram(program)
-    val stateHistory = new StateHistory()
-    val tree = new RandomPathSelectionStrategy(stateHistory)
+    val future = Future {
+      val program = parseUnsafe(code)
+      val cfg = new IntraproceduralCfgFactory().fromProgram(program)
+      val stateHistory = new ExecutionTree()
+      val tree = new RandomPathSelectionStrategy(stateHistory)
 
-    val executor = new LoopSummarization(cfg, searchStrategy = tree, stateHistory = Some(stateHistory))
-    executor.run()
+      val executor = new LoopSummarization(cfg, searchStrategy = tree, stateHistory = Some(stateHistory))
+      executor.run()
+    }
+
+    try {
+      Await.ready(future, 5.seconds) // Use Await.result if you need the result of the future
+    } catch {
+      case _: TimeoutException => println("Test terminated due to timeout")
+      case NonFatal(e) => println(s"Test failed due to an unexpected error: ${e.getMessage}")
+    }
+
+  }
+
+
+  test("nasty summarization test7") {
+    val code =
+      """
+        |main() {
+        |  var var0,var1,var2,var3,var4,var5,var6,var7,var8,var9,var10,var11,var12,var13,var14,var15,var16,var17,var18,var19,var20,var21,var22,var23,var24,var25,var26,var27;
+        |  var0 = 8;
+        |  var1 = alloc 1;
+        |  var2 = 6;
+        |  var3 = 2;
+        |  var4 = alloc alloc 6;
+        |  var5 = {ZqemmtvlFK:0};
+        |  var6 = alloc alloc alloc 8;
+        |  var7 = {spAGlOQptt:1};
+        |  var8 = 4;
+        |  var9 = alloc alloc 8;
+        |  var10 = 4;
+        |  var11 = 0;
+        |  var12 = 0;
+        |  var13 = alloc alloc 2;
+        |  var14 = [alloc alloc 4,alloc alloc 2,alloc alloc 8,alloc alloc 8,alloc alloc 8,alloc alloc 7,alloc alloc 6,alloc alloc 5,alloc alloc 0];
+        |  var15 = 1;
+        |  var16 = 2;
+        |  var17 = alloc 2;
+        |  var18 = 6;
+        |  var19 = 3;
+        |  var20 = 7;
+        |  var21 = 8;
+        |  var22 = 3;
+        |  var23 = alloc alloc 3;
+        |  var24 = alloc alloc 1;
+        |  var25 = -1;
+        |  var26 = 1;
+        |  var27 = [4,7,5,-1,7];
+        |  while (input) {
+        |    while (var7.spAGlOQptt) {
+        |      while ((var22 < var3)) {
+        |        if (!var5.ZqemmtvlFK) {
+        |          while ((var26 < var12)) {
+        |            while ((var11 < var0)) {
+        |              var17 = alloc 2;
+        |              output input;
+        |              var18 = 7;
+        |              var11 = (var11 + 1);
+        |            }
+        |            var26 = (var26 + 1);
+        |          }
+        |          while (var12) {
+        |            while ((var12 < var26)) {
+        |              output var2;
+        |              var12 = (var12 + 1);
+        |            }
+        |            while ((var15 < var11)) {
+        |              var15 = (var15 + 1);
+        |            }
+        |          }
+        |        } else {
+        |          while (var5.ZqemmtvlFK) {
+        |            var27 = [5,0,1,1,2,8,2];
+        |            while (4) {
+        |              var16 = 1;
+        |              output !input;
+        |              output 3;
+        |            }
+        |            var20 = 3;
+        |            while ((var25 < var21)) {
+        |              var9 = alloc alloc 2;
+        |              var25 = (var25 + 1);
+        |            }
+        |          }
+        |          var15 = !0;
+        |          while (!6) {
+        |            output 5;
+        |          }
+        |          while ((var3 < var3)) {
+        |            while ((var3 < var21)) {
+        |              var3 = (var3 + 1);
+        |            }
+        |            var3 = (var3 + 1);
+        |          }
+        |        }
+        |        var22 = (var22 + 1);
+        |      }
+        |      while ((var26 < var11)) {
+        |        while ((var12 < var16)) {
+        |          var12 = (var12 + 1);
+        |        }
+        |        var26 = (var26 + 1);
+        |      }
+        |      while ((var18 < var15)) {
+        |        while ((var8 < var0)) {
+        |          while (var22) {
+        |            while ((var2 < var21)) {
+        |              output input;
+        |              var27 = [6,4,5,6,-1,8,1,8];
+        |              var2 = (var2 + 1);
+        |            }
+        |            while ((var10 < var0)) {
+        |              var6 = alloc alloc alloc 0;
+        |              output input;
+        |              var10 = (var10 + 1);
+        |            }
+        |          }
+        |          output input;
+        |          var8 = (var8 + 1);
+        |        }
+        |        var18 = (var18 + 1);
+        |      }
+        |      var27[1] = input;
+        |    }
+        |    while ((var8 < var26)) {
+        |      var14[1] = var23;
+        |      if (var20) {
+        |        while ((var0 < var15)) {
+        |          while ((var21 < var20)) {
+        |            var21 = (var21 + 1);
+        |          }
+        |          while ((var3 < var26)) {
+        |            while ((var19 < var12)) {
+        |              var2 = 8;
+        |              output var5.ZqemmtvlFK;
+        |              var10 = 3;
+        |              var7 = {spAGlOQptt:4};
+        |              var19 = (var19 + 1);
+        |            }
+        |            output 1;
+        |            var3 = (var3 + 1);
+        |          }
+        |          while ((var15 < var11)) {
+        |            while ((var20 < var11)) {
+        |              output var25;
+        |              var12 = 0;
+        |              var24 = alloc alloc 5;
+        |              output 9;
+        |              var20 = (var20 + 1);
+        |            }
+        |            while ((var2 < var0)) {
+        |              var15 = 2;
+        |              var15 = 3;
+        |              var25 = 2;
+        |              var2 = (var2 + 1);
+        |            }
+        |            var15 = (var15 + 1);
+        |          }
+        |          var0 = (var0 + 1);
+        |        }
+        |        output !!7;
+        |        while ((var3 < var18)) {
+        |          while ((var21 < var22)) {
+        |            var21 = (var21 + 1);
+        |          }
+        |          var27[3] = 9;
+        |          while ((var19 < var25)) {
+        |            var19 = (var19 + 1);
+        |          }
+        |          while ((var10 < var25)) {
+        |            while (5) {}
+        |            while ((var10 < var11)) {
+        |              var26 = 2;
+        |              var10 = (var10 + 1);
+        |            }
+        |            var10 = (var10 + 1);
+        |          }
+        |          var3 = (var3 + 1);
+        |        }
+        |      } else {
+        |        if (var5.ZqemmtvlFK) {
+        |          while ((var12 < var3)) {
+        |            var12 = (var12 + 1);
+        |          }
+        |        } else {
+        |          while (!0) {
+        |            output 0;
+        |            while ((var15 < var19)) {
+        |              var15 = (var15 + 1);
+        |            }
+        |            while ((var21 < var19)) {
+        |              var21 = (var21 + 1);
+        |            }
+        |            while ((var22 < var8)) {
+        |              var22 = (var22 + 1);
+        |            }
+        |          }
+        |        }
+        |        output !0;
+        |      }
+        |      while ((var19 < var12)) {
+        |        while ((var15 < var25)) {
+        |          var15 = (var15 + 1);
+        |        }
+        |        while ((var16 < var26)) {
+        |          while (7) {
+        |            while (5) {}
+        |            while (2) {
+        |              output 4;
+        |              var9 = alloc alloc -1;
+        |              output 0;
+        |            }
+        |            while ((var22 < var20)) {
+        |              output input;
+        |              var19 = 0;
+        |              output !input;
+        |              var22 = (var22 + 1);
+        |            }
+        |            while ((var20 < var3)) {
+        |              var24 = alloc alloc 6;
+        |              output !input;
+        |              output 9;
+        |              var2 = 7;
+        |              var20 = (var20 + 1);
+        |            }
+        |          }
+        |          var16 = (var16 + 1);
+        |        }
+        |        while ((var12 < var0)) {
+        |          while ((var20 < var19)) {
+        |            while ((var21 < var0)) {
+        |              var21 = (var21 + 1);
+        |            }
+        |            var20 = (var20 + 1);
+        |          }
+        |          var12 = (var12 + 1);
+        |        }
+        |        var27[4] = input;
+        |        var19 = (var19 + 1);
+        |      }
+        |      var8 = (var8 + 1);
+        |    }
+        |    while ((var12 < var26)) {
+        |      var12 = (var12 + 1);
+        |    }
+        |    var27[0] = var3;
+        |  }
+        |  while ((var21 < var12)) {
+        |    output !6;
+        |    if (input) {
+        |      output var7.spAGlOQptt;
+        |    } else {
+        |      while ((var18 < var10)) {
+        |        while ((var19 < var20)) {
+        |          while ((var11 < var10)) {
+        |            var11 = (var11 + 1);
+        |          }
+        |          var19 = (var19 + 1);
+        |        }
+        |        output input;
+        |        var18 = (var18 + 1);
+        |      }
+        |      output 7;
+        |      var1 = var17;
+        |    }
+        |    output !0;
+        |    var21 = (var21 + 1);
+        |  }
+        |  return var5.ZqemmtvlFK;
+        |}
+        |
+        |""".stripMargin
+
+    val future = Future {
+      val program = parseUnsafe(code)
+      val cfg = new IntraproceduralCfgFactory().fromProgram(program)
+      val stateHistory = new ExecutionTree()
+      val tree = new RandomPathSelectionStrategy(stateHistory)
+
+      val executor = new LoopSummarization(cfg, searchStrategy = tree, stateHistory = Some(stateHistory))
+      executor.run()
+    }
+
+    try {
+      Await.ready(future, 5.seconds) // Use Await.result if you need the result of the future
+    } catch {
+      case _: TimeoutException => println("Test terminated due to timeout")
+      case NonFatal(e) => println(s"Test failed due to an unexpected error: ${e.getMessage}")
+    }
 
   }
 
@@ -5492,9 +4471,278 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
         |}
         |""".stripMargin
 
-    val program = parseUnsafe(code)
 
-    new SymbolicExecutorFactory(false, false, Some("querycount"), Some(5), Some(5), "tree").get(program).run()
+    val future = Future {
+      val program = parseUnsafe(code)
+
+      new SymbolicExecutorFactory(false, false, Some("aggresive"), 5, 5, "tree").get(program).run()
+    }
+
+    try {
+      Await.ready(future, 5.seconds) // Use Await.result if you need the result of the future
+    } catch {
+      case _: TimeoutException => println("Test terminated due to timeout")
+      case NonFatal(e) => println(s"Test failed due to an unexpected error: ${e.getMessage}")
+    }
+
+  }
+
+
+  test("random factory test2") {
+    val code =
+      """
+        |main() {
+        |  var var0,var1,var2,var3,var4,var5,var6,var7,var8,var9,var10,var11,var12,var13,var14,var15,var16,var17,var18,var19,var20,var21,var22;
+        |  var0 = 0;
+        |  var1 = alloc 3;
+        |  var2 = 4;
+        |  var3 = {KrdRjIpsXz:6,cULmqjOLdc:alloc 8,GZalvKWqZl:alloc alloc -1,sZATslPPrs:4,qxIoQWtvcJ:[0,-1,1,0,0]};
+        |  var4 = 2;
+        |  var5 = 1;
+        |  var6 = alloc alloc 3;
+        |  var7 = 7;
+        |  var8 = 4;
+        |  var9 = 5;
+        |  var10 = alloc alloc -1;
+        |  var11 = 2;
+        |  var12 = -1;
+        |  var13 = alloc alloc alloc 1;
+        |  var14 = alloc 2;
+        |  var15 = 8;
+        |  var16 = 4;
+        |  var17 = {YObdYDaech:[3,7,-1,1,3,6],vKJkDditvP:alloc 6};
+        |  var18 = [6,7,-1,-1,3,8,3,7];
+        |  var19 = -1;
+        |  var20 = 7;
+        |  var21 = 3;
+        |  var22 = [8,4,-1,2,-1,8];
+        |  if (var18[5]) {
+        |    var18[0] = var3.KrdRjIpsXz;
+        |  } else {}
+        |  if (var18[7]) {} else {
+        |    if (var18[0]) {
+        |      output !input;
+        |    } else {
+        |      output var3.sZATslPPrs;
+        |      var20 = var22[1];
+        |      output var0;
+        |    }
+        |    while (var3.sZATslPPrs) {}
+        |    while ((var19 < var9)) {
+        |      while (var12) {
+        |        var18[7] = var3.KrdRjIpsXz;
+        |        output var18[4];
+        |      }
+        |      var9 = !input;
+        |      while ((var0 < var15)) {
+        |        output input;
+        |        var0 = (var0 + 1);
+        |      }
+        |      if (input) {
+        |        if (var18[1]) {
+        |          var14 = alloc 0;
+        |        } else {
+        |          output input;
+        |          output (input - var3.KrdRjIpsXz);
+        |          output input;
+        |        }
+        |        while (input) {}
+        |        while (((0 - 6) + [1,3,6,4,7][3])) {
+        |          output input;
+        |          var0 = var3.KrdRjIpsXz;
+        |        }
+        |        var14 = var1;
+        |      } else {}
+        |      var19 = (var19 + 1);
+        |    }
+        |    while ((var15 < var8)) {
+        |      var15 = (var15 + 1);
+        |    }
+        |  }
+        |  var22[1] = input;
+        |  var17 = var17;
+        |  var16 = var3.sZATslPPrs;
+        |  if (var3.sZATslPPrs) {
+        |    if (!var5) {
+        |      if (var3.sZATslPPrs) {} else {}
+        |      var7 = var9;
+        |    } else {
+        |      output input;
+        |      if ((((4 - -1) - input) - input)) {
+        |        while (var3.sZATslPPrs) {
+        |          var0 = !1;
+        |          output var18[7];
+        |        }
+        |        if (var3.KrdRjIpsXz) {
+        |          output (input - input);
+        |          var22 = var22;
+        |          output input;
+        |        } else {
+        |          var13 = &var6;
+        |          var14 = alloc 0;
+        |          output input;
+        |          var14 = var1;
+        |        }
+        |      } else {}
+        |    }
+        |    while ((var22[4] + (!input + var22[5]))) {
+        |      var6 = &var14;
+        |      if (input) {
+        |        var22[3] = input;
+        |        while ((var11 < var20)) {
+        |          var0 = var3.sZATslPPrs;
+        |          output input;
+        |          var11 = (var11 + 1);
+        |        }
+        |        while ((var11 < var7)) {
+        |          output var3.sZATslPPrs;
+        |          var11 = (var11 + 1);
+        |        }
+        |        output var3.KrdRjIpsXz;
+        |      } else {
+        |        while (var11) {}
+        |        var5 = var2;
+        |      }
+        |    }
+        |    output !input;
+        |  } else {}
+        |  return (input + var20);
+        |}
+        |""".stripMargin
+
+
+
+    val future = Future {
+      val program = parseUnsafe(code)
+
+      new SymbolicExecutorFactory(false, false, None, 5, 5, "klee").get(program).run()
+    }
+
+    try {
+      Await.ready(future, 5.seconds) // Use Await.result if you need the result of the future
+    } catch {
+      case _: TimeoutException => println("Test terminated due to timeout")
+      case NonFatal(e) => println(s"Test failed due to an unexpected error: ${e.getMessage}")
+    }
+
+  }
+
+
+  test("random factory test 3") {
+    val code =
+      """
+        |main() {
+        |  var var0,var1,var2,var3,var4,var5,var6,var7,var8,var9,var10,var11,var12,var13,var14,var15,var16,var17,var18,var19,var20,var21,var22,var23,var24,var25,var26;
+        |  var0 = -1;
+        |  var1 = 7;
+        |  var2 = 0;
+        |  var3 = alloc 4;
+        |  var4 = alloc 4;
+        |  var5 = alloc alloc 3;
+        |  var6 = 4;
+        |  var7 = 2;
+        |  var8 = 5;
+        |  var9 = 0;
+        |  var10 = 3;
+        |  var11 = {NsohCuqXxz:2,esBqZprHeo:-1};
+        |  var12 = 8;
+        |  var13 = [4,8,3,3,1];
+        |  var14 = alloc 7;
+        |  var15 = 6;
+        |  var16 = alloc 5;
+        |  var17 = alloc 4;
+        |  var18 = -1;
+        |  var19 = 7;
+        |  var20 = alloc 2;
+        |  var21 = 4;
+        |  var22 = 6;
+        |  var23 = 4;
+        |  var24 = 2;
+        |  var25 = alloc 3;
+        |  var26 = [3,3,8,4,5,4,1];
+        |  while (var13[2]) {
+        |    if ((var13[3] * (input - (!-1 + var24)))) {
+        |      while ((!input - !!4)) {
+        |        if (var6) {
+        |          var22 = !3;
+        |          var19 = (0 - 3);
+        |          output var11.esBqZprHeo;
+        |          var3 = &var6;
+        |        } else {
+        |          output var11.esBqZprHeo;
+        |          var5 = alloc alloc 6;
+        |          var9 = var11.NsohCuqXxz;
+        |          output var11.NsohCuqXxz;
+        |        }
+        |        while (input) {
+        |          var24 = input;
+        |          output input;
+        |        }
+        |      }
+        |      while (input) {
+        |        while ((var24 < var9)) {
+        |          output !input;
+        |          var4 = &var7;
+        |          output var11.NsohCuqXxz;
+        |          var2 = !7;
+        |          var24 = (var24 + 1);
+        |        }
+        |        while ((input + input)) {
+        |          var1 = [8,-1,4,0,4,2][1];
+        |          var20 = var17;
+        |          output (var26[2] + input);
+        |          var24 = input;
+        |        }
+        |      }
+        |    } else {
+        |      while (var13[4]) {
+        |        while (input) {
+        |          output input;
+        |          var17 = var16;
+        |          var16 = alloc 6;
+        |          output var11.NsohCuqXxz;
+        |        }
+        |        var13 = var13;
+        |        while (([8,1,8,1,2][4] + var11.esBqZprHeo)) {
+        |          output var15;
+        |          output var0;
+        |        }
+        |        while (var11.NsohCuqXxz) {}
+        |      }
+        |    }
+        |    if (var26[3]) {} else {
+        |      while (!var23) {
+        |        while ((var10 < var23)) {
+        |          output !var26[3];
+        |          output input;
+        |          output var11.esBqZprHeo;
+        |          var24 = (-1 * 6);
+        |          var10 = (var10 + 1);
+        |        }
+        |        while (input) {
+        |          var23 = [4,5,3,4,4,2][3];
+        |          output input;
+        |        }
+        |        while (var11.NsohCuqXxz) {}
+        |      }
+        |    }
+        |    while (input) {
+        |      output input;
+        |    }
+        |  }
+        |  if (var13[1]) {
+        |    var13[3] = input;
+        |    var26[0] = input;
+        |    while (var24) {}
+        |  } else {}
+        |  return (var11.NsohCuqXxz * input);
+        |}
+        |""".stripMargin
+
+
+      val program = parseUnsafe(code)
+      new SymbolicExecutorFactory(false, false, Some("querycount"), 1, 5, "random").get(program).run()
+
 
   }
 

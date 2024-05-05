@@ -1,7 +1,7 @@
 package microc.cli
 
 import microc.ast.AstPrinter
-import microc.symbolic_execution.experiments.ProgramGenerator
+import microc.generation.ProgramGenerator
 
 import java.io.{File, PrintWriter}
 

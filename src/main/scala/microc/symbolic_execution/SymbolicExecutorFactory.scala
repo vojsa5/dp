@@ -16,7 +16,7 @@ import scala.collection.immutable.HashSet
 import scala.collection.mutable
 
 class SymbolicExecutorFactory(useSummarizaiton: Boolean, useSubsumption: Boolean, mergingStrategyType: Option[String],
-                              smartMergingCost: Option[Int], kappa: Option[Int], searchStrategyType: String) {
+                              smartMergingCost: Int, kappa: Int, searchStrategyType: String) {
   def get(program: Program): SymbolicExecutor = {
     val programCfg = new IntraproceduralCfgFactory().fromProgram(program)
     val ctx = new Context()
@@ -24,7 +24,7 @@ class SymbolicExecutorFactory(useSummarizaiton: Boolean, useSubsumption: Boolean
     if (useSubsumption) {
       pathSubsumption = Some(new PathSubsumption(new ConstraintSolver(ctx)))
     }
-    var stateHistory: Option[StateHistory] = None
+    var stateHistory: Option[ExecutionTree] = None
     var covered: Option[mutable.HashSet[CfgNode]] = None
 
     val searchStrategy = searchStrategyType match {
@@ -35,13 +35,13 @@ class SymbolicExecutorFactory(useSummarizaiton: Boolean, useSubsumption: Boolean
       case "random" =>
         new RandomSearchStrategy()
       case "tree" =>
-        stateHistory = Some(new StateHistory())
+        stateHistory = Some(new ExecutionTree())
         new RandomPathSelectionStrategy(stateHistory.get)
       case "coverage" =>
         covered = Some(new mutable.HashSet[CfgNode]())
         new CoverageSearchStrategy(covered.get)
       case "klee" =>
-        stateHistory = Some(new StateHistory())
+        stateHistory = Some(new ExecutionTree())
         covered = Some(new mutable.HashSet[CfgNode]())
         new KleeSearchStrategy(stateHistory.get, covered.get)
       case _ =>
@@ -65,16 +65,12 @@ class SymbolicExecutorFactory(useSummarizaiton: Boolean, useSubsumption: Boolean
           }
           variableCosts.put(node._1, nodeCosts)
         }
-        new HeuristicBasedStateMerging(new BFSSearchStrategy, variableCosts, smartMergingCost.get)
+        new HeuristicBasedStateMerging(searchStrategy, variableCosts, smartMergingCost)
       }
       case Some("recursive") => {
-        val kappaI = kappa match {
-          case Some(value) => value
-          case None => 1
-        }
-        val tmp = new RecursionBasedAnalyses()(new SemanticAnalysis().analyze(program), kappaI)
+        val tmp = new RecursionBasedAnalyses()(new SemanticAnalysis().analyze(program), kappa)
         tmp.tmp2(programCfg)
-        new HeuristicBasedStateMerging(new BFSSearchStrategy, tmp.mapping, smartMergingCost.get)
+        new HeuristicBasedStateMerging(searchStrategy, tmp.mapping, smartMergingCost)
       }
       case Some(_) =>
         throw new InvalidApplicationException()

@@ -12,7 +12,10 @@ class HeuristicBasedStateMerging(strategy: SearchStrategy, variableSolvingCosts:
         for (existingState <- alreadyExisting) {
           if (state.isSimilarTo(existingState, limitCost, variableSolvingCosts(state.programLocation))) {
             statesToRemove.add(existingState)
+            val start = System.currentTimeMillis()
             val merged = existingState.mergeStates(state)
+            val end = System.currentTimeMillis()
+            System.out.println("MERGING: ", end - start)
             strategy.updateExecutionTree(state, merged)
             states((state.programLocation, state.symbolicStore.framesCnt())).remove(existingState)
             states.getOrElseUpdate((state.programLocation, state.symbolicStore.framesCnt()), new mutable.HashSet[SymbolicState]()).add(merged)
@@ -43,5 +46,5 @@ class HeuristicBasedStateMerging(strategy: SearchStrategy, variableSolvingCosts:
     res
   }
 
-  override def statesCount(): Int = strategy.statesCount() - statesToRemove.size
+  override def statesCount(): Int = strategy.statesCount()
 }

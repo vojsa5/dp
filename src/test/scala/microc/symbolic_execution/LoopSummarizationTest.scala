@@ -990,13 +990,13 @@ class LoopSummarizationTest extends FunSuite with MicrocSupport with Examples {
         val trueRes = initialX + initialIterationCount + lastIterCount.value
         for (trace <- summary) {
           if (trace._2.nonEmpty) {
-            val change: Expr => Expr = trace._2.find  { case (Identifier(name, loc), _) => name == "x" }.get._2
-            change.apply(Number(initialX, CodeLoc(0, 0))) match {
+            val change: Expr => SymbolicState => Expr = trace._2.find  { case (Identifier(name, loc), _) => name == "x" }.get._2
+            change.apply(Number(initialX, CodeLoc(0, 0))).apply(symbolicState) match {
               case expr => {
                 var v = LoopSummarization.getSymbolicValsFromExpr(expr, symbolicState)
                 assert(v.nonEmpty)
                 val applied = pda.applyIterationsCount(expr, v.head, Number(initialIterationCount, CodeLoc(0, 0)))
-                if (v.size >= 2) {
+                if (v.toSet.size >= 2) {
                   Utility.simplifyArithExpr(pda.applyIterationsCount(Utility.simplifyArithExpr(applied), v.tail.head, lastIterCount)) match {
                     case Number(value, _) =>
                       println(value, trueRes)
@@ -1023,13 +1023,13 @@ class LoopSummarizationTest extends FunSuite with MicrocSupport with Examples {
         for (trace <- summary) {
           if (trace._2.nonEmpty) {
             if (trace._2.exists { case (Identifier(name, loc), _) => name == "z" }) {
-              val change: Expr => Expr = trace._2.find  { case (Identifier(name, loc), _) => name == "z" }.get._2
-              change.apply(Number(initialX, CodeLoc(0, 0))) match {
+              val change: Expr => SymbolicState => Expr = trace._2.find  { case (Identifier(name, loc), _) => name == "z" }.get._2
+              change.apply(Number(initialX, CodeLoc(0, 0))).apply(symbolicState) match {
                 case expr => {
                   println(expr)
                   val v = LoopSummarization.getSymbolicValsFromExpr(expr, symbolicState)
                   assert(v.nonEmpty)
-                  if (v.size >= 2) {
+                  if (v.toSet.size >= 2) {
                     Utility.simplifyArithExpr(pda.applyIterationsCount(expr, v.head, lastIterCount)) match {
                       case Number(value, _) =>
                         assert(value == trueRes)
@@ -1118,13 +1118,13 @@ class LoopSummarizationTest extends FunSuite with MicrocSupport with Examples {
         val trueRes = initialX + initialIterationCount + lastIterCount.value
         for (trace <- summary) {
           if (trace._2.nonEmpty) {
-            val change: Expr => Expr = trace._2.find  { case (Identifier(name, loc), _) => name == "x" }.get._2
-            change.apply(Number(initialX, CodeLoc(0, 0))) match {
+            val change: Expr => SymbolicState => Expr = trace._2.find  { case (Identifier(name, loc), _) => name == "x" }.get._2
+            change.apply(Number(initialX, CodeLoc(0, 0))).apply(symbolicState) match {
               case expr => {
                 var v = LoopSummarization.getSymbolicValsFromExpr(expr, symbolicState)
                 assert(v.nonEmpty)
                 val applied = pda.applyIterationsCount(expr, v.head, Number(initialIterationCount, CodeLoc(0, 0)))
-                if (v.size >= 2) {
+                if (v.toSet.size >= 2) {
                   Utility.simplifyArithExpr(pda.applyIterationsCount(Utility.simplifyArithExpr(applied), v.tail.head, lastIterCount)) match {
                     case Number(value, _) =>
                       assert(value == trueRes)
@@ -1150,13 +1150,13 @@ class LoopSummarizationTest extends FunSuite with MicrocSupport with Examples {
         for (trace <- summary) {
           if (trace._2.nonEmpty) {
             if (trace._2.exists { case (Identifier(name, loc), _) => name == "z" }) {
-              val change: Expr => Expr = trace._2.find  { case (Identifier(name, loc), _) => name == "z" }.get._2
-              change.apply(Number(initialX, CodeLoc(0, 0))) match {
+              val change: Expr => SymbolicState => Expr = trace._2.find  { case (Identifier(name, loc), _) => name == "z" }.get._2
+              change.apply(Number(initialX, CodeLoc(0, 0))).apply(symbolicState) match {
                 case expr => {
                   println(expr)
                   val v = LoopSummarization.getSymbolicValsFromExpr(expr, symbolicState)
                   assert(v.nonEmpty)
-                  if (v.size >= 2) {
+                  if (v.toSet.size >= 2) {
                     Utility.simplifyArithExpr(pda.applyIterationsCount(expr, v.head, lastIterCount)) match {
                       case Number(value, _) =>
                         assert(value == trueRes)
@@ -1246,13 +1246,13 @@ class LoopSummarizationTest extends FunSuite with MicrocSupport with Examples {
         val trueRes = initialX + initialIterationCount + lastIterCount.value
         for (trace <- summary) {
           if (trace._2.nonEmpty) {
-            val change: Expr => Expr = trace._2.find  { case (Identifier(name, loc), _) => name == "x" }.get._2
-            change.apply(Number(initialX, CodeLoc(0, 0))) match {
+            val change: Expr => SymbolicState => Expr = trace._2.find  { case (Identifier(name, loc), _) => name == "x" }.get._2
+            change.apply(Number(initialX, CodeLoc(0, 0))).apply(symbolicState) match {
               case expr => {
                 var v = LoopSummarization.getSymbolicValsFromExpr(expr, symbolicState)
                 assert(v.nonEmpty)
                 val applied = pda.applyIterationsCount(expr, v.head, Number(initialIterationCount, CodeLoc(0, 0)))
-                if (v.size >= 2) {
+                if (v.toSet.size >= 2) {
                   Utility.simplifyArithExpr(pda.applyIterationsCount(Utility.simplifyArithExpr(applied), v.tail.head, lastIterCount)) match {
                     case Number(value, _) =>
                       assert(value == trueRes)
@@ -1278,13 +1278,13 @@ class LoopSummarizationTest extends FunSuite with MicrocSupport with Examples {
         for (trace <- summary) {
           if (trace._2.nonEmpty) {
             if (trace._2.exists { case (Identifier(name, loc), _) => name == "z" }) {
-              val change: Expr => Expr = trace._2.find  { case (Identifier(name, loc), _) => name == "z" }.get._2
-              change.apply(Number(initialX, CodeLoc(0, 0))) match {
+              val change: Expr => SymbolicState => Expr = trace._2.find  { case (Identifier(name, loc), _) => name == "z" }.get._2
+              change.apply(Number(initialX, CodeLoc(0, 0))).apply(symbolicState) match {
                 case expr => {
                   println(expr)
                   val v = LoopSummarization.getSymbolicValsFromExpr(expr, symbolicState)
                   assert(v.nonEmpty)
-                  if (v.size >= 2) {
+                  if (v.toSet.size >= 2) {
                     Utility.simplifyArithExpr(pda.applyIterationsCount(expr, v.head, lastIterCount)) match {
                       case Number(value, _) =>
                         assert(value == trueRes)
@@ -1374,13 +1374,13 @@ class LoopSummarizationTest extends FunSuite with MicrocSupport with Examples {
         val trueRes = initialX + 2 * initialIterationCount + lastIterCount.value
         for (trace <- summary) {
           if (trace._2.nonEmpty) {
-            val change: Expr => Expr = trace._2.find  { case (Identifier(name, loc), _) => name == "x" }.get._2
-            change.apply(Number(initialX, CodeLoc(0, 0))) match {
+            val change: Expr => SymbolicState => Expr = trace._2.find  { case (Identifier(name, loc), _) => name == "x" }.get._2
+            change.apply(Number(initialX, CodeLoc(0, 0))).apply(symbolicState) match {
               case expr => {
                 var v = LoopSummarization.getSymbolicValsFromExpr(expr, symbolicState)
                 assert(v.nonEmpty)
                 val applied = pda.applyIterationsCount(expr, v.head, Number(initialIterationCount, CodeLoc(0, 0)))
-                if (v.size >= 2) {
+                if (v.toSet.size >= 2) {
                   Utility.simplifyArithExpr(pda.applyIterationsCount(Utility.simplifyArithExpr(applied), v.tail.head, lastIterCount)) match {
                     case Number(value, _) =>
                       assert(value - trueRes <= 1)
@@ -1406,13 +1406,13 @@ class LoopSummarizationTest extends FunSuite with MicrocSupport with Examples {
         for (trace <- summary) {
           if (trace._2.nonEmpty) {
             if (trace._2.exists { case (Identifier(name, loc), _) => name == "z" }) {
-              val change: Expr => Expr = trace._2.find  { case (Identifier(name, loc), _) => name == "z" }.get._2
-              change.apply(Number(initialX, CodeLoc(0, 0))) match {
+              val change: Expr => SymbolicState => Expr = trace._2.find  { case (Identifier(name, loc), _) => name == "z" }.get._2
+              change.apply(Number(initialX, CodeLoc(0, 0))).apply(symbolicState) match {
                 case expr => {
                   println(expr)
                   val v = LoopSummarization.getSymbolicValsFromExpr(expr, symbolicState)
                   assert(v.nonEmpty)
-                  if (v.size >= 2) {
+                  if (v.toSet.size >= 2) {
                     Utility.simplifyArithExpr(pda.applyIterationsCount(expr, v.head, lastIterCount)) match {
                       case Number(value, _) =>
                         assert(value - trueRes <= 1)
@@ -1502,13 +1502,13 @@ class LoopSummarizationTest extends FunSuite with MicrocSupport with Examples {
         val trueRes = initialX + initialIterationCount + lastIterCount.value
         for (trace <- summary) {
           if (trace._2.nonEmpty) {
-            val change: Expr => Expr = trace._2.find  { case (Identifier(name, loc), _) => name == "x" }.get._2
-            change.apply(Number(initialX, CodeLoc(0, 0))) match {
+            val change: Expr => SymbolicState => Expr = trace._2.find  { case (Identifier(name, loc), _) => name == "x" }.get._2
+            change.apply(Number(initialX, CodeLoc(0, 0))).apply(symbolicState) match {
               case expr => {
                 var v = LoopSummarization.getSymbolicValsFromExpr(expr, symbolicState)
                 assert(v.nonEmpty)
                 val applied = pda.applyIterationsCount(expr, v.head, Number(initialIterationCount, CodeLoc(0, 0)))
-                if (v.size >= 2) {
+                if (v.toSet.size >= 2) {
                   Utility.simplifyArithExpr(pda.applyIterationsCount(Utility.simplifyArithExpr(applied), v.tail.head, lastIterCount)) match {
                     case Number(value, _) =>
                       println(value, trueRes)
@@ -1535,13 +1535,13 @@ class LoopSummarizationTest extends FunSuite with MicrocSupport with Examples {
         for (trace <- summary) {
           if (trace._2.nonEmpty) {
             if (trace._2.exists { case (Identifier(name, loc), _) => name == "z" }) {
-              val change: Expr => Expr = trace._2.find  { case (Identifier(name, loc), _) => name == "z" }.get._2
-              change.apply(Number(initialX, CodeLoc(0, 0))) match {
+              val change: Expr => SymbolicState => Expr = trace._2.find  { case (Identifier(name, loc), _) => name == "z" }.get._2
+              change.apply(Number(initialX, CodeLoc(0, 0))).apply(symbolicState) match {
                 case expr => {
                   println(expr)
                   val v = LoopSummarization.getSymbolicValsFromExpr(expr, symbolicState)
                   assert(v.nonEmpty)
-                  if (v.size >= 2) {
+                  if (v.toSet.size >= 2) {
                     Utility.simplifyArithExpr(pda.applyIterationsCount(expr, v.head, lastIterCount)) match {
                       case Number(value, _) =>
                         assert(value == trueRes)
@@ -1633,13 +1633,13 @@ class LoopSummarizationTest extends FunSuite with MicrocSupport with Examples {
         val trueRes = initialX + initialIterationCount + lastIterCount.value
         for (trace <- summary) {
           if (trace._2.nonEmpty) {
-            val change: Expr => Expr = trace._2.find  { case (Identifier(name, loc), _) => name == "x" }.get._2
-            change.apply(Number(initialX, CodeLoc(0, 0))) match {
+            val change: Expr => SymbolicState => Expr = trace._2.find  { case (Identifier(name, loc), _) => name == "x" }.get._2
+            change.apply(Number(initialX, CodeLoc(0, 0))).apply(symbolicState) match {
               case expr => {
                 var v = LoopSummarization.getSymbolicValsFromExpr(expr, symbolicState)
                 assert(v.nonEmpty)
                 val applied = pda.applyIterationsCount(expr, v.head, Number(initialIterationCount, CodeLoc(0, 0)))
-                if (v.size >= 2) {
+                if (v.toSet.size >= 2) {
                   Utility.simplifyArithExpr(pda.applyIterationsCount(Utility.simplifyArithExpr(applied), v.tail.head, lastIterCount)) match {
                     case Number(value, _) =>
                       println(value, trueRes)
@@ -1666,13 +1666,13 @@ class LoopSummarizationTest extends FunSuite with MicrocSupport with Examples {
         for (trace <- summary) {
           if (trace._2.nonEmpty) {
             if (trace._2.exists { case (Identifier(name, loc), _) => name == "z" }) {
-              val change: Expr => Expr = trace._2.find  { case (Identifier(name, loc), _) => name == "z" }.get._2
-              change.apply(Number(initialX, CodeLoc(0, 0))) match {
+              val change: Expr => SymbolicState => Expr = trace._2.find  { case (Identifier(name, loc), _) => name == "z" }.get._2
+              change.apply(Number(initialX, CodeLoc(0, 0))).apply(symbolicState) match {
                 case expr => {
                   println(expr)
                   val v = LoopSummarization.getSymbolicValsFromExpr(expr, symbolicState)
                   assert(v.nonEmpty)
-                  if (v.size >= 2) {
+                  if (v.toSet.size >= 2) {
                     Utility.simplifyArithExpr(pda.applyIterationsCount(expr, v.head, lastIterCount)) match {
                       case Number(value, _) =>
                         assert(value == trueRes)
@@ -1764,16 +1764,16 @@ class LoopSummarizationTest extends FunSuite with MicrocSupport with Examples {
         val trueRes = initialX + initialIterationCount + lastIterCount.value
         for (trace <- summary) {
           if (trace._2.nonEmpty) {
-            val change: Expr => Expr = trace._2.find  {
+            val change: Expr => SymbolicState => Expr = trace._2.find  {
               case (ArrayAccess(Identifier(name, _), _, loc), _) => name == "x" || name == "z"
               case (Identifier(_, _), _) => false
             }.get._2
-            change.apply(Number(initialX, CodeLoc(0, 0))) match {
+            change.apply(Number(initialX, CodeLoc(0, 0))).apply(symbolicState) match {
               case expr => {
                 var v = LoopSummarization.getSymbolicValsFromExpr(expr, symbolicState)
                 assert(v.nonEmpty)
                 val applied = pda.applyIterationsCount(expr, v.head, Number(initialIterationCount, CodeLoc(0, 0)))
-                if (v.size >= 2) {
+                if (v.toSet.size >= 2) {
                   Utility.simplifyArithExpr(pda.applyIterationsCount(Utility.simplifyArithExpr(applied), v.tail.head, lastIterCount)) match {
                     case Number(value, _) =>
                       println(value, trueRes)
@@ -1803,16 +1803,16 @@ class LoopSummarizationTest extends FunSuite with MicrocSupport with Examples {
               case (ArrayAccess(Identifier(name, _), _, loc), _) => name == "z"
               case (Identifier(_, _), _) => false
             }) {
-              val change: Expr => Expr = trace._2.find  {
+              val change: Expr => SymbolicState => Expr = trace._2.find  {
                 case (ArrayAccess(Identifier(name, _), _, loc), _) => name == "z"
                 case (Identifier(_, _), _) => false
               }.get._2
-              change.apply(Number(initialX, CodeLoc(0, 0))) match {
+              change.apply(Number(initialX, CodeLoc(0, 0))).apply(symbolicState) match {
                 case expr => {
                   println(expr)
                   val v = LoopSummarization.getSymbolicValsFromExpr(expr, symbolicState)
                   assert(v.nonEmpty)
-                  if (v.size >= 2) {
+                  if (v.toSet.size >= 2) {
                     Utility.simplifyArithExpr(pda.applyIterationsCount(expr, v.head, lastIterCount)) match {
                       case Number(value, _) =>
                         assert(value == trueRes)
@@ -1907,11 +1907,11 @@ class LoopSummarizationTest extends FunSuite with MicrocSupport with Examples {
         val trueRes = initialX + initialIterationCount + lastIterCount.value
         for (trace <- summary) {
           if (trace._2.nonEmpty) {
-            val change: Expr => Expr = trace._2.find  {
+            val change: Expr => SymbolicState => Expr = trace._2.find  {
               case (FieldAccess(Identifier(name, _), _, loc), _) => name == "x" || name == "z"
               case (Identifier(_, _), _) => false
             }.get._2
-            change.apply(Number(initialX, CodeLoc(0, 0))) match {
+            change.apply(Number(initialX, CodeLoc(0, 0))).apply(symbolicState) match {
               case expr => {
                 var v = LoopSummarization.getSymbolicValsFromExpr(expr, symbolicState)
                 assert(v.nonEmpty)
@@ -1946,11 +1946,11 @@ class LoopSummarizationTest extends FunSuite with MicrocSupport with Examples {
               case (FieldAccess(Identifier(name, _), _, loc), _) => name == "z"
               case (Identifier(_, _), _) => false
             }) {
-              val change: Expr => Expr = trace._2.find  {
+              val change: Expr => SymbolicState => Expr = trace._2.find  {
                 case (FieldAccess(Identifier(name, _), _, loc), _) => name == "z"
                 case (Identifier(_, _), _) => false
               }.get._2
-              change.apply(Number(initialX, CodeLoc(0, 0))) match {
+              change.apply(Number(initialX, CodeLoc(0, 0))).apply(symbolicState) match {
                 case expr => {
                   println(expr)
                   val v = LoopSummarization.getSymbolicValsFromExpr(expr, symbolicState)
@@ -2117,7 +2117,7 @@ class LoopSummarizationTest extends FunSuite with MicrocSupport with Examples {
     val paths = pathsOpt.get
     for (path <- paths) {
       if (path.changes.nonEmpty) {
-        val change: Expr => Expr => Expr = path.changes.find  { case (Identifier(name, loc), _) => name == "i" }.get._2
+        val change: Expr => Expr => SymbolicState => Expr = path.changes.find  { case (Identifier(name, loc), _) => name == "i" }.get._2
         println(change.apply(Number(0, CodeLoc(0, 0))).apply(Number(10, CodeLoc(0, 0))))
         println(change.apply(Number(0, CodeLoc(0, 0))).apply(Number(0, CodeLoc(0, 0))))
         println(change.apply(Number(10, CodeLoc(0, 0))).apply(Number(0, CodeLoc(0, 0))))
@@ -2420,14 +2420,14 @@ class LoopSummarizationTest extends FunSuite with MicrocSupport with Examples {
     val paths = pathsOpt.get
     for (path <- paths) {
       if (path.changes.nonEmpty) {
-        val j = path.changes.find(ch => ch._1.asInstanceOf[Identifier].name == "j").get._2.apply(Number(1, CodeLoc(0, 0))).apply(Number(1, CodeLoc(0, 0)))
+        val j = path.changes.find(ch => ch._1.asInstanceOf[Identifier].name == "j").get._2.apply(Number(1, CodeLoc(0, 0))).apply(Number(1, CodeLoc(0, 0))).apply(symbolicState)
         j match {
           case Number(value, _) =>
             assert(value == 1)
           case _ =>
             assert(false)
         }
-        val k = path.changes.find(ch => ch._1.asInstanceOf[Identifier].name == "k").get._2.apply(Number(1, CodeLoc(0, 0))).apply(Number(1, CodeLoc(0, 0)))
+        val k = path.changes.find(ch => ch._1.asInstanceOf[Identifier].name == "k").get._2.apply(Number(1, CodeLoc(0, 0))).apply(Number(1, CodeLoc(0, 0))).apply(symbolicState)
         k match {
           case Number(value, _) =>
             assert(value == 1)

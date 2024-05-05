@@ -9,7 +9,7 @@ import scala.collection.mutable
 
 case class Traces() {
 
-  var res = new mutable.HashSet[(Expr, mutable.HashMap[Expr, Expr => Expr])]()
+  var res = new mutable.HashSet[(Expr, mutable.LinkedHashMap[Expr, Expr => SymbolicState => Expr], mutable.HashSet[Expr])]()
 
 
 
@@ -18,15 +18,16 @@ case class Traces() {
                       symbolicState: SymbolicState,
                       currPath: Vertex,
                       traceCondition: Expr,
-                      updated_variables: mutable.HashMap[Expr, Expr => Expr],
-                      rec: mutable.LinkedHashMap[Vertex, (Expr, mutable.HashMap[Expr, Expr => Expr])]
+                      updated_variables: mutable.LinkedHashMap[Expr, Expr => SymbolicState => Expr],
+                      rec: mutable.LinkedHashMap[Vertex, (Expr, mutable.LinkedHashMap[Expr, Expr => SymbolicState => Expr])],
+                      incrementedVars: mutable.HashSet[Expr]
                     ): Boolean = {
     if (rec.contains(currPath)) {
       constructCycleState(pda, rec, currPath, traceCondition, updated_variables, symbolicState) match {
         case Some(res) =>
           for (edge <- pda.edges(currPath.path)) {
             if (!rec.contains(edge.destination)) {
-              summarizeTrace(pda, symbolicState, edge.destination, res._1, res._2, rec)
+              summarizeTrace(pda, symbolicState, edge.destination, res._1, res._2, rec, incrementedVars)
             }
           }
         case None =>
@@ -35,10 +36,10 @@ case class Traces() {
     }
     else if (pda.exitStates.contains(currPath.path)) {
       if (rec.isEmpty) {
-        res.add(BinaryOp(AndAnd, Utility.applyTheState(Utility.applyPointers(Not(currPath.condition, CodeLoc(0, 0)), symbolicState), symbolicState, true), traceCondition, CodeLoc(0, 0)), updated_variables)
+        res.add(BinaryOp(AndAnd, Utility.applyTheState(Utility.applyPointers(Not(currPath.condition, CodeLoc(0, 0)), symbolicState), symbolicState, true), traceCondition, CodeLoc(0, 0)), updated_variables, incrementedVars)
       }
       else {
-        res.add(traceCondition, updated_variables)
+        res.add(traceCondition, updated_variables, incrementedVars)
       }
     }
     else {
@@ -48,11 +49,11 @@ case class Traces() {
         pda.solver.solveConstraint(pda.solver.createConstraint(condition, symbolicState, true)) match {
           case Status.SATISFIABLE =>
             val ncond = condition
-            val nrec = new mutable.LinkedHashMap[Vertex, (Expr, mutable.HashMap[Expr, Expr => Expr])]()
+            val nrec = new mutable.LinkedHashMap[Vertex, (Expr, mutable.LinkedHashMap[Expr, Expr => SymbolicState => Expr])]()
             for (i <- rec) {
               nrec.put(i._1, i._2)
             }
-            val newUpdatedVariables = mutable.HashMap[Expr, Expr => Expr]()
+            val newUpdatedVariables = mutable.LinkedHashMap[Expr, Expr => SymbolicState => Expr]()
             for (update <- updated_variables) {
               newUpdatedVariables.put(update._1, update._2)
             }
@@ -63,12 +64,12 @@ case class Traces() {
               else {
                 newUpdatedVariables.put(update._1, update._2)
                 newState.updateMemoryLocation(symbolicState.getMemoryLoc(update._1), Utility.removeUnnecessarySymbolicExpr(
-                  SymbolicExpr(update._2.apply(symbolicState.getValAtMemoryLoc(update._1, true).asInstanceOf[Symbolic]), CodeLoc(0, 0)))
+                  SymbolicExpr(update._2.apply(symbolicState.getValAtMemoryLoc(update._1, true).asInstanceOf[Symbolic]).apply(newState), CodeLoc(0, 0)))
                 )
               }
             }
             nrec.put(currPath, (ncond, edge.change))
-            summarizeTrace(pda, newState, edge.destination, ncond, newUpdatedVariables, nrec)
+            summarizeTrace(pda, newState, edge.destination, ncond, newUpdatedVariables, nrec, incrementedVars)
           case _ =>
         }
       }
@@ -76,12 +77,12 @@ case class Traces() {
     true
   }
 
-  def constructCycleState(pda: PDA, rec: mutable.LinkedHashMap[Vertex, (Expr, mutable.HashMap[Expr, Expr => Expr])],
-                          currPath: Vertex, traceCondition: Expr, updated_variables: mutable.HashMap[Expr, Expr => Expr],
+  def constructCycleState(pda: PDA, rec: mutable.LinkedHashMap[Vertex, (Expr, mutable.LinkedHashMap[Expr, Expr => SymbolicState => Expr])],
+                          currPath: Vertex, traceCondition: Expr, updated_variables: mutable.LinkedHashMap[Expr, Expr => SymbolicState => Expr],
                           symbolicState: SymbolicState):
-  Option[(Expr, mutable.HashMap[Expr, Expr => Expr])] = {
-    val newUpdatedVariables = mutable.HashMap[Expr, Expr => Expr]()
-    val newUpdatedVariables2 = mutable.HashMap[Expr, Expr => Expr]()
+  Option[(Expr, mutable.LinkedHashMap[Expr, Expr => SymbolicState => Expr])] = {
+    val newUpdatedVariables = mutable.LinkedHashMap[Expr, Expr => SymbolicState => Expr]()
+    val newUpdatedVariables2 = mutable.LinkedHashMap[Expr, Expr => SymbolicState => Expr]()
     val newState = symbolicState.deepCopy()
     for (update <- updated_variables) {
       newUpdatedVariables2.put(update._1, update._2)
@@ -90,7 +91,7 @@ case class Traces() {
     var initialConstraint: Expr = BinaryOp(GreaterEqual, iterations, Number(0, CodeLoc(0, 0)), CodeLoc(0, 0))
 
     // get the cycle vertices
-    val cycleRec = mutable.LinkedHashMap[Vertex, (Expr, mutable.HashMap[Expr, Expr => Expr])]()
+    val cycleRec = mutable.LinkedHashMap[Vertex, (Expr, mutable.LinkedHashMap[Expr, Expr => SymbolicState => Expr])]()
     var foundBeginningOfTheCycle = false
     for (r <- rec) {
       if (r._1 == currPath) {
@@ -112,11 +113,11 @@ case class Traces() {
           val prev = newUpdatedVariables(update._1)
           pda.loopSummary.computePeriod(lastNode._1, r._1._1, r._2._1) match {
             case Some(period) =>
-              newUpdatedVariables.put(update._1, variable =>
+              newUpdatedVariables.put(update._1, variable => s =>
                 BinaryOp(
                   OrOr,
-                  pda.applyIterationsCount(update._2.apply(variable), r._1._1.iterationsVal, Number(period, CodeLoc(0, 0))),
-                  prev.apply(variable), CodeLoc(0, 0)
+                  pda.applyIterationsCount(update._2.apply(variable).apply(s), r._1._1.iterationsVal, Number(period, CodeLoc(0, 0))),
+                  prev.apply(variable).apply(s), CodeLoc(0, 0)
                 )
               )
             case None =>
@@ -139,7 +140,7 @@ case class Traces() {
       else {
         newUpdatedVariables2.put(update._1, update._2)
         newState.updateMemoryLocation(symbolicState.getMemoryLoc(update._1), Utility.removeUnnecessarySymbolicExpr(
-          SymbolicExpr(update._2.apply(symbolicState.getValAtMemoryLoc(update._1, true).asInstanceOf[Symbolic]), CodeLoc(0, 0)))
+          SymbolicExpr(update._2.apply(symbolicState.getValAtMemoryLoc(update._1, true).asInstanceOf[Symbolic]).apply(newState), CodeLoc(0, 0)))
         )
       }
     }

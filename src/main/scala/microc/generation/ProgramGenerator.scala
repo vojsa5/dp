@@ -1,4 +1,4 @@
-package microc.symbolic_execution.experiments
+package microc.generation
 
 import microc.ast.{Alloc, ArrayAccess, ArrayNode, AssignStmt, AstPrinter, BinaryOp, BinaryOperator, Block, CodeLoc, Divide, Equal, Expr, FieldAccess, FunBlockStmt, FunDecl, Identifier, IdentifierDecl, IfStmt, Input, LowerThan, Minus, NestedBlockStmt, Not, NotEqual, Null, Number, OutputStmt, Plus, Program, Record, RecordField, ReturnStmt, StmtInNestedBlock, Times, VarRef, VarStmt, WhileStmt}
 import microc.symbolic_execution.Utility

@@ -31,7 +31,11 @@ class ConstraintSolver(val ctx: Context) {
   def solveConstraint(constraint: com.microsoft.z3.Expr[_]): Status = {
     val solver = ctx.mkSolver()
     solver.add(ConstraintSolver.getCondition(ctx, constraint))
-    solver.check()
+    val start = System.currentTimeMillis()
+    val res = solver.check()
+    val end = System.currentTimeMillis()
+    System.out.println("SOLVING: ", end - start)
+    res
   }
 
 
@@ -49,7 +53,7 @@ class ConstraintSolver(val ctx: Context) {
           ConstraintSolver.getCondition(ctx, valToExpr(state.getValOnMemoryLocation(val1, true).get, state, allowNonInitializedVals)),
           ConstraintSolver.getCondition(ctx, valToExpr(state.getValOnMemoryLocation(val2, true).get, state, allowNonInitializedVals))
         )
-      case UninitializedRef => //TODO merge with symbolic val generation
+      case UninitializedRef =>
         ctx.mkIntConst(Utility.generateRandomString())
       case PointerVal(address) => ctx.mkInt(address)
       case NullRef => ctx.mkInt(0)

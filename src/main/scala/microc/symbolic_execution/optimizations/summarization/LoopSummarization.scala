@@ -15,7 +15,7 @@ object LoopSummarization {
   def getAllPaths(stmt: CfgNode, loopId: Double, symbolicState: SymbolicState, executor: SymbolicExecutor): mutable.HashSet[SymbolicState] = {
     var tmpState = symbolicState.deepCopy()
     var paths = List[Path]()
-    paths = paths.appended(new Path(List[Stmt](), Number(1, CodeLoc(0, 0)), List.empty))
+    paths = paths.appended(new Path(List[Stmt](), Number(1, CodeLoc(0, 0)), List.empty, mutable.HashSet[Expr]()))
     var curr = stmt
     while (curr.id > loopId) {
       curr.ast match {
@@ -122,16 +122,16 @@ object LoopSummarization {
 
   def createSymbolicStateWithAllValuesSymbolic(oldState: SymbolicState, mapping: mutable.HashMap[Val, Expr]): SymbolicState = {
     var newState = new SymbolicState(oldState.programLocation, Number(1, CodeLoc(0, 0)), new SymbolicStore(Map.empty))
-    for (v <- oldState.variableDecls) {
-      val tmpSymVal = getSymbolicRepressentation(oldState.getValueOfVar(v.name, v.loc, true), v.name, oldState, newState, mapping)
-      tmp(Identifier(v.name, v.loc), tmpSymVal, mapping, newState)
+    for (v <- oldState.symbolicStore.lastFrameVars()) {
+      val tmpSymVal = getSymbolicRepressentation(oldState.getValueOfVar(v, CodeLoc(0, 0), true), v, oldState, newState, mapping)
+      tmp(Identifier(v, CodeLoc(0, 0)), tmpSymVal, mapping, newState)
     }
     newState
   }
 }
 
 class SummarizationResult(
-                           val summary: mutable.HashSet[(Expr, mutable.HashMap[Expr, Expr => Expr])],
+                           val summary: mutable.HashSet[(Expr, mutable.LinkedHashMap[Expr, Expr => SymbolicState => Expr], mutable.HashSet[Expr])],
                            val state: SymbolicState,
                            val updatedVars: mutable.HashSet[Expr]
                          )
@@ -141,7 +141,7 @@ class LoopSummarization(program: ProgramCfg,
                         subsumption: Option[PathSubsumption] = None,
                         ctx: Context = new Context(),
                         searchStrategy: SearchStrategy = new BFSSearchStrategy,
-                        stateHistory: Option[StateHistory] = None,
+                        stateHistory: Option[ExecutionTree] = None,
                         covered: Option[mutable.HashSet[CfgNode]] = None,
                         printStats: Boolean = true
                  ) extends SymbolicExecutor(program, subsumption, ctx, searchStrategy, stateHistory, covered, printStats = printStats) {
@@ -160,7 +160,7 @@ class LoopSummarization(program: ProgramCfg,
       statistics.summarizableLoops += 1
       for (trace <- summary) {
         var tmpState = symbolicState.deepCopy()
-        tmpState = tmpState.addedLoopTrace(trace)
+        tmpState = tmpState.addLoopTrace(trace)
 
         for (change <- trace._2) {
           val name = Utility.getName(change._1)
@@ -182,13 +182,16 @@ class LoopSummarization(program: ProgramCfg,
 
 
 //TODO remove
-  val pathToVertex: mutable.HashMap[Path, List[(Expr, Expr => Expr => Expr)]] = mutable.HashMap[Path, List[(Expr, Expr => Expr => Expr)]]()
+  val pathToVertex: mutable.LinkedHashMap[Path, List[(Expr, Expr => Expr => SymbolicState => Expr)]] = mutable.LinkedHashMap[Path, List[(Expr, Expr => Expr => SymbolicState => Expr)]]()
   val pathToState: mutable.HashMap[Path, SymbolicState] = mutable.HashMap[Path, SymbolicState]()
   var s: SymbolicState = null
 
   def getAllConditionsInALoop(cfg: ProgramCfg, loop: CfgNode): mutable.HashSet[Expr] = {
     val res = mutable.HashSet[Expr]()
     val minId = loop.id.toInt
+    if (loop.succ.isEmpty) {
+      System.out.print("fd")
+    }
     val maxId = loop.succ.maxBy(node => node.id).id.toInt
     for (i <- minId until maxId) {
       cfg.nodes.find(node => node.id == i).get.ast match {
@@ -251,9 +254,9 @@ class LoopSummarization(program: ProgramCfg,
     if (unsummarizableLoops.contains(loop)) {
       return None
     }
-    val (pda, updatedVars) = if (!loopPDAs.contains(symbolicState.programLocation)) {
+    val (pda, updatedVars) = if (!loopPDAs.contains(loop)) {
       val updatedVars = mutable.HashSet[Expr]()
-      val allConditions: mutable.HashSet[Expr] = getAllConditionsInALoop(program, symbolicState.programLocation)
+      val allConditions: mutable.HashSet[Expr] = getAllConditionsInALoop(program, loop)
       val conditionMemoryCells: mutable.HashSet[String] = getMemoryCellsFromConditions(allConditions)
       var vertices: List[Vertex] = List()
 
@@ -278,18 +281,18 @@ class LoopSummarization(program: ProgramCfg,
       }
       val pda = PDA(this, vertices, symbolicState.variableDecls, solver, Number(1, CodeLoc(0, 0)), newState, mapping)
       pda.initialize()
-      loopPDAs.put(symbolicState.programLocation, (pda, updatedVars, mapping))
+      if (pda.checkForConnectedCycles()) {
+        return None
+      }
+      loopPDAs.put(loop, (pda, updatedVars, mapping))
       (pda, updatedVars)
     }
     else {
-      val pda = loopPDAs(symbolicState.programLocation)
+      val pda = loopPDAs(loop)
       for (v <- pda._3) {
         mapping.put(v._1, v._2)
       }
       (pda._1, pda._2)
-    }
-    if (pda.checkForConnectedCycles()) {
-      return None
     }
     pda.summarizeType1Loop2(symbolicState) match {
       case Some(summary) =>
@@ -344,12 +347,12 @@ class LoopSummarization(program: ProgramCfg,
 
 
   def getAllLoopBodyPaths(stmt: CfgNode, loopId: Double, originalSymbolicState: SymbolicState, symbolicState: SymbolicState,
-                          incrementedMemoryLocations: mutable.HashMap[PointerVal, Expr => Expr => Expr], updatedVars: mutable.HashSet[Expr],
+                          incrementedMemoryLocations: mutable.HashMap[PointerVal, Expr => Expr => SymbolicState => Expr],
+                          updatedVars: mutable.HashSet[Expr], incrementedVars: mutable.HashSet[Expr],
                           conditionMemoryCells: mutable.HashSet[String], locationsWithUnpredictability: mutable.HashSet[String],
                           mapping: mutable.HashMap[Val, Expr], idMapping: mutable.HashMap[Identifier, Expr]): Option[List[Path]] = {
-    var tmpState = symbolicState.deepCopy()
     var paths = List[Path]()
-    paths = paths.appended(new Path(List[Stmt](), Number(1, CodeLoc(0, 0)), List.empty))
+    paths = paths.appended(new Path(List[Stmt](), Number(1, CodeLoc(0, 0)), List.empty, mutable.HashSet[Expr]()))
     var curr = stmt
     while (curr.id > loopId) {
       curr.ast match {
@@ -359,8 +362,12 @@ class LoopSummarization(program: ProgramCfg,
               val trueBranch = Utility.getTrueBranch(curr)
               val elseBranch = Utility.getFalseBranch(curr)
               val trueState = symbolicState.deepCopy()
+              val newUpdatedVars = new mutable.HashSet[Expr]
+              newUpdatedVars.addAll(updatedVars)
+              val newIncrementedVars = new mutable.HashSet[Expr]
+              newIncrementedVars.addAll(updatedVars)
               var pathsOpt = getAllLoopBodyPaths(trueBranch, loopId, originalSymbolicState, trueState,
-                incrementedMemoryLocations, updatedVars, conditionMemoryCells, locationsWithUnpredictability.clone(), mapping, idMapping)
+                incrementedMemoryLocations, newUpdatedVars, newIncrementedVars, conditionMemoryCells, locationsWithUnpredictability.clone(), mapping, idMapping)
               if (pathsOpt.isEmpty) {
                 return None
               }
@@ -369,8 +376,16 @@ class LoopSummarization(program: ProgramCfg,
                 .map(pathContinuation => path.appendedAsPath(pathContinuation))
 
               val falseState = symbolicState.deepCopy()
+              val newUpdatedVars2 = new mutable.HashSet[Expr]
+              newUpdatedVars2.addAll(updatedVars)
+              val newIncrementedVars2 = new mutable.HashSet[Expr]
+              newIncrementedVars2.addAll(updatedVars)
               pathsOpt = getAllLoopBodyPaths(elseBranch, loopId, originalSymbolicState, falseState,
-                incrementedMemoryLocations, updatedVars, conditionMemoryCells, locationsWithUnpredictability.clone(), mapping, idMapping)
+                incrementedMemoryLocations, newUpdatedVars2, newIncrementedVars2, conditionMemoryCells, locationsWithUnpredictability.clone(), mapping, idMapping)
+              updatedVars.addAll(newUpdatedVars)
+              updatedVars.addAll(newUpdatedVars2)
+              incrementedVars.addAll(newIncrementedVars)
+              incrementedVars.addAll(newIncrementedVars2)
               if (pathsOpt.isEmpty) {
                 return None
               }
@@ -384,30 +399,33 @@ class LoopSummarization(program: ProgramCfg,
           )
           return Some(paths)
         case w@WhileStmt(_, _, _) =>
-          val summaryOpt = summarizeLoopInner(curr, symbolicState, Some(symbolicState), mapping)
+          val summaryOpt = summarizeLoopInner(curr, symbolicState.deepCopy(), Some(symbolicState), mapping)
           if (summaryOpt.isEmpty) {
             return None
           }
           val summary = summaryOpt.get
           val innerUpdatedVars = summary.updatedVars
-          updatedVars.addAll(innerUpdatedVars)
+          incrementedVars.addAll(innerUpdatedVars)
           for (trace <- summary.summary) {
-            symbolicState.addedLoopTrace(trace)
+            symbolicState.addLoopTrace(trace)
             paths = paths.map(path => path.addedCondition(trace._1))
             for (update <- trace._2) {
               val name = Utility.getName(update._1)
               if (Utility.varIsFromOriginalProgram(name)) {
-                paths = paths.map(path =>
-                  if (innerUpdatedVars.contains(update._1)) {
-                    path.updatedChanges(update._1,
-                      iterations => x =>
-                        Utility.simplifyArithExpr(BinaryOp(Plus, x, BinaryOp(Times, iterations, update._2.apply(x), CodeLoc(0, 0)), CodeLoc(0, 0)))
-                    )
-                  }
-                  else {
-                    path.updatedChanges(update._1,
-                      iterations => x => Utility.simplifyArithExpr(update._2.apply(x))
-                    )
+                  paths = paths.map(path => {
+                    updatedVars.add(update._1)
+                    if (innerUpdatedVars.contains(update._1)) {
+                      incrementedVars.add(update._1)
+                      path.updatedChanges(update._1,
+                        iterations => x => s =>
+                          Utility.simplifyArithExpr(BinaryOp(Plus, x, BinaryOp(Times, iterations, update._2.apply(x).apply(s), CodeLoc(0, 0)), CodeLoc(0, 0)))
+                      )
+                    }
+                    else {
+                      path.updatedChanges(update._1,
+                        iterations => x => s => Utility.simplifyArithExpr(update._2.apply(x).apply(s))
+                      )
+                    }
                   }
                 )
                 if (symbolicState.containsVar(name)) {
@@ -423,8 +441,8 @@ class LoopSummarization(program: ProgramCfg,
               idMapping.put(id, right)
             case _ =>
           }
-          val changeOpt = computeVariableChange2(otherStmt, symbolicState, incrementedMemoryLocations,
-            updatedVars, conditionMemoryCells, locationsWithUnpredictability, mapping)
+          val changeOpt = computeVariableChange2(otherStmt, symbolicState, incrementedMemoryLocations, updatedVars,
+            incrementedVars, conditionMemoryCells, locationsWithUnpredictability, mapping)
           if (changeOpt.nonEmpty) {
             (left, right) match {
               case (_, BinaryOp(_, _, _, _)) =>
@@ -438,8 +456,8 @@ class LoopSummarization(program: ProgramCfg,
               case _ =>
             }
             if (curr.succ.head.id > loopId) {
-              stepOnAssign(otherStmt, symbolicState)
-              stepOnAssign(otherStmt, originalSymbolicState)
+              stepOnAssign(otherStmt, symbolicState, true)
+              stepOnAssign(otherStmt, originalSymbolicState, true)
             }
             val change = changeOpt.get
             change._1 match {
@@ -463,6 +481,9 @@ class LoopSummarization(program: ProgramCfg,
           curr = curr.succ.head
       }
     }
+    if (paths.size == 1) {
+      paths.head.incrementedVariables = incrementedVars
+    }
     for (path <- paths) {
       if (!pathToState.contains(path)) {
         pathToState.put(path, symbolicState)
@@ -476,20 +497,23 @@ class LoopSummarization(program: ProgramCfg,
 
 
   def computeVariableChange2(stmt: Stmt, symbolicState: SymbolicState,
-                             incrementedMemoryLocations: mutable.HashMap[PointerVal, (Expr) => ((Expr) => Expr)],
-                             incrementedVariables: mutable.HashSet[Expr],
+                             incrementedMemoryLocations: mutable.HashMap[PointerVal, (Expr) => ((Expr) => SymbolicState => Expr)],
+                             updatedVariables: mutable.HashSet[Expr], incrementedVariables: mutable.HashSet[Expr],
                              conditionMemoryCells: mutable.HashSet[String],
                              locationsWithUnpredictability: mutable.HashSet[String],
                              mapping: mutable.HashMap[Val, Expr]
-                            ): Option[(Expr, (Expr) => ((Expr) => Expr))] = {
+                            ): Option[(Expr, Expr => Expr => SymbolicState => Expr)] = {
     stmt match {
       case AssignStmt(left, right, _) =>
-        if (Utility.exprContainsAMemoryLocation(right, locationsWithUnpredictability, printer) && conditionMemoryCells.contains(printer.print(left))) {
+        if (Utility.exprContainsAMemoryLocation(right, locationsWithUnpredictability, printer) /*&& conditionMemoryCells.contains(printer.print(left))*/) {
+          return None
+        }
+        val leftSideMemoryLocation = symbolicState.getMemoryLoc(left)
+        if (incrementedVariables.exists(v => v.equals(left))) {
           return None
         }
         val name = Utility.getName(left)
         locationsWithUnpredictability.remove(printer.print(left))
-        val leftSideMemoryLocation = symbolicState.getMemoryLoc(left)
         Utility.simplifyArithExpr(right) match {
           case BinaryOp(_, SymbolicVal(_), _, _) =>
             None
@@ -497,17 +521,19 @@ class LoopSummarization(program: ProgramCfg,
             None
           case BinaryOp(Plus, Identifier(name2, loc1), n@Number(_, loc2), _)
             if sameSymbolicVal(symbolicState, symbolicState.getSymbolicValOpt(name2).get, leftSideMemoryLocation) =>
-            val changeFunction: Expr => Expr => Expr = (iterations => (x =>
+            val changeFunction: Expr => Expr => SymbolicState => Expr = (iterations => (x => s =>
               Utility.simplifyArithExpr(BinaryOp(Plus, x, BinaryOp(Times, iterations, n, loc2), loc1))))
             incrementedMemoryLocations.put(leftSideMemoryLocation, changeFunction)
             incrementedVariables.add(left)
+            updatedVariables.add(left)
             Some(left, changeFunction)
           case BinaryOp(Minus, Identifier(name2, loc1), Number(value, loc2), _)
             if sameSymbolicVal(symbolicState, symbolicState.getSymbolicValOpt(name2).get, leftSideMemoryLocation) =>
-            val changeFunction: Expr => Expr => Expr = (iterations => (x =>
+            val changeFunction: Expr => Expr => SymbolicState => Expr = (iterations => (x => s =>
               Utility.simplifyArithExpr(BinaryOp(Plus, x, BinaryOp(Times, iterations, Number(-value, loc2), loc2), loc1))))
             incrementedMemoryLocations.put(leftSideMemoryLocation, changeFunction)
             incrementedVariables.add(left)
+            updatedVariables.add(left)
             Some(left, changeFunction)
           case BinaryOp(Plus, Identifier(name2, loc1), id@Identifier(name3, loc2), _)
             if sameSymbolicVal(symbolicState, symbolicState.getSymbolicValOpt(name2).get, leftSideMemoryLocation) &&
@@ -528,121 +554,119 @@ class LoopSummarization(program: ProgramCfg,
           case BinaryOp(Plus, resId@Identifier(name2, loc1), id@Identifier(_, loc2), _)
             if sameSymbolicVal(symbolicState, symbolicState.getSymbolicValOpt(name2).get, leftSideMemoryLocation) =>
             val v = symbolicState.getValueOfVar(id.name, id.loc).asInstanceOf[Symbolic]
-            val changeFunction: Expr => Expr => Expr = (iterations => (x =>
+            val changeFunction: Expr => Expr => SymbolicState => Expr = (iterations => (x => s =>
               Utility.simplifyArithExpr(BinaryOp(Plus, x, BinaryOp(Times, iterations, v, loc2), loc1))))
             incrementedMemoryLocations.put(leftSideMemoryLocation, changeFunction)
             incrementedVariables.add(left)
+            updatedVariables.add(left)
             Some(left, changeFunction)
           case BinaryOp(Minus, resId@Identifier(name2, loc1), id@Identifier(_, loc2), _)
             if sameSymbolicVal(symbolicState, symbolicState.getSymbolicValOpt(name2).get, leftSideMemoryLocation) =>
             val v = symbolicState.getValueOfVar(id.name, id.loc).asInstanceOf[Symbolic]
-            val changeFunction: Expr => Expr => Expr = (iterations => (x =>
+            val changeFunction: Expr => Expr => SymbolicState => Expr = (iterations => (x => s =>
               Utility.simplifyArithExpr(BinaryOp(Plus, x, BinaryOp(Times, iterations, BinaryOp(Minus, Number(0, CodeLoc(0, 0)), v, loc2), loc2), loc1))))
             incrementedMemoryLocations.put(leftSideMemoryLocation, changeFunction)
             incrementedVariables.add(left)
+            updatedVariables.add(left)
             Some(left, changeFunction)
           case BinaryOp(Plus, n@Number(_, loc2), Identifier(name2, loc1), _)
             if sameSymbolicVal(symbolicState, symbolicState.getSymbolicValOpt(name2).get, leftSideMemoryLocation) =>
-            val changeFunction: Expr => Expr => Expr = (iterations => (x =>
+            val changeFunction: Expr => Expr => SymbolicState => Expr = (iterations => (x => s =>
               Utility.simplifyArithExpr(BinaryOp(Plus, x, BinaryOp(Times, iterations, n, loc2), loc1))))
             incrementedMemoryLocations.put(leftSideMemoryLocation, changeFunction)
             incrementedVariables.add(left)
+            updatedVariables.add(left)
             Some(left, changeFunction)
           case BinaryOp(Minus, Number(value, loc2), Identifier(name2, loc1), _)
             if sameSymbolicVal(symbolicState, symbolicState.getSymbolicValOpt(name2).get, leftSideMemoryLocation) =>
-            val changeFunction: Expr => Expr => Expr = (iterations => (x =>
+            val changeFunction: Expr => Expr => SymbolicState => Expr = (iterations => (x => s =>
               Utility.simplifyArithExpr(BinaryOp(Plus, x, BinaryOp(Times, iterations, Number(-value, loc2), loc2), loc1))))
             incrementedMemoryLocations.put(leftSideMemoryLocation, changeFunction)
             incrementedVariables.add(left)
+            updatedVariables.add(left)
             Some(left, changeFunction)
           case BinaryOp(Plus, id@Identifier(_, loc2), resId@Identifier(name2, loc1), _)
             if sameSymbolicVal(symbolicState, symbolicState.getSymbolicValOpt(name2).get, leftSideMemoryLocation) =>
             val v = symbolicState.getValueOfVar(id.name, id.loc).asInstanceOf[Symbolic]
-            val changeFunction: Expr => Expr => Expr = (iterations => (x =>
+            val changeFunction: Expr => Expr => SymbolicState => Expr = (iterations => (x => s =>
               Utility.simplifyArithExpr(BinaryOp(Plus, x, BinaryOp(Times, iterations, v, loc2), loc1))))
             incrementedMemoryLocations.put(leftSideMemoryLocation, changeFunction)
             incrementedVariables.add(left)
+            updatedVariables.add(left)
             Some(left, changeFunction)
           case BinaryOp(Minus, id@Identifier(_, loc2), resId@Identifier(name2, loc1), _)
             if sameSymbolicVal(symbolicState, symbolicState.getSymbolicValOpt(name2).get, leftSideMemoryLocation) =>
             val v = symbolicState.getValueOfVar(id.name, id.loc).asInstanceOf[Symbolic]
-            val changeFunction: Expr => Expr => Expr = (iterations => (x =>
+            val changeFunction: Expr => Expr => SymbolicState => Expr = (iterations => (x => s =>
               Utility.simplifyArithExpr(BinaryOp(Plus, x, BinaryOp(Times, iterations, BinaryOp(Minus, Number(0, CodeLoc(0, 0)), v, loc2), loc2), loc1))))
             incrementedMemoryLocations.put(leftSideMemoryLocation, changeFunction)
             incrementedVariables.add(left)
+            updatedVariables.add(left)
             Some(left, changeFunction)
           case expr: BinaryOp if !Utility.varIsFromOriginalProgram(name) =>
-            Some(left, (iterations => (x => Utility.simplifyArithExpr(expr))))
+            Some(left, (iterations => (x => s => Utility.simplifyArithExpr(expr))))
           case n@Not(expr, loc) =>
-            Some(left, (iterations => (x => n)))
+            Some(left, (iterations => (x => s => n)))
           case arr@ArrayNode(elems, loc) =>
             val v = loadArray(arr, symbolicState)
-            Some(left, (iterations => (x => v)))
+            Some(left, (iterations => (x => s => v)))
           case arr@ArrayAccess(ArrayNode(elems, loc1), Number(value, loc2), loc3) =>
             val elem = elems(value)
-            Some(left, (iterations => (x => elem)))
+            Some(left, (iterations => (x => s => elem)))
           case f@FieldAccess(Record(fields, loc1), field, loc3) =>
             val elem = fields.find(rf => rf.name == field).get.expr
-            Some(left, (iterations => (x => elem)))
+            Some(left, (iterations => (x => s => elem)))
           case n@Number(_, _) =>
-            Some(left, (iterations => (x => n)))
+            Some(left, (iterations => (x => s => n)))
           case a@Alloc(expr, _) =>
-            Some(left, (iterations => (x => a)))
+            Some(left, (iterations => (x => s => a)))
           case r@VarRef(id, loc) =>
-            Some(left, (iterations => (x => r)))
+            Some(left, (iterations => (x => s => r)))
           case in@Input(loc) =>
             locationsWithUnpredictability.add(printer.print(left))
-            Some(left, (iterations => (x => SymbolicVal(CodeLoc(0, 0)))))
-          case Identifier(name, loc) =>
+            Some(left, (iterations => (x => s => SymbolicVal(CodeLoc(0, 0)))))
+          case id@Identifier(_, _) if left.equals(id) =>
+            updatedVariables.add(left)
+            Some(left, iterations => x => s => x)
+          case id@Identifier(name, loc) =>
             val location = symbolicState.getSymbolicValOpt(name).get
-//            symbolicState.getVal(location) match {
-//              case Some(s@SymbolicVal(_)) =>
-//                mapping.put(s, left)
-//              case _ =>
-//            }
+            updatedVariables.add(left)
             if (!incrementedMemoryLocations.contains(location)) {
-              Some(left, (iterations => (x => x)))
+              Some(left, (iterations => (x => state => state.getValAtMemoryLoc(id).asInstanceOf[Symbolic])))
             }
             else {
+              incrementedVariables.add(left)
               Some(left, incrementedMemoryLocations(location))
             }
           case a@ArrayAccess(_, _, _) =>
             val location = symbolicState.getMemoryLoc(a)
-//            symbolicState.getVal(location) match {
-//              case Some(s@SymbolicVal(_)) =>
-//                mapping.put(s, left)
-//              case _ =>
-//            }
+            updatedVariables.add(left)
             if (!incrementedMemoryLocations.contains(location)) {
-              Some(left, (iterations => (x => x)))
+
+              Some(left, (iterations => (x => state => state.getValAtMemoryLoc(a).asInstanceOf[Symbolic])))
             }
             else {
+              incrementedVariables.add(left)
               Some(left, incrementedMemoryLocations(location))
             }
           case f@FieldAccess(_, _, _) =>
             val location = symbolicState.getMemoryLoc(f)
-//            symbolicState.getVal(location) match {
-//              case Some(s@SymbolicVal(_)) =>
-//                mapping.put(s, left)
-//              case _ =>
-//            }
+            updatedVariables.add(left)
             if (!incrementedMemoryLocations.contains(location)) {
-              Some(left, (iterations => (x => x)))
+              Some(left, (iterations => (x => state => state.getValAtMemoryLoc(f).asInstanceOf[Symbolic])))
             }
             else {
+              incrementedVariables.add(left)
               Some(left, incrementedMemoryLocations(location))
             }
           case d@Deref(pointer, loc) =>
             val location = symbolicState.getMemoryLoc(d)
-            //            symbolicState.getVal(location) match {
-            //              case Some(s@SymbolicVal(_)) =>
-            //                mapping.put(s, left)
-            //              case _ =>
-            //            }
+            updatedVariables.add(left)
             if (!incrementedMemoryLocations.contains(location)) {
-              Some(left, (iterations => (x => x)))
+              Some(left, (iterations => (x => state => state.getValAtMemoryLoc(d).asInstanceOf[Symbolic])))
             }
             else {
+              incrementedVariables.add(left)
               Some(left, incrementedMemoryLocations(location))
             }
           case _ =>
@@ -657,12 +681,11 @@ class LoopSummarization(program: ProgramCfg,
   def getAllPathsInALoop(stmt: CfgNode, originalSymbolicState: SymbolicState, symbolicState: SymbolicState, conditionMemoryCells: mutable.HashSet[String],
                          updatedVars: mutable.HashSet[Expr], mapping: mutable.HashMap[Val, Expr]): Option[List[Path]] = {
     var paths = List[Path]()
-    s = symbolicState
-    val incrementedMemoryLocations = mutable.HashMap[PointerVal, Expr => Expr => Expr]()
+    val incrementedMemoryLocations = mutable.HashMap[PointerVal, Expr => Expr => SymbolicState => Expr]()
     val locationsWithUnpredictability = mutable.HashSet[String]()
     val idMapping = mutable.HashMap[Identifier, Expr]()
     val pathsOpt = getAllLoopBodyPaths(Utility.getTrueBranch(stmt), stmt.id, originalSymbolicState, symbolicState.deepCopy(), incrementedMemoryLocations,
-      updatedVars, conditionMemoryCells, locationsWithUnpredictability, mapping, idMapping)
+      updatedVars, mutable.HashSet[Expr](), conditionMemoryCells, locationsWithUnpredictability, mapping, idMapping)
     if (pathsOpt.isEmpty) {
       return None
     }
@@ -671,7 +694,7 @@ class LoopSummarization(program: ProgramCfg,
       .map(path => path.addedCondition(g))
       .map(path => path.simplifiedCondition())
     )
-    var falsePath = new Path(List.empty, Number(1, stmt.ast.loc), List.empty)
+    var falsePath = new Path(List.empty, Number(1, stmt.ast.loc), List.empty, mutable.HashSet[Expr]())
     falsePath = falsePath.addedCondition(Not(g, stmt.ast.loc))
     stmt.pred.minBy(node => node.id).ast match {
       case a@AssignStmt(Identifier(name, loc), expr, _) =>
@@ -684,6 +707,7 @@ class LoopSummarization(program: ProgramCfg,
     for (path <- paths) {
       pathToVertex.put(path, path.changes)
     }
+    s = symbolicState
     Some(paths)
   }
 
@@ -714,7 +738,17 @@ class LoopSummarization(program: ProgramCfg,
     changes.foreach(change => {
       val valLocation = symbolicState.getMemoryLoc(change._1)
       val tmp = change._2.apply(BinaryOp(Minus, iterations, Number(1, CodeLoc(0, 0)), CodeLoc(0, 0)))
-        .apply(symbolicState.symbolicStore.storage.getVal(valLocation).get.asInstanceOf[Symbolic])
+        .apply(
+          {
+            symbolicState.symbolicStore.storage.getVal(valLocation) match {
+              case None =>
+                System.out.print("df")
+                symbolicState.getMemoryLoc(change._1)
+              case _ =>
+            }
+            symbolicState.symbolicStore.storage.getVal(valLocation).get.asInstanceOf[Symbolic]
+          })
+        .apply(symbolicState)
       val newVal = tmp match {
         case v: Val => v
         case e: Expr =>
@@ -723,13 +757,13 @@ class LoopSummarization(program: ProgramCfg,
       symbolicState.updateMemoryLocation(valLocation, newVal)
     })
     val path1Constraint = Utility.applyTheState(Utility.applyPointers(vertex1.condition, symbolicState), symbolicState)
-    val resChanges = new mutable.HashMap[Expr, Expr => Expr]()
+    val resChanges = new mutable.LinkedHashMap[Expr, Expr => SymbolicState => Expr]()
     for (change <- changes) {
       resChanges.put(change._1, change._2.apply(iterations))
     }
     changes.foreach(change => {
       val valLocation = symbolicState2.getMemoryLoc(change._1)
-      val newVal = change._2.apply(iterations).apply(symbolicState2.symbolicStore.storage.getVal(valLocation).get.asInstanceOf[Symbolic]) match {
+      val newVal = change._2.apply(iterations).apply(symbolicState2.symbolicStore.storage.getVal(valLocation).get.asInstanceOf[Symbolic]).apply(symbolicState2) match {
         case v: Val => v
         case e: Expr =>
           Utility.removeUnnecessarySymbolicExpr(SymbolicExpr(e, CodeLoc(0, 0)))
@@ -779,7 +813,7 @@ class LoopSummarization(program: ProgramCfg,
       symbolicState.updateMemoryLocation(valLocation, newVal)
     })
     val path1Constraint = Utility.applyTheState(vertex1.condition, symbolicState)
-    val resChanges = new mutable.HashMap[Expr, Expr => Expr]()
+    val resChanges = new mutable.HashMap[Expr, Expr => SymbolicState => Expr]()
     for (change <- changes) {
       resChanges.put(change._1, change._2.apply(iterations))
     }

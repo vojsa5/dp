@@ -1,13 +1,13 @@
 package microc.symbolic_execution.optimizations.merging
 
 import microc.cfg.CfgNode
-import microc.symbolic_execution.{StateHistory, SymbolicState}
+import microc.symbolic_execution.{ExecutionTree, SymbolicState}
 
 import scala.collection.mutable
 
 class DynamicStateMerging(
                            strategy: StateMerging,
-                           stateHistory: StateHistory,
+                           stateHistory: ExecutionTree,
                            variableSolvingCosts: mutable.HashMap[CfgNode, mutable.HashMap[String, Double]],
                            limitCost: Double,
                            depth: Int

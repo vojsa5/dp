@@ -1,4 +1,4 @@
-package microc.symbolic_execution.experiments
+package microc.generation
 
 case class NumType() extends VarType {
   override def toString: String = "number"

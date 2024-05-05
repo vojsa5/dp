@@ -36,5 +36,7 @@ class AggressiveStateMerging(strategy: SearchStrategy) extends StateMerging {
     res
   }
 
-  override def statesCount(): Int = strategy.statesCount() - statesToRemove.size
+  override def statesCount(): Int = {
+    strategy.statesCount()
+  }
 }

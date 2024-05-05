@@ -101,7 +101,7 @@ object Utility {
       case Null(_) => Set.empty
       case Deref(pointer, _) => getIdentifiersThatCanCauseError(pointer)
       case ArrayNode(elems, _) => elems.flatMap(elem => getIdentifiersThatCanCauseError(elem)).toSet
-      case ArrayAccess(array, index, _) => getAllIdentifierNames(array) ++ getAllIdentifierNames(index)
+      case ArrayAccess(array, index, _) => getIdentifiersThatCanCauseError(array) ++ getAllIdentifierNames(index)
       case Record(fields, _) => fields.flatMap(field => getIdentifiersThatCanCauseError(field.expr)).toSet
       case FieldAccess(record, _, _) => getIdentifiersThatCanCauseError(record)
       case _ => Set.empty
@@ -187,10 +187,10 @@ object Utility {
       case SymbolicExpr(expr, _) => applyTheState(expr, state, allowReturnNonInitialized)
       case IteVal(val1, val2, cond, loc) =>
         (applyVal(state.getValOnMemoryLocation(val1).get, state), applyVal(state.getValOnMemoryLocation(val2).get, state)) match {
-          case (a: Symbolic, b: Symbolic) => IteVal(state.addAlloc(a), state.addAlloc(b), applyTheState(cond, state, allowReturnNonInitialized), loc)
-          case (a: Symbolic, b) => IteVal(state.addAlloc(a), state.addAlloc(SymbolicExpr(b, loc)), applyTheState(cond, state, allowReturnNonInitialized), loc)
-          case (a, b: Symbolic) => IteVal(state.addAlloc(SymbolicExpr(a, loc)), state.addAlloc(b), applyTheState(cond, state, allowReturnNonInitialized), loc)
-          case (a, b) => IteVal(state.addAlloc(SymbolicExpr(a, loc)), state.addAlloc(SymbolicExpr(b, loc)), applyTheState(cond, state, allowReturnNonInitialized), loc)
+          case (a: Symbolic, b: Symbolic) => IteVal(state.addVal(a), state.addVal(b), applyTheState(cond, state, allowReturnNonInitialized), loc)
+          case (a: Symbolic, b) => IteVal(state.addVal(a), state.addVal(SymbolicExpr(b, loc)), applyTheState(cond, state, allowReturnNonInitialized), loc)
+          case (a, b: Symbolic) => IteVal(state.addVal(SymbolicExpr(a, loc)), state.addVal(b), applyTheState(cond, state, allowReturnNonInitialized), loc)
+          case (a, b) => IteVal(state.addVal(SymbolicExpr(a, loc)), state.addVal(SymbolicExpr(b, loc)), applyTheState(cond, state, allowReturnNonInitialized), loc)
         }
       case r@RecVal(fields) => r
       case a@ArrVal(elems) => a
@@ -585,4 +585,40 @@ object Utility {
     }
   }
 
+
+  def getIdentifiers(expr: Expr): mutable.HashSet[Identifier] = {
+    expr match {
+      case BinaryOp(_, left, right, _) =>
+        val res = getIdentifiers(left).addAll(getIdentifiers(right))
+        res
+      case Not(expr, _) =>
+        getIdentifiers(expr)
+      case id@Identifier(_, _) =>
+        val res = mutable.HashSet[Identifier]()
+        res.add(id)
+        res
+      case _ => mutable.HashSet[Identifier]()
+    }
+  }
+
+  def isComparisonOperator(binaryOp: BinaryOp): Boolean = {
+    binaryOp.operator match {
+      case Plus => false
+      case Minus => false
+      case Times => false
+      case Divide => false
+      case _ => true
+    }
+  }
+
+  def containsOneOfTheIdentifiers(expr: Expr, ids: mutable.HashSet[Expr]): Boolean = {
+    expr match {
+      case BinaryOp(_, left, right, _) => containsOneOfTheIdentifiers(left, ids) || containsOneOfTheIdentifiers(right, ids)
+      case Not(expr, _) => containsOneOfTheIdentifiers(expr, ids)
+      case id@Identifier(_, _) =>
+        ids.exists(i => i.equals(id))
+      case _ =>
+        false
+    }
+  }
 }

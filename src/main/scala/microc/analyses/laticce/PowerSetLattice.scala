@@ -1,4 +1,4 @@
-package microc.lattice
+package microc.analyses.laticce
 
 class PowerSetLattice[A](elements: Set[A]) extends Lattice[Set[A]] {
   override def top: Set[A] = {

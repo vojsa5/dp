@@ -63,6 +63,8 @@ trait CfgFactory {
             for (pred <- preds) {
               pred.succ.add(qNode)
             }
+          case _ =>
+            throw new Exception("Block should always contain a NestedBlockStmt")
         }
         preds = tmpPreds
         qNode
@@ -102,6 +104,8 @@ trait CfgFactory {
 //              tmpPreds.add(last)
 //            }
           case None =>
+          case _ =>
+            throw new Exception("Block should always contain a NestedBlockStmt")
         }
         tmpPreds.addAll(preds)
         preds = tmpPreds

@@ -106,7 +106,7 @@ class RandomSearchStrategy extends SearchStrategy {
 }
 
 
-class RandomPathSelectionStrategy(stateHistory: StateHistory) extends SearchStrategy {
+class RandomPathSelectionStrategy(stateHistory: ExecutionTree) extends SearchStrategy {
 
   override def addState(symbolicState: SymbolicState): Unit = {}
 
@@ -114,8 +114,9 @@ class RandomPathSelectionStrategy(stateHistory: StateHistory) extends SearchStra
     stateHistory.getState()
   }
 
-  override def statesCount(): Int =
+  override def statesCount(): Int = {
     stateHistory.statesCount()
+  }
 }
 
 
@@ -123,27 +124,36 @@ class CoverageSearchStrategy(covered: mutable.HashSet[CfgNode]) extends SearchSt
 
   var set = new mutable.HashSet[SymbolicState]
 
-  private def nextUncoveredDistanceInner(cfgNode: CfgNode): Int = {
-    if (!covered.contains(cfgNode)) {
-      0
+  private def nextUncoveredDistanceInner(cfgNode: CfgNode, limit: Int): Int = {
+    if (!covered.contains(cfgNode) || limit < 0) {
+      1
     }
     else {
       val nodesWithBiggerId = cfgNode.succ.filter(s => s.id >= cfgNode.id)
       if (nodesWithBiggerId.isEmpty) {
         return Int.MaxValue
       }
-      cfgNode.succ.filter(s => s.id >= cfgNode.id).map(s => nextUncoveredDistanceInner(s)).min + 1
+      cfgNode.succ.filter(s => s.id >= cfgNode.id).map(s => nextUncoveredDistanceInner(s, limit - 1)).min + 1
     }
   }
 
   private def nextUncoveredDistance(symbolicState: SymbolicState): Int =
-    nextUncoveredDistanceInner(symbolicState.programLocation)
+    nextUncoveredDistanceInner(symbolicState.programLocation, 50)
 
   override def addState(symbolicState: SymbolicState): Unit =
     set.add(symbolicState)
 
   override def getState(): SymbolicState = {
-    val res = set.minBy(nextUncoveredDistance)
+    val weights = set.map(s => 1.0 / nextUncoveredDistance(s)).toSeq
+    val totalWeight = weights.sum
+
+    val normalizedWeights = weights.map(w => w / totalWeight)
+
+    val cumulativeWeights = normalizedWeights.scanLeft(0.0)(_ + _).tail
+
+    val randomValue = Random.nextDouble()
+    val index = cumulativeWeights.indexWhere(cw => randomValue < cw)
+    val res = set.toSeq(index)
     set.remove(res)
     res
   }
@@ -153,7 +163,7 @@ class CoverageSearchStrategy(covered: mutable.HashSet[CfgNode]) extends SearchSt
 }
 
 
-class KleeSearchStrategy(stateHistory: StateHistory, covered: mutable.HashSet[CfgNode]) extends SearchStrategy {
+class KleeSearchStrategy(stateHistory: ExecutionTree, covered: mutable.HashSet[CfgNode]) extends SearchStrategy {
   val coverageSearchStrategy = new CoverageSearchStrategy(covered)
   val randomPathSearchStrategy = new RandomPathSelectionStrategy(stateHistory)
 

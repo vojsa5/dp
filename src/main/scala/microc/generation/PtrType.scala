@@ -1,4 +1,4 @@
-package microc.symbolic_execution.experiments
+package microc.generation
 
 case class PtrType(inner: VarType) extends VarType {
   override def toString: String = "pointer -> " + inner.toString

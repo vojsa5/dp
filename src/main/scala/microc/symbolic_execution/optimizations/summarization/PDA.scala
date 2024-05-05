@@ -24,20 +24,20 @@ case class PDA(loopSummary: LoopSummarization, vertices: List[Vertex], variables
           case Identifier(name, _) =>
             if (!Utility.varIsFromOriginalProgram(name) && !newState.containsVar(name)) {
               newState.updateVar(name, Utility.removeUnnecessarySymbolicExpr(
-                SymbolicExpr(change._2.apply(Number(1, CodeLoc(0, 0))).apply(Number(1, CodeLoc(0, 0))), CodeLoc(0, 0)))
+                SymbolicExpr(change._2.apply(Number(1, CodeLoc(0, 0))).apply(Number(1, CodeLoc(0, 0))).apply(newState), CodeLoc(0, 0)))
               )
             }
           case d@Deref(pointer, loc) =>
             newState.updateMemoryLocation(newState.getMemoryLoc(d), Utility.removeUnnecessarySymbolicExpr(
-              SymbolicExpr(change._2.apply(Number(1, CodeLoc(0, 0))).apply(newState.getValAtMemoryLoc(d).asInstanceOf[Symbolic]), CodeLoc(0, 0)))
+              SymbolicExpr(change._2.apply(Number(1, CodeLoc(0, 0))).apply(newState.getValAtMemoryLoc(d).asInstanceOf[Symbolic]).apply(newState), CodeLoc(0, 0)))
             )
           case a@ArrayAccess(_, _, _) =>
             newState.updateMemoryLocation(newState.getMemoryLoc(a), Utility.removeUnnecessarySymbolicExpr(
-              SymbolicExpr(change._2.apply(Number(1, CodeLoc(0, 0))).apply(newState.getValAtMemoryLoc(a).asInstanceOf[Symbolic]), CodeLoc(0, 0)))
+              SymbolicExpr(change._2.apply(Number(1, CodeLoc(0, 0))).apply(newState.getValAtMemoryLoc(a).asInstanceOf[Symbolic]).apply(newState), CodeLoc(0, 0)))
             )
           case f@FieldAccess(_, _, _) =>
             newState.updateMemoryLocation(newState.getMemoryLoc(f), Utility.removeUnnecessarySymbolicExpr(
-              SymbolicExpr(change._2.apply(Number(1, CodeLoc(0, 0))).apply(newState.getValAtMemoryLoc(f).asInstanceOf[Symbolic]), CodeLoc(0, 0)))
+              SymbolicExpr(change._2.apply(Number(1, CodeLoc(0, 0))).apply(newState.getValAtMemoryLoc(f).asInstanceOf[Symbolic]).apply(newState), CodeLoc(0, 0)))
             )
         }
       }
@@ -69,8 +69,8 @@ case class PDA(loopSummary: LoopSummarization, vertices: List[Vertex], variables
   }
 
 
-  def summarizeType1Loop2(symbolicState: SymbolicState): Option[mutable.HashSet[(Expr, mutable.HashMap[Expr, Expr => Expr])]] = {
-    var res: mutable.HashSet[(Expr, mutable.HashMap[Expr, Expr => Expr])] = mutable.HashSet()
+  def summarizeType1Loop2(symbolicState: SymbolicState): Option[mutable.HashSet[(Expr, mutable.LinkedHashMap[Expr, Expr => SymbolicState => Expr], mutable.HashSet[Expr])]] = {
+    var res: mutable.HashSet[(Expr, mutable.LinkedHashMap[Expr, Expr => SymbolicState => Expr], mutable.HashSet[Expr])] = mutable.HashSet()
     for (path <- entryStates) {
       val constraint = solver.createConstraint(BinaryOp(AndAnd, path.condition, symbolicState.pathCondition, CodeLoc(0, 0)), symbolicState, true)
       solver.solveConstraint(constraint) match {
@@ -81,8 +81,9 @@ case class PDA(loopSummary: LoopSummarization, vertices: List[Vertex], variables
             symbolicState,
             path,
             Number(1, CodeLoc(0, 0)),
-            new mutable.HashMap[Expr, Expr => Expr](),
-            new mutable.LinkedHashMap[Vertex, (Expr, mutable.HashMap[Expr, Expr => Expr])]()
+            new mutable.LinkedHashMap[Expr, Expr => SymbolicState => Expr](),
+            new mutable.LinkedHashMap[Vertex, (Expr, mutable.LinkedHashMap[Expr, Expr => SymbolicState => Expr])](),
+            new mutable.HashSet[Expr]
           )
           if (!summarizable) {
             return None
@@ -179,8 +180,8 @@ case class PDA(loopSummary: LoopSummarization, vertices: List[Vertex], variables
   }
 
 
-  def combineFunctions(operation: BinaryOperator, oldFunction: Expr => Expr, newFunction: Expr => Expr): Expr => Expr = {
-    expr => BinaryOp(operation, oldFunction.apply(expr), newFunction.apply(expr), CodeLoc(0, 0))
+  def combineFunctions(operation: BinaryOperator, oldFunction: Expr => SymbolicState => Expr, newFunction: Expr => SymbolicState => Expr): Expr => SymbolicState => Expr = {
+    expr => s => BinaryOp(operation, oldFunction.apply(expr).apply(s), newFunction.apply(expr).apply(s), CodeLoc(0, 0))
   }
 
 }

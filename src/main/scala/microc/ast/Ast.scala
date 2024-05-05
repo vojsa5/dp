@@ -473,11 +473,6 @@ case class VarStmt(decls: List[IdentifierDecl], loc: Loc) extends Stmt {
   override def children: Iterable[AstNode] = decls
 }
 
-case class AddConditionStatement(condition: Expr, loc: Loc) extends Stmt {
-  override def children: Iterable[AstNode] = List(condition)
-  override def toString: String = condition.toString + loc.toString
-}
-
 case class IdentifierDecl(name: String, loc: Loc) extends Decl
 
 case class FunDecl(name: String, params: List[IdentifierDecl], block: FunBlockStmt, loc: Loc) extends Decl {

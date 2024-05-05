@@ -392,7 +392,7 @@ class MicroCInterpreter(program: Program, stdin: Reader, stdout: Writer, ascii: 
           case IntVal(_) => interpretNode(thenBranch, stackFrames)
           case _ => throw errorNonIntCondition(loc, evaluatedGuard.toString)
         }
-      case Input(loc) =>/*
+      case Input(loc) =>
         if (ascii) {
           val readArr = Array.fill(7)(0): Array[Char]
           stdin.read(readArr)
@@ -422,7 +422,7 @@ class MicroCInterpreter(program: Program, stdin: Reader, stdout: Writer, ascii: 
         }
         if (res == 0) {
           throw errorNonIntInput(loc, tmp.toString)
-        }*/
+        }
         IntVal(0)
       case NestedBlockStmt(body, _) =>
         stackFrames.push()
@@ -431,7 +431,7 @@ class MicroCInterpreter(program: Program, stdin: Reader, stdout: Writer, ascii: 
         NullRef
       case Null(_) => NullRef
       case OutputStmt(expr, loc) =>
-        /*val r = interpretNode(expr, stackFrames)
+        val r = interpretNode(expr, stackFrames)
         r match {
           case IntVal(value) =>
             if (ascii) {
@@ -449,7 +449,7 @@ class MicroCInterpreter(program: Program, stdin: Reader, stdout: Writer, ascii: 
               stdout.write(NL)
             }
           case v => throw errorNonIntOutput(loc, v.toString)
-        }*/
+        }
         NullRef
       case Record(fields, _) =>
         val fieldsMap: mutable.Map[String, Val] = mutable.Map.empty

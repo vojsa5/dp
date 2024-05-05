@@ -4,7 +4,7 @@ import com.microsoft.z3.Context
 import microc.analysis.{QueryCountAnalyses, SemanticAnalysis}
 import microc.ast.AstNormalizer
 import microc.cfg.{CfgNode, IntraproceduralCfgFactory, ProgramCfg}
-import microc.symbolic_execution.experiments.{ExperimentRunner, ProgramGenerator}
+import microc.generation.{ExperimentRunner, ProgramGenerator}
 import microc.symbolic_execution.optimizations.subsumption.PathSubsumption
 import microc.symbolic_execution.optimizations.summarization.LoopSummarization
 import microc.symbolic_execution.optimizations.merging.HeuristicBasedStateMerging
@@ -217,8 +217,8 @@ class ProgramGenerationTest extends FunSuite with MicrocSupport with Examples {
     val program = new AstNormalizer().normalize(new ProgramGenerator().generateRandomProgram())
     val cfg = new IntraproceduralCfgFactory().fromProgram(program);
     val covered = Some(mutable.HashSet[CfgNode]())
-    val stateHistory = new StateHistory()
-    val executor = new SymbolicExecutor(cfg, stateHistory = Some(stateHistory), searchStrategy = new KleeSearchStrategy(stateHistory, covered.get), covered = covered)
+    val stateHistory = new ExecutionTree()
+    val executor = new SymbolicExecutor(cfg, executionTree = Some(stateHistory), searchStrategy = new KleeSearchStrategy(stateHistory, covered.get), covered = covered)
     executor.run()
   }
 

@@ -1,8 +1,8 @@
 package microc.analysis
 
+import microc.analyses.laticce.MapLattice
 import microc.ast.{ArrayAccess, ArrayNode, AssignStmt, AstNode, BinaryOp, Decl, Expr, Identifier, IfStmt, Input, Number, OutputStmt, ReturnStmt, WhileStmt}
 import microc.cfg.{CfgNode, ProgramCfg}
-import microc.lattice.MapLattice
 
 import java.util
 

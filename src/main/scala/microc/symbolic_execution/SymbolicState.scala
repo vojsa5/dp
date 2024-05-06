@@ -26,6 +26,8 @@ class SymbolicState(
     1
   }
 
+  def tookToLongToMerge(): Boolean = false
+
   def deepCopy(): SymbolicState = {
     new SymbolicState(this.programLocation, this.pathCondition, this.symbolicStore.deepCopy(), this.callStack, this.variableDecls)
   }
@@ -194,7 +196,7 @@ class SymbolicState(
         new SymbolicState(next, addToPathCondition(guard), symbolicStore.deepCopy(), copyCallStack(callStack), variableDecls)
       case IfStmt(guard, thenBranch, None, loc) =>
         val next = if (thenBranch.asInstanceOf[NestedBlockStmt].body.isEmpty) {
-          programLocation.succ.find(s => s.ast == ast).get
+          programLocation.succ.head
         }
         else {
           val firstThenStatement = thenBranch.asInstanceOf[NestedBlockStmt].body.head
@@ -231,7 +233,7 @@ class SymbolicState(
         new SymbolicState(next, addToPathCondition(Not(guard, loc)), symbolicStore.deepCopy(), copyCallStack(callStack), variableDecls)
       case IfStmt(guard, thenBranch, None, loc) =>
         val next = if (thenBranch.asInstanceOf[NestedBlockStmt].body.isEmpty) {
-          programLocation.succ.find(s => s.ast != ast).get
+          programLocation.succ.head
         }
         else {
           val firstThenStatement = thenBranch.asInstanceOf[NestedBlockStmt].body.head
@@ -269,7 +271,7 @@ class SymbolicState(
 
   def applyChange(memoryLoc: Expr, change: Expr => SymbolicState => Expr, mapping: mutable.HashMap[Val, Expr]): SymbolicState = {
     val ptr = getMemoryLoc(memoryLoc)
-    val n = SymbolicExpr(change.apply(symbolicStore.getValOfPtr(ptr).get.asInstanceOf[Symbolic]).apply(this), CodeLoc(0, 0))
+    val n = SymbolicExpr(change.apply(symbolicStore.getValOfPtr(ptr, true).get.asInstanceOf[Symbolic]).apply(this), CodeLoc(0, 0))
     updateMemoryLocation(ptr, Utility.removeUnnecessarySymbolicExpr(SymbolicExpr(Utility.replaceWithMapping(n.asInstanceOf[Symbolic], mapping, this), CodeLoc(0, 0))))
     this
   }
@@ -282,8 +284,7 @@ class SymbolicState(
     val start = System.currentTimeMillis()
     val (symbolicStore, expr) = this.symbolicStore.mergeStores(other.symbolicStore, pathCondition, other.pathCondition).get
     val end = System.currentTimeMillis()
-    System.out.println("MERGING3: ", end - start)
-    new MergedSymbolicState(
+    val res = new MergedSymbolicState(
       programLocation,
       expr,
       symbolicStore,
@@ -291,6 +292,10 @@ class SymbolicState(
       variableDecls = this.variableDecls,
       (this, other)
     )
+    if (end - start > 50) {
+      res.tookTooLongToMerge = true
+    }
+    res
   }
 
   def copyCallStack(callStack: List[(CfgNode, List[IdentifierDecl])]): List[(CfgNode, List[IdentifierDecl])] = {

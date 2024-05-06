@@ -22,9 +22,9 @@ object Main {
   def symbolicallyExecute(program: String,
                           @arg(name = "search-strategy", doc = "choose a seach strategy (optional string argument)")
                         searchStrategy: Option[String] = None,
-                          @arg(name = "smart-merging", doc = "Enable smart merging strategy (optional string argument)")
+                          @arg(name = "merging-strategy", doc = "Enable smart merging strategy (optional string argument)")
                         smartMerging: Option[String] = None,
-                          @arg(name = "smart-merging-cost", doc = "smart merging cost (optional int argument)")
+                          @arg(name = "smart-merging-limit-cost", doc = "smart merging cost (optional int argument)")
                         smartMergingCost: Option[Int] = None,
                           @arg(name = "kappa", doc = "kappa for smart merging (optional int argument)")
                         kappa: Option[Int] = None,

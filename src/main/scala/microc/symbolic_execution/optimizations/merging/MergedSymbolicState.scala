@@ -14,9 +14,13 @@ class MergedSymbolicState(
                            var innerStates: (SymbolicState, SymbolicState))
   extends SymbolicState(nextStatement, pathCondition, symbolicStore, callStack, variableDecls) {
 
+  var tookTooLongToMerge: Boolean = false
+
   override def associatedPathsCount(): Int = {
     innerStates._1.associatedPathsCount() + innerStates._2.associatedPathsCount()
   }
+
+  override def tookToLongToMerge(): Boolean = tookTooLongToMerge
 
   override def getIfTrueState(): SymbolicState = {
     val nextStatement = getProgramLocation()

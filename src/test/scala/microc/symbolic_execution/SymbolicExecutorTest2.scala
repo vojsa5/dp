@@ -211,7 +211,7 @@ class SymbolicExecutorTest2 extends FunSuite with MicrocSupport with Examples {
 
 
   test("type 3 nested loop unsummarizable") {
-    val code =
+    var code =
       """
         |main() {
         |  var i, j, k, n, l;
@@ -221,6 +221,7 @@ class SymbolicExecutorTest2 extends FunSuite with MicrocSupport with Examples {
         |  j = 1;
         |  l = input;
         |  while (i < n) {
+        |     l = input;
         |     while (l < n) {
         |       j = input;
         |       l = l + 1;
@@ -231,10 +232,47 @@ class SymbolicExecutorTest2 extends FunSuite with MicrocSupport with Examples {
         |  return k;
         |}
         |""".stripMargin;
-    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    val executor = new LoopSummarization(cfg);
-    executor.run()
-    val future = Future {
+    var cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+    var executor = new LoopSummarization(cfg);
+    var future = Future {
+      executor.run()
+      fail("should be killed by timeout")
+    }
+
+    try {
+      Await.ready(future, 5.seconds)
+    }
+    catch {
+      case _: TimeoutException =>
+      case e =>
+        fail(e.toString)
+    }
+
+
+    code =
+      """
+        |main() {
+        |  var i, j, k, n, l;
+        |  i = input;
+        |  k = input;
+        |  n = input;
+        |  j = 1;
+        |  l = input;
+        |  while (i < n) {
+        |     l = input;
+        |     i = i + j;
+        |     while (l < n) {
+        |       j = input;
+        |       l = l + 1;
+        |     }
+        |     k = k + 1;
+        |  }
+        |  return k;
+        |}
+        |""".stripMargin;
+    cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+    executor = new LoopSummarization(cfg);
+    future = Future {
       executor.run()
       fail("should be killed by timeout")
     }
@@ -1168,7 +1206,7 @@ class SymbolicExecutorTest2 extends FunSuite with MicrocSupport with Examples {
   }
 
 
-  test("unbounded periodic loop finishes with summarization correctly 2") {
+  test("unbounded periodic loop finishes with summarization correctly") {
     var code =
       """
         |main() {
@@ -1267,7 +1305,7 @@ class SymbolicExecutorTest2 extends FunSuite with MicrocSupport with Examples {
   }
 
 
-  test("unbounded periodic loop finishes with summarization correctly 3") {
+  test("unbounded periodic loop finishes with summarization correctly 2") {
     var code =
       """
         |main() {
@@ -1795,9 +1833,22 @@ class SymbolicExecutorTest2 extends FunSuite with MicrocSupport with Examples {
         |}
         |""".stripMargin;
 
-    var cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    var executor = new LoopSummarization(cfg)
-    executor.run()
+
+    var future = Future {
+      val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+      val executor = new LoopSummarization(cfg)
+      executor.run()
+      fail("should be killed by timeout")
+    }
+
+    try {
+      Await.ready(future, 5.seconds)
+    }
+    catch {
+      case _: TimeoutException =>
+      case e =>
+        fail(e.toString)
+    }
 
 
     code =
@@ -1825,8 +1876,8 @@ class SymbolicExecutorTest2 extends FunSuite with MicrocSupport with Examples {
         |}
         |""".stripMargin;
 
-    cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    executor = new LoopSummarization(cfg)
+    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+    val executor = new LoopSummarization(cfg)
     try {
       executor.run()
       fail("Expected a ExecutionException but it did not occur.")
@@ -1835,6 +1886,8 @@ class SymbolicExecutorTest2 extends FunSuite with MicrocSupport with Examples {
       case _: ExecutionException =>
       case other: Throwable => fail("Expected a ExecutionException, but caught different exception: " + other)
     }
+
+
 
 
     code =
@@ -1862,9 +1915,23 @@ class SymbolicExecutorTest2 extends FunSuite with MicrocSupport with Examples {
         |}
         |""".stripMargin;
 
-    cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    executor = new LoopSummarization(cfg)
-    executor.run()
+
+
+    future = Future {
+      val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+      val executor = new LoopSummarization(cfg)
+      executor.run()
+      fail("should be killed by timeout")
+    }
+
+    try {
+      Await.ready(future, 5.seconds)
+    }
+    catch {
+      case _: TimeoutException =>
+      case e =>
+        fail(e.toString)
+    }
   }
 
 

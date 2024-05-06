@@ -103,7 +103,7 @@ class SymbolicExecutor(program: ProgramCfg,
                        executionTree: Option[ExecutionTree] = None,
                        covered: Option[mutable.HashSet[CfgNode]] = None,
                        createITEAtSymbolicArrayAccess: Boolean = false,
-                       printStats: Boolean = true
+                       printStats: Boolean = false
                       ) {
 
   val solver = new ConstraintSolver(ctx)
@@ -553,6 +553,20 @@ class SymbolicExecutor(program: ProgramCfg,
     ArrVal(vals)
   }
 
+  def loadRecord(r: Record, symbolicState: SymbolicState, ignoreErrors: Boolean): RecVal = {
+    val fieldsMap: mutable.HashMap[String, PointerVal] = mutable.HashMap.empty
+    val fields = r.fields
+    fields.foreach(field =>
+      evaluate(field.expr, symbolicState, ignoreErrors) match {
+        case RecVal(_) => throw errorRecordNestedFields(field.expr.loc, symbolicState)
+        case res =>
+          symbolicState.updateVar(field.name, res)
+          fieldsMap.update(field.name, symbolicState.getSymbolicValOpt(field.name).get)
+      }
+    )
+    RecVal(fieldsMap)
+  }
+
   def evaluate(expr: Expr, symbolicState: SymbolicState, ignoreErrors: Boolean = false): Val = {
     expr match {
       case BinaryOp(operator, left, right, loc) =>
@@ -700,17 +714,8 @@ class SymbolicExecutor(program: ProgramCfg,
           case _ =>
             throw errorNonArrayAccess(loc, evaluate(array, symbolicState, ignoreErrors).toString, symbolicState)
         }
-      case Record(fields, loc) =>
-        val fieldsMap: mutable.HashMap[String, PointerVal] = mutable.HashMap.empty
-        fields.foreach(field =>
-          evaluate(field.expr, symbolicState, ignoreErrors) match {
-            case RecVal(_) => throw errorRecordNestedFields(field.expr.loc, symbolicState)
-            case res =>
-              symbolicState.updateVar(field.name, res)
-              fieldsMap.update(field.name, symbolicState.getSymbolicValOpt(field.name).get)
-          }
-        )
-        RecVal(fieldsMap)
+      case r@Record(_, _) =>
+        loadRecord(r, symbolicState, ignoreErrors)
       case FieldAccess(record, field, loc) =>
         evaluate(record, symbolicState, ignoreErrors) match {
           case RecVal(fields) =>

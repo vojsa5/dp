@@ -86,7 +86,7 @@ class LoopSummarizationTest extends FunSuite with MicrocSupport with Examples {
     val mapping = mutable.HashMap[Val, Expr]()
     val memoryCells = executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt))
     val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState, LoopSummarization.createSymbolicStateWithAllValuesSymbolic(symbolicState, mapping),
-      memoryCells, mutable.HashSet[Expr](), mapping)
+      memoryCells, mutable.HashSet[Expr](), mutable.HashSet[Expr](), mutable.HashSet[String](), mapping)
     assert(pathsOpt.nonEmpty)
     val paths = pathsOpt.get
     assert(paths.size == 2)
@@ -177,7 +177,7 @@ class LoopSummarizationTest extends FunSuite with MicrocSupport with Examples {
     val mapping = mutable.HashMap[Val, Expr]()
     val memoryCells = executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt))
     val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState, LoopSummarization.createSymbolicStateWithAllValuesSymbolic(symbolicState, mapping),
-      memoryCells, mutable.HashSet[Expr](), mapping)
+      memoryCells, mapping)
     assert(pathsOpt.nonEmpty)
     val paths = pathsOpt.get
     assert(paths.size == 3)
@@ -303,7 +303,7 @@ class LoopSummarizationTest extends FunSuite with MicrocSupport with Examples {
     val mapping = mutable.HashMap[Val, Expr]()
     val memoryCells = executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt))
     val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState, LoopSummarization.createSymbolicStateWithAllValuesSymbolic(symbolicState, mapping),
-      memoryCells, mutable.HashSet[Expr](), mapping)
+      memoryCells, mapping)
     assert(pathsOpt.nonEmpty)
     val paths = pathsOpt.get
     assert(paths.size == 5)
@@ -968,7 +968,7 @@ class LoopSummarizationTest extends FunSuite with MicrocSupport with Examples {
     val mapping = mutable.HashMap[Val, Expr]()
     val memoryCells = executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt))
     val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState, LoopSummarization.createSymbolicStateWithAllValuesSymbolic(symbolicState, mapping),
-      memoryCells, mutable.HashSet[Expr](), mapping)
+      memoryCells, mapping)
     assert(pathsOpt.nonEmpty)
     val paths = pathsOpt.get
     var vertices :List[Vertex] = List()
@@ -1097,7 +1097,7 @@ class LoopSummarizationTest extends FunSuite with MicrocSupport with Examples {
     val mapping = mutable.HashMap[Val, Expr]()
     val memoryCells = executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt))
     val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState, LoopSummarization.createSymbolicStateWithAllValuesSymbolic(symbolicState, mapping),
-      memoryCells, mutable.HashSet[Expr](), mapping)
+      memoryCells, mapping)
     assert(pathsOpt.nonEmpty)
     val paths = pathsOpt.get
     var vertices :List[Vertex] = List()
@@ -1225,7 +1225,7 @@ class LoopSummarizationTest extends FunSuite with MicrocSupport with Examples {
     val mapping = mutable.HashMap[Val, Expr]()
     val memoryCells = executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt))
     val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState, LoopSummarization.createSymbolicStateWithAllValuesSymbolic(symbolicState, mapping),
-      memoryCells, mutable.HashSet[Expr](), mapping)
+      memoryCells, mapping)
     assert(pathsOpt.nonEmpty)
     val paths = pathsOpt.get
     var vertices :List[Vertex] = List()
@@ -1353,7 +1353,7 @@ class LoopSummarizationTest extends FunSuite with MicrocSupport with Examples {
     val mapping = mutable.HashMap[Val, Expr]()
     val memoryCells = executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt))
     val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState, LoopSummarization.createSymbolicStateWithAllValuesSymbolic(symbolicState, mapping),
-      memoryCells, mutable.HashSet[Expr](), mapping)
+      memoryCells, mapping)
     assert(pathsOpt.nonEmpty)
     val paths = pathsOpt.get
     var vertices :List[Vertex] = List()
@@ -1481,7 +1481,7 @@ class LoopSummarizationTest extends FunSuite with MicrocSupport with Examples {
     val mapping = mutable.HashMap[Val, Expr]()
     val memoryCells = executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt))
     val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState, LoopSummarization.createSymbolicStateWithAllValuesSymbolic(symbolicState, mapping),
-      memoryCells, mutable.HashSet[Expr](), mapping)
+      memoryCells, mapping)
     assert(pathsOpt.nonEmpty)
     val paths = pathsOpt.get
     var vertices :List[Vertex] = List()
@@ -1612,7 +1612,7 @@ class LoopSummarizationTest extends FunSuite with MicrocSupport with Examples {
     val mapping = mutable.HashMap[Val, Expr]()
     val memoryCells = executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt))
     val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState, LoopSummarization.createSymbolicStateWithAllValuesSymbolic(symbolicState, mapping),
-      memoryCells, mutable.HashSet[Expr](), mapping)
+      memoryCells, mapping)
     assert(pathsOpt.nonEmpty)
     val paths = pathsOpt.get
     var vertices :List[Vertex] = List()
@@ -1743,7 +1743,7 @@ class LoopSummarizationTest extends FunSuite with MicrocSupport with Examples {
     val mapping = mutable.HashMap[Val, Expr]()
     val memoryCells = executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt))
     val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState, LoopSummarization.createSymbolicStateWithAllValuesSymbolic(symbolicState, mapping),
-      memoryCells, mutable.HashSet[Expr](), mapping)
+      memoryCells, mapping)
     assert(pathsOpt.nonEmpty)
     val paths = pathsOpt.get
     var vertices :List[Vertex] = List()
@@ -1886,7 +1886,7 @@ class LoopSummarizationTest extends FunSuite with MicrocSupport with Examples {
     val mapping = mutable.HashMap[Val, Expr]()
     val memoryCells = executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt))
     val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState, LoopSummarization.createSymbolicStateWithAllValuesSymbolic(symbolicState, mapping),
-      memoryCells, mutable.HashSet[Expr](), mapping)
+      memoryCells, mapping)
     assert(pathsOpt.nonEmpty)
     val paths = pathsOpt.get
     var vertices :List[Vertex] = List()
@@ -2111,7 +2111,7 @@ class LoopSummarizationTest extends FunSuite with MicrocSupport with Examples {
     val mapping = mutable.HashMap[Val, Expr]()
     val memoryCells = executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt))
     val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState, LoopSummarization.createSymbolicStateWithAllValuesSymbolic(symbolicState, mapping),
-      memoryCells, mutable.HashSet[Expr](), mapping)
+      memoryCells, mapping)
 
     assert(pathsOpt.nonEmpty)
     val paths = pathsOpt.get
@@ -2169,7 +2169,7 @@ class LoopSummarizationTest extends FunSuite with MicrocSupport with Examples {
     val mapping = mutable.HashMap[Val, Expr]()
     val memoryCells = executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt))
     val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState, LoopSummarization.createSymbolicStateWithAllValuesSymbolic(symbolicState, mapping),
-      memoryCells, mutable.HashSet[Expr](), mapping)
+      memoryCells, mapping)
     assert(pathsOpt.isEmpty)
   }
 
@@ -2219,7 +2219,7 @@ class LoopSummarizationTest extends FunSuite with MicrocSupport with Examples {
     val mapping = mutable.HashMap[Val, Expr]()
     val memoryCells = executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt))
     val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState, LoopSummarization.createSymbolicStateWithAllValuesSymbolic(symbolicState, mapping),
-      memoryCells, mutable.HashSet[Expr](), mapping)
+      memoryCells, mapping)
     assert(pathsOpt.nonEmpty)
     val paths = pathsOpt.get
     var vertices :List[Vertex] = List()
@@ -2279,7 +2279,7 @@ class LoopSummarizationTest extends FunSuite with MicrocSupport with Examples {
     val mapping = mutable.HashMap[Val, Expr]()
     val memoryCells = executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt))
     val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState, LoopSummarization.createSymbolicStateWithAllValuesSymbolic(symbolicState, mapping),
-      memoryCells, mutable.HashSet[Expr](), mapping)
+      memoryCells, mapping)
     assert(pathsOpt.isEmpty)
   }
 
@@ -2326,7 +2326,7 @@ class LoopSummarizationTest extends FunSuite with MicrocSupport with Examples {
     val mapping = mutable.HashMap[Val, Expr]()
     val memoryCells = executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt))
     val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState, LoopSummarization.createSymbolicStateWithAllValuesSymbolic(symbolicState, mapping),
-      memoryCells, mutable.HashSet[Expr](), mapping)
+      memoryCells, mapping)
     assert(pathsOpt.isEmpty)
   }
 
@@ -2374,7 +2374,7 @@ class LoopSummarizationTest extends FunSuite with MicrocSupport with Examples {
     val mapping = mutable.HashMap[Val, Expr]()
     val memoryCells = executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt))
     val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState, LoopSummarization.createSymbolicStateWithAllValuesSymbolic(symbolicState, mapping),
-      memoryCells, mutable.HashSet[Expr](), mapping)
+      memoryCells, mapping)
     assert(pathsOpt.isEmpty)
   }
 
@@ -2415,7 +2415,7 @@ class LoopSummarizationTest extends FunSuite with MicrocSupport with Examples {
     val mapping = mutable.HashMap[Val, Expr]()
     val memoryCells = executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt))
     val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState, LoopSummarization.createSymbolicStateWithAllValuesSymbolic(symbolicState, mapping),
-      memoryCells, mutable.HashSet[Expr](), mapping)
+      memoryCells, mapping)
     assert(pathsOpt.nonEmpty)
     val paths = pathsOpt.get
     for (path <- paths) {
@@ -2476,7 +2476,7 @@ class LoopSummarizationTest extends FunSuite with MicrocSupport with Examples {
     val mapping = mutable.HashMap[Val, Expr]()
     val memoryCells = executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt))
     val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState, LoopSummarization.createSymbolicStateWithAllValuesSymbolic(symbolicState, mapping),
-      memoryCells, mutable.HashSet[Expr](), mapping)
+      memoryCells, mutable.HashSet[Expr](), mutable.HashSet[Expr](), mutable.HashSet[String](), mapping)
     assert(pathsOpt.nonEmpty)
     val paths = pathsOpt.get
 
@@ -2530,7 +2530,7 @@ class LoopSummarizationTest extends FunSuite with MicrocSupport with Examples {
     val mapping = mutable.HashMap[Val, Expr]()
     val memoryCells = executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt))
     val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState, LoopSummarization.createSymbolicStateWithAllValuesSymbolic(symbolicState, mapping),
-      memoryCells, mutable.HashSet[Expr](), mapping)
+      memoryCells, mutable.HashSet[Expr](), mutable.HashSet[Expr](), mutable.HashSet[String](), mapping)
     assert(pathsOpt.nonEmpty)
     val paths = pathsOpt.get
 
@@ -2583,7 +2583,7 @@ class LoopSummarizationTest extends FunSuite with MicrocSupport with Examples {
     val mapping = mutable.HashMap[Val, Expr]()
     val memoryCells = executor.getMemoryCellsFromConditions(executor.getAllConditionsInALoop(cfg, stmt))
     val pathsOpt = executor.getAllPathsInALoop(stmt, symbolicState, LoopSummarization.createSymbolicStateWithAllValuesSymbolic(symbolicState, mapping),
-      memoryCells, mutable.HashSet[Expr](), mapping)
+      memoryCells, mutable.HashSet[Expr](), mutable.HashSet[Expr](), mutable.HashSet[String](), mapping)
     assert(pathsOpt.nonEmpty)
     val paths = pathsOpt.get
 

@@ -526,7 +526,7 @@ object Utility {
         next
       case IfStmt(guard, thenBranch, None, loc) =>
         val next = if (thenBranch.asInstanceOf[NestedBlockStmt].body.isEmpty) {
-          node.succ.find(s => s.ast == ast).get
+          node.succ.head
         }
         else {
           val firstThenStatement = thenBranch.asInstanceOf[NestedBlockStmt].body.head
@@ -563,7 +563,7 @@ object Utility {
         next
       case IfStmt(guard, thenBranch, None, loc) =>
         val next = if (thenBranch.asInstanceOf[NestedBlockStmt].body.isEmpty) {
-          node.succ.find(s => s.ast != ast).get
+          node.succ.head
         }
         else {
           val firstThenStatement = thenBranch.asInstanceOf[NestedBlockStmt].body.head

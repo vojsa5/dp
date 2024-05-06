@@ -69,7 +69,9 @@ case class Traces() {
               }
             }
             nrec.put(currPath, (ncond, edge.change))
-            summarizeTrace(pda, newState, edge.destination, ncond, newUpdatedVariables, nrec, incrementedVars)
+            if (!summarizeTrace(pda, newState, edge.destination, ncond, newUpdatedVariables, nrec, incrementedVars)) {
+              return false
+            }
           case _ =>
         }
       }
@@ -109,23 +111,33 @@ case class Traces() {
     for (r <- cycleRecWithNext) {
       for (update <- r._1._2._2) {
         val name = Utility.getName(update._1)
-        if (newUpdatedVariables.contains(update._1) && Utility.varIsFromOriginalProgram(name)) {
-          val prev = newUpdatedVariables(update._1)
+//        if (newUpdatedVariables.contains(update._1) && Utility.varIsFromOriginalProgram(name)) {
+//          val prev = newUpdatedVariables(update._1)
+//          pda.loopSummary.computePeriod(lastNode._1, r._1._1, r._2._1) match {
+//            case Some(period) =>
+//              newUpdatedVariables.put(update._1, variable => s =>
+//                BinaryOp(
+//                  OrOr,
+//                  pda.applyIterationsCount(update._2.apply(variable).apply(s), r._1._1.iterationsVal, Number(period, CodeLoc(0, 0))),
+//                  prev.apply(variable).apply(s), CodeLoc(0, 0)
+//                )
+//              )
+//            case None =>
+//              return None
+//          }
+//        }
+//        else {
+//          newUpdatedVariables.put(update._1, update._2)
+//        }
+        if (Utility.varIsFromOriginalProgram(name)) {
           pda.loopSummary.computePeriod(lastNode._1, r._1._1, r._2._1) match {
             case Some(period) =>
               newUpdatedVariables.put(update._1, variable => s =>
-                BinaryOp(
-                  OrOr,
-                  pda.applyIterationsCount(update._2.apply(variable).apply(s), r._1._1.iterationsVal, Number(period, CodeLoc(0, 0))),
-                  prev.apply(variable).apply(s), CodeLoc(0, 0)
-                )
+                pda.applyIterationsCount(update._2.apply(variable).apply(s), r._1._1.iterationsVal, Number(period, CodeLoc(0, 0)))
               )
             case None =>
               return None
           }
-        }
-        else {
-          newUpdatedVariables.put(update._1, update._2)
         }
       }
       i = i + 1

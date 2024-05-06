@@ -627,7 +627,6 @@ class SymbolicStore(functionDeclarations: Map[String, FunVal]) {
     val res = new SymbolicStore(functionDeclarations)
     val thisPointerMapping: mutable.HashMap[Int, Int] = new mutable.HashMap[Int, Int]()
     val otherPointerMapping: mutable.HashMap[Int, Int] = new mutable.HashMap[Int, Int]()
-    val start = System.currentTimeMillis()
     for (i <- 0 until this.frames.size) {
       val thisFrame = this.frames(i)
       val otherFrame = other.frames(i)
@@ -653,9 +652,7 @@ class SymbolicStore(functionDeclarations: Map[String, FunVal]) {
         res.pushFrame()
       }
     }
-    val end = System.currentTimeMillis()
     //val r = Utility.simplifyADisjunction(pathCondition, pathCondition2)//this proved to be too slow
-    System.out.println("MERGING2: ", end - start)
     Some(res, BinaryOp(OrOr, pathCondition, pathCondition2, CodeLoc(0, 0)))
   }
 }

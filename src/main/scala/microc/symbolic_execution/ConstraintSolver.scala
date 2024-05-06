@@ -31,11 +31,7 @@ class ConstraintSolver(val ctx: Context) {
   def solveConstraint(constraint: com.microsoft.z3.Expr[_]): Status = {
     val solver = ctx.mkSolver()
     solver.add(ConstraintSolver.getCondition(ctx, constraint))
-    val start = System.currentTimeMillis()
-    val res = solver.check()
-    val end = System.currentTimeMillis()
-    System.out.println("SOLVING: ", end - start)
-    res
+    solver.check()
   }
 
 
@@ -219,60 +215,14 @@ class ConstraintSolver(val ctx: Context) {
             throw new Exception("IMPLEMENT")
         }
       case a@ArrayNode(_, _) => a
-      case r@Record(fields, loc) => r
+      case r@Record(_, _) => r
       case arrVal: ArrVal => arrVal
       case recVal: RecVal => recVal
+      case pointerVal: PointerVal => pointerVal
       case _ =>
         throw new Exception("IMPLEMENT")
     }
   }
 
-
-
-  private def applyTheStateOnce(expr: Expr, state: SymbolicState, allowReturnNonInitialized: Boolean = false): Expr = {
-    expr match {
-      case Not(expr, loc) =>
-        Not(applyTheStateOnce(expr, state, allowReturnNonInitialized), loc)
-      case BinaryOp(operator, left, right, loc) => BinaryOp(operator, applyTheStateOnce(left, state, allowReturnNonInitialized), applyTheStateOnce(right, state, allowReturnNonInitialized), loc)
-      case Identifier(name, loc) =>
-        val i = state.getValueOfVar(name, loc, allowReturnNonInitialized)
-        state.getValueOfVar(name, loc, allowReturnNonInitialized) match {
-          case n: Number => n
-          case s: SymbolicVal => s
-          case e: SymbolicExpr => e.value
-          case _ => throw new Exception("IMPLEMENT")
-        }
-      case n@Number(_, _) => n
-      case v@SymbolicVal(_) => v
-      case SymbolicExpr(expr, _) => applyTheStateOnce(expr, state, allowReturnNonInitialized)
-    }
-  }
-
-  private def applyTheStateWithChangesAsFunctions(expr: Expr, symbolicState: SymbolicState, changes: mutable.HashMap[String, Expr => Expr]): Expr = {
-    var res = expr match {
-      case Not(expr, loc) =>
-        Not(applyTheStateWithChangesAsFunctions(expr, symbolicState, changes), loc)
-      case BinaryOp(operator, left, right, loc) => BinaryOp(operator, applyTheStateWithChangesAsFunctions(left, symbolicState, changes), applyTheStateWithChangesAsFunctions(right, symbolicState, changes), loc)
-      case id@Identifier(name, loc) =>
-        if (changes.contains(name) && Utility.varIsFromOriginalProgram(name)) {
-          symbolicState.getValueOfVar(name, loc, true) match {
-            case SymbolicExpr(expr, _) => changes(name).apply(expr)
-            case UninitializedRef => SymbolicVal(CodeLoc(0, 0))
-            case _ =>
-              id
-          }
-        }
-        else {
-          Utility.applyVal(symbolicState.getValueOfVar(name, loc), symbolicState)
-        }
-      case n@Number(_, _) => n
-      case v@SymbolicVal(_) => v
-      case SymbolicExpr(expr, _) => applyTheStateWithChangesAsFunctions(expr, symbolicState, changes)
-    }
-    if (res != expr) {
-      res = applyTheStateWithChangesAsFunctions(res, symbolicState, changes)
-    }
-    res
-  }
 
 }

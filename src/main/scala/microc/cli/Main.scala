@@ -37,14 +37,14 @@ object Main {
                           @arg(name = "output", doc = "Output folder (optional string argument)")
                         output: Option[String] = None): Int = {
     val programInput = new FileInputStream(program)
-    new SymbolicExecuteAction(programInput, searchStrategy, smartMerging, smartMergingCost, kappa, summarization, subsumption, timeout, output).run()
+    new SymbolicExecuteAction(programInput, searchStrategy, smartMerging, smartMergingCost, kappa, summarization, subsumption, timeout, output ).run()
   }
 
   @main(doc = "precomputeVariableCosts")
   def precomputeVariableCosts(program: String,
-                        @arg(name = "smart-merging", doc = "Enable smart merging strategy (optional string argument)")
+                        @arg(name = "merging-strategy", doc = "merging strategy (string argument)")
                         smartMerging: Option[String] = None,
-                        @arg(name = "kappa", doc = "kappa for smart merging (optional int argument)")
+                        @arg(name = "kappa", doc = "kappa for recursive merging (optional int argument)")
                         kappa: Option[Int] = None,
                         @arg(name = "timeout", doc = "Timeout for the program is s (optional int argument)")
                         timeout: Option[Int] = None,
@@ -66,18 +66,18 @@ object Main {
                        loopGenProb: Double = 1/6,
                        @arg(name = "forLoopGenProb", doc = "Probability of generating a for loop")
                        forLoopGenProb: Double = 1/6,
-                       @arg(name = "maxStmtDepth", doc = "Maximum depth of statement nesting")
-                       maxStmtDepth: Int = 2,
+                       @arg(name = "maxBlockDepth", doc = "Maximum depth of block nesting")
+                       maxBlockDepth: Int = 2,
                        @arg(name = "maxTopLvlStmtsCount", doc = "Maximum number of top-level statements")
                        maxTopLvlStmtsCount: Int = 15,
                        @arg(name = "maxStmtsWithinABlock", doc = "Maximum number of statements within a block")
                        maxStmtsWithinABlock: Int = 7,
                        @arg(name = "errorGuaranteed", doc = "An error is guaranteed")
                        errorGuaranteed: Boolean = false,
-                       @arg(name = "tryNotToGenerateError", doc = "The generator tries to not generate errors")
-                       tryNotToGenerateRandomError: Boolean = true
+                       @arg(name = "doNotGenerateDivisions", doc = "The generator tries to not generate errors")
+                       doNotGenerateDivisions: Boolean = true
                      ): Int = {
-    new GenerateProgramAction(file, loopGenProb, forLoopGenProb, maxStmtDepth, maxTopLvlStmtsCount, maxStmtsWithinABlock, errorGuaranteed, tryNotToGenerateRandomError).run()
+    new GenerateProgramAction(file, loopGenProb, forLoopGenProb, maxBlockDepth, maxTopLvlStmtsCount, maxStmtsWithinABlock, errorGuaranteed, doNotGenerateDivisions).run()
   }
 
 
@@ -108,7 +108,7 @@ object Main {
            inputFile: Option[String],
            @arg(doc = "Input from command line")
            input: List[Int],
-           @arg(positional = true)
+           @arg(doc = "Program to run")
            program: String,
            @arg(doc = "Args to main function")
            args: Leftover[Int]

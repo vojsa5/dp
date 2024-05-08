@@ -38,7 +38,7 @@ object LoopSummarization {
           return res
         case otherStmt@AssignStmt(left, right, _) =>
           if (Utility.varIsFromOriginalProgram(Utility.getName(left))) {
-            executor.stepOnAssign(otherStmt, symbolicState)
+            executor.stepOnAssign(otherStmt, symbolicState, true)
           }
           curr = curr.succ.head
         case _ =>
@@ -161,24 +161,12 @@ class LoopSummarization(program: ProgramCfg,
       val summary = summarizationRes.get.summary
       statistics.summarizableLoops += 1
       for (trace <- summary) {
-        for (i <- trace._2) {
-          println("************************************************")
-          println(i._1)
-          println("************************************************")
-        }
         var tmpState = symbolicState.deepCopy()
         tmpState = tmpState.addLoopTrace(trace)
 
         for (change <- trace._2) {
-          val name = Utility.getName(change._1)
-          //if (Utility.varIsFromOriginalProgram(name)) {
-          //  if (tmpState.containsVar(name)) {
-              println(name)
-              tmpState.applyChange(change._1, trace._2(change._1), mapping)
-          //  }
-          //}
+          tmpState.applyChange(change._1, trace._2(change._1), mapping)
         }
-        //searchStrategy.addState(tmpState)
         step(tmpState)
         symbolicState.returnValue = tmpState.returnValue
       }
@@ -192,7 +180,7 @@ class LoopSummarization(program: ProgramCfg,
 //TODO remove
   val pathToVertex: mutable.LinkedHashMap[Path, List[(Expr, Expr => Expr => SymbolicState => Expr)]] = mutable.LinkedHashMap[Path, List[(Expr, Expr => Expr => SymbolicState => Expr)]]()
   val pathToState: mutable.HashMap[Path, SymbolicState] = mutable.HashMap[Path, SymbolicState]()
-  var s: SymbolicState = null
+  var generalState: SymbolicState = null
 
   def getAllConditionsInALoop(cfg: ProgramCfg, loop: CfgNode): mutable.HashSet[Expr] = {
     val res = mutable.HashSet[Expr]()
@@ -201,31 +189,9 @@ class LoopSummarization(program: ProgramCfg,
     for (i <- minId until maxId) {
       cfg.nodes.find(node => node.id == i).get.ast match {
         case WhileStmt(guard, _, _) =>
-          var expr = guard
-//          var j = i
-//          while (Utility.containsVariableNotStartingInAProgram(expr)) {
-//            j = j - 1
-//            cfg.nodes.find(node => node.id == j).get.ast match {
-//              case AssignStmt(left, right, _) =>
-//                expr = Utility.replaceExpr(expr, left, right)
-//              case _ =>
-//                throw new Exception("IMPLEMENT")
-//            }
-//          }
-          res.add(expr)
+          res.add(guard)
         case IfStmt(guard, _, _, _) =>
-          var expr = guard
-//          var j = i
-//          while (Utility.containsVariableNotStartingInAProgram(expr)) {
-//            j = j - 1
-//            cfg.nodes.find(node => node.id == j).get.ast match {
-//              case AssignStmt(left, right, _) =>
-//                expr = Utility.replaceExpr(expr, left, right)
-//              case _ =>
-//                throw new Exception("IMPLEMENT")
-//            }
-//          }
-          res.add(expr)
+          res.add(guard)
         case _ =>
       }
     }
@@ -265,6 +231,7 @@ class LoopSummarization(program: ProgramCfg,
       val locationsWithUnpredictability = mutable.HashSet[String]()
       val allConditions: mutable.HashSet[Expr] = getAllConditionsInALoop(program, loop)
       val conditionMemoryCells: mutable.HashSet[String] = getMemoryCellsFromConditions(allConditions)
+      val updatedBy: mutable.HashMap[String, mutable.HashSet[String]] = mutable.HashMap()
       var vertices: List[Vertex] = List()
 
       val innerMapping: mutable.HashMap[Val, Expr] = mutable.HashMap[Val, Expr]()
@@ -278,7 +245,7 @@ class LoopSummarization(program: ProgramCfg,
         innerMapping.put(m._1, m._2)
       }
       val pathsOpt = getAllPathsInALoop(loop, symbolicState.deepCopy(), newState.deepCopy(), conditionMemoryCells,
-        updatedVars, incrementedVars, locationsWithUnpredictability, innerMapping)
+        updatedBy, updatedVars, incrementedVars, locationsWithUnpredictability, innerMapping)
       if (pathsOpt.isEmpty) {
         unsummarizableLoops.add(loop)
         return None
@@ -311,53 +278,11 @@ class LoopSummarization(program: ProgramCfg,
   }
 
 
-  def computeVariableChange(stmts: List[Stmt], symbolicState: SymbolicState): mutable.HashMap[String, (Expr) => ((Expr) => Expr)] = {
-    val variableChange = mutable.HashMap[String, Expr => (Expr => Expr)]()
-    for (stmt <- stmts) {
-      stmt match {
-        case AssignStmt(Identifier(name, loc), expr, _) =>
-          expr match {
-            case BinaryOp(Plus, Identifier(name2, loc1), n@Number(_, loc2), _) if name == name2 =>
-              variableChange += (name -> (iterations => (x =>
-                Utility.simplifyArithExpr(BinaryOp(Plus, x, BinaryOp(Times, iterations, n, loc2), loc1)))))
-            case BinaryOp(Minus, Identifier(name2, loc1), Number(value, loc2), _) if name == name2 =>
-              variableChange += (name -> (iterations => (x =>
-                Utility.simplifyArithExpr(BinaryOp(Plus, x, BinaryOp(Times, iterations, Number(-value, loc2), loc2), loc1)))))
-            case BinaryOp(Plus, Identifier(name2, loc1), id@Identifier(_, loc2), _) if name == name2 =>
-              variableChange += (name -> (iterations => (x =>
-                Utility.simplifyArithExpr(BinaryOp(Plus, x, BinaryOp(Times, iterations, symbolicState.getValueOfVar(id.name, id.loc).asInstanceOf[Symbolic], loc2), loc1)))))
-            case BinaryOp(Minus, Identifier(name2, loc1), id@Identifier(_, loc2), _) if name == name2 =>
-              variableChange += (name -> (iterations => (x =>
-                Utility.simplifyArithExpr(BinaryOp(Plus, x, BinaryOp(Times, iterations, Not(symbolicState.getValueOfVar(id.name, id.loc).asInstanceOf[Symbolic], loc2), loc2), loc1)))))
-            case BinaryOp(Plus, n@Number(_, loc2), Identifier(name2, loc1),  _) if name == name2 =>
-              variableChange += (name -> (iterations => (x =>
-                Utility.simplifyArithExpr(BinaryOp(Plus, x, BinaryOp(Times, iterations, n, loc2), loc1)))))
-            case BinaryOp(Minus, Number(value, loc2), Identifier(name2, loc1), _) if name == name2 =>
-              variableChange += (name -> (iterations => (x =>
-                Utility.simplifyArithExpr(BinaryOp(Plus, x, BinaryOp(Times, iterations, Number(-value, loc2), loc2), loc1)))))
-            case BinaryOp(Plus, id@Identifier(_, loc2), Identifier(name2, loc1), _) if name == name2 =>
-              variableChange += (name -> (iterations => (x =>
-                Utility.simplifyArithExpr(BinaryOp(Plus, x, BinaryOp(Times, iterations, symbolicState.getValueOfVar(id.name, id.loc).asInstanceOf[Symbolic], loc2), loc1)))))
-            case BinaryOp(Minus, id@Identifier(_, loc2), Identifier(name2, loc1), _) if name == name2 =>
-              variableChange += (name -> (iterations => (x =>
-                Utility.simplifyArithExpr(BinaryOp(Plus, x, BinaryOp(Times, iterations, Not(symbolicState.getValueOfVar(id.name, id.loc).asInstanceOf[Symbolic], loc2), loc2), loc1)))))
-
-            case expr if !Utility.varIsFromOriginalProgram(name) =>
-              variableChange += (name -> (iterations => (x => Utility.simplifyArithExpr(expr))))
-            case _ =>
-
-          }
-        case _ =>
-      }
-    }
-    variableChange
-  }
-
-
   def getAllLoopBodyPaths(stmt: CfgNode, loopId: Double, originalSymbolicState: SymbolicState, symbolicState: SymbolicState,
                           incrementedMemoryLocations: mutable.HashMap[PointerVal, Expr => Expr => SymbolicState => Expr],
                           updatedVars: mutable.HashSet[Expr], incrementedVars: mutable.HashSet[Expr],
-                          conditionMemoryCells: mutable.HashSet[String], locationsWithUnpredictability: mutable.HashSet[String],
+                          conditionMemoryCells: mutable.HashSet[String], updatedBy: mutable.HashMap[String, mutable.HashSet[String]],
+                          locationsWithUnpredictability: mutable.HashSet[String],
                           mapping: mutable.HashMap[Val, Expr], idMapping: mutable.HashMap[Identifier, Expr]): Option[List[Path]] = {
     var paths = List[Path]()
     paths = paths.appended(new Path(List[Stmt](), Number(1, CodeLoc(0, 0)), List.empty, mutable.HashSet[Expr]()))
@@ -377,7 +302,8 @@ class LoopSummarization(program: ProgramCfg,
               val newIncrementedVars2 = new mutable.HashSet[Expr]
               newIncrementedVars2.addAll(incrementedVars)
               var pathsOpt = getAllLoopBodyPaths(trueBranch, loopId, originalSymbolicState, trueState,
-                incrementedMemoryLocations, newUpdatedVars, newIncrementedVars, conditionMemoryCells, locationsWithUnpredictability.clone(), mapping, idMapping)
+                incrementedMemoryLocations, newUpdatedVars, newIncrementedVars, conditionMemoryCells, updatedBy,
+                locationsWithUnpredictability.clone(), mapping, idMapping)
               if (pathsOpt.isEmpty) {
                 return None
               }
@@ -390,7 +316,8 @@ class LoopSummarization(program: ProgramCfg,
               newUpdatedVars2.addAll(updatedVars)
 
               pathsOpt = getAllLoopBodyPaths(elseBranch, loopId, originalSymbolicState, falseState,
-                incrementedMemoryLocations, newUpdatedVars2, newIncrementedVars2, conditionMemoryCells, locationsWithUnpredictability.clone(), mapping, idMapping)
+                incrementedMemoryLocations, newUpdatedVars2, newIncrementedVars2, conditionMemoryCells, updatedBy,
+                locationsWithUnpredictability.clone(), mapping, idMapping)
               updatedVars.addAll(newUpdatedVars)
               updatedVars.addAll(newUpdatedVars2)
               incrementedVars.addAll(newIncrementedVars)
@@ -456,7 +383,7 @@ class LoopSummarization(program: ProgramCfg,
             case _ =>
           }
           val changeOpt = computeVariableChange2(otherStmt, symbolicState, incrementedMemoryLocations, updatedVars,
-            incrementedVars, conditionMemoryCells, locationsWithUnpredictability, mapping)
+            incrementedVars, conditionMemoryCells, updatedBy, locationsWithUnpredictability, mapping)
           if (changeOpt.nonEmpty) {
             (left, right) match {
               case (_, BinaryOp(_, _, _, _)) =>
@@ -483,8 +410,6 @@ class LoopSummarization(program: ProgramCfg,
                 paths = paths.map(path => path.appendedStatement(otherStmt).updatedChanges(a, change._2))
               case f@FieldAccess(record, field, loc) =>
                 paths = paths.map(path => path.appendedStatement(otherStmt).updatedChanges(f, change._2))
-              case _ =>
-                throw new Exception("IMPLEMENT")
             }
           }
           else {
@@ -514,10 +439,13 @@ class LoopSummarization(program: ProgramCfg,
                              incrementedMemoryLocations: mutable.HashMap[PointerVal, (Expr) => ((Expr) => SymbolicState => Expr)],
                              updatedVariables: mutable.HashSet[Expr], incrementedVariables: mutable.HashSet[Expr],
                              conditionMemoryCells: mutable.HashSet[String],
+                             updatedBy: mutable.HashMap[String, mutable.HashSet[String]],
                              locationsWithUnpredictability: mutable.HashSet[String],
                              mapping: mutable.HashMap[Val, Expr]
                             ): Option[(Expr, Expr => Expr => SymbolicState => Expr)] = {
     stmt match {
+      case AssignStmt(ArrayAccess(_, Identifier(_, _), _), _, _) =>
+        None
       case AssignStmt(left, right, _) =>
         if (Utility.exprContainsAMemoryLocation(right, locationsWithUnpredictability, printer) && conditionMemoryCells.contains(printer.print(left))) {
           return None
@@ -530,6 +458,18 @@ class LoopSummarization(program: ProgramCfg,
         locationsWithUnpredictability.remove(printer.print(left))
         if (Utility.exprContainsAMemoryLocation(right, locationsWithUnpredictability, printer)) {
           locationsWithUnpredictability.add(printer.print(left))
+        }
+        for (loc <- Utility.getMemoryLocationsFromExpr(right, printer)) {
+          if (printer.print(left) != loc) {
+            val v = updatedBy.getOrElse(printer.print(left), mutable.HashSet())
+            v.add(loc)
+            updatedBy.put(printer.print(left), v)
+          }
+        }
+        if (conditionMemoryCells.contains(printer.print(left))) {
+          if (!Utility.isNotUpdatedByUnpredictableLoc(printer.print(left), locationsWithUnpredictability, updatedBy, mutable.HashSet[String]())){
+            return None
+          }
         }
         Utility.simplifyArithExpr(right) match {
           case BinaryOp(_, SymbolicVal(_), _, _) =>
@@ -645,24 +585,33 @@ class LoopSummarization(program: ProgramCfg,
             updatedVariables.add(left)
             Some(left, changeFunction)
           case expr: BinaryOp if !Utility.varIsFromOriginalProgram(name) =>
+            updatedVariables.add(left)
             Some(left, (iterations => (x => s => Utility.simplifyArithExpr(expr))))
           case n@Not(expr, loc) =>
+            updatedVariables.add(left)
             Some(left, (iterations => (x => s => n)))
           case arr@ArrayNode(elems, loc) =>
+            updatedVariables.add(left)
             Some(left, (iterations => (x => s => loadArray(arr, s))))
           case r@Record(fields, loc) =>
+            updatedVariables.add(left)
             Some(left,  (iterations => (x => s => loadRecord(r, s, false))))
           case arr@ArrayAccess(ArrayNode(elems, loc1), Number(value, loc2), loc3) =>
             val elem = elems(value)
+            updatedVariables.add(left)
             Some(left, (iterations => (x => s => elem)))
           case f@FieldAccess(Record(fields, loc1), field, loc3) =>
             val elem = fields.find(rf => rf.name == field).get.expr
+            updatedVariables.add(left)
             Some(left, (iterations => (x => s => elem)))
           case n@Number(_, _) =>
+            updatedVariables.add(left)
             Some(left, (iterations => (x => s => n)))
           case a@Alloc(expr, _) =>
+            updatedVariables.add(left)
             Some(left, (iterations => (x => s => a)))
           case r@VarRef(id, loc) =>
+            updatedVariables.add(left)
             Some(left, (iterations => (x => s => r)))
           case in@Input(loc) =>
             locationsWithUnpredictability.add(printer.print(left))
@@ -680,12 +629,17 @@ class LoopSummarization(program: ProgramCfg,
               incrementedVariables.add(left)
               Some(left, incrementedMemoryLocations(location))
             }
-          case a@ArrayAccess(_, _, _) =>
+          case a@ArrayAccess(_, n: Number, _) =>
             val location = symbolicState.getMemoryLoc(a)
             updatedVariables.add(left)
             if (!incrementedMemoryLocations.contains(location)) {
 
-              Some(left, (iterations => (x => state => state.getValAtMemoryLoc(a).asInstanceOf[Symbolic])))
+              Some(left, (iterations => (x => state => {
+                val res = state.getValAtMemoryLoc(a).asInstanceOf[Symbolic]
+                res
+                }
+                )
+                ))
             }
             else {
               incrementedVariables.add(left)
@@ -721,13 +675,13 @@ class LoopSummarization(program: ProgramCfg,
 
 
   def getAllPathsInALoop(stmt: CfgNode, originalSymbolicState: SymbolicState, symbolicState: SymbolicState, conditionMemoryCells: mutable.HashSet[String],
-                         updatedVars: mutable.HashSet[Expr], incrementedVars: mutable.HashSet[Expr],
+                         updatedBy: mutable.HashMap[String, mutable.HashSet[String]], updatedVars: mutable.HashSet[Expr], incrementedVars: mutable.HashSet[Expr],
                          locationsWithUnpredictability: mutable.HashSet[String], mapping: mutable.HashMap[Val, Expr]): Option[List[Path]] = {
     var paths = List[Path]()
     val incrementedMemoryLocations = mutable.HashMap[PointerVal, Expr => Expr => SymbolicState => Expr]()
     val idMapping = mutable.HashMap[Identifier, Expr]()
     val pathsOpt = getAllLoopBodyPaths(Utility.getTrueBranch(stmt), stmt.id, originalSymbolicState, symbolicState.deepCopy(), incrementedMemoryLocations,
-      updatedVars, incrementedVars, conditionMemoryCells, locationsWithUnpredictability, mapping, idMapping)
+      updatedVars, incrementedVars, conditionMemoryCells, updatedBy, locationsWithUnpredictability, mapping, idMapping)
     if (pathsOpt.isEmpty) {
       return None
     }
@@ -749,7 +703,7 @@ class LoopSummarization(program: ProgramCfg,
     for (path <- paths) {
       pathToVertex.put(path, path.changes)
     }
-    s = symbolicState
+    generalState = symbolicState
     Some(paths)
   }
 
@@ -774,8 +728,8 @@ class LoopSummarization(program: ProgramCfg,
     val changes = pathToVertex(vertex1.path)
     val iterations = vertex1.path.iterations
 
-    val symbolicState = s.deepCopy()
-    val symbolicState2 = s.deepCopy()
+    val symbolicState = generalState.deepCopy()
+    val symbolicState2 = generalState.deepCopy()
 
     changes.foreach(change => {
       val valLocation = symbolicState.getMemoryLoc(change._1)
@@ -835,8 +789,8 @@ class LoopSummarization(program: ProgramCfg,
   }
 
   def computePeriod(vertex1: Vertex, vertex2: Vertex, vertex3: Vertex): Option[Int] = {
-    val symbolicState = s.deepCopy()
-    val symbolicState2 = s.deepCopy()
+    val symbolicState = generalState.deepCopy()
+    val symbolicState2 = generalState.deepCopy()
 
 
     val changes = pathToVertex(vertex1.path)
@@ -945,6 +899,11 @@ class LoopSummarization(program: ProgramCfg,
       case v@SymbolicVal(_) => v
       case SymbolicExpr(expr, _) => applyMapping(expr, mapping)
       case p@PointerVal(_) => p
+      case ArrayAccess(array, index, loc) => ArrayAccess(applyMapping(array, mapping), applyMapping(index, mapping), loc)
+      case a@ArrayNode(_, _) => a
+      case FieldAccess(record, field, loc) => FieldAccess(applyMapping(record, mapping), field, loc)
+      case r@Record(_, _) => r
+      case Deref(pointer, loc) => Deref(applyMapping(pointer, mapping), loc)
     }
   }
 

@@ -1,9 +1,9 @@
 package microc.symbolic_execution.optimizations.subsumption
 
 import com.microsoft.z3.{Context, Status}
-import microc.ast.{AndAnd, AssignStmt, BinaryOp, CodeLoc, Expr, Identifier, IfStmt, NestedBlockStmt, Not, Number, OrOr, WhileStmt}
+import microc.ast.{AndAnd, AssignStmt, BinaryOp, CodeLoc, Expr, Identifier, IfStmt, Input, NestedBlockStmt, Not, Number, OrOr, WhileStmt}
 import microc.cfg.CfgNode
-import microc.symbolic_execution.Value.Val
+import microc.symbolic_execution.Value.{SymbolicVal, Val}
 import microc.symbolic_execution.optimizations.summarization.LoopSummarization
 import microc.symbolic_execution.{ConstraintSolver, SymbolicExecutor, SymbolicState, Utility}
 
@@ -40,7 +40,19 @@ class PathSubsumption(constraintSolver: ConstraintSolver) {
   }
 
   def addAnnotation(node: CfgNode, expr: Expr): Unit = {
-    annotations(node) = BinaryOp(OrOr, annotations.getOrElseUpdate(node, Number(0, CodeLoc(0, 0))), expr, CodeLoc(0, 0))
+    annotations(node) = Utility.simplifyArithExpr(BinaryOp(OrOr, annotations.getOrElseUpdate(node, Number(0, CodeLoc(0, 0))), expr, CodeLoc(0, 0)))
+  }
+
+  def getAnnotation(node: CfgNode): Expr = {
+    annotations(node)
+  }
+
+  def setAnnotation(node: CfgNode, expr: Expr): Unit = {
+    annotations(node) = expr
+  }
+
+  def removeAnnotation(node: CfgNode): Unit = {
+    annotations.remove(node)
   }
 
 
@@ -64,7 +76,7 @@ class PathSubsumption(constraintSolver: ConstraintSolver) {
           throw new Exception("This should never happen")
       }
       val thenNode = node.succ.minBy(node => node.id)
-      if (annotations.contains(thenNode)) {
+      if (annotations.contains(thenNode) && !Utility.isLoopAnnotation(annotations(thenNode))) {
         if (thenBranch.asInstanceOf[NestedBlockStmt].body.isEmpty) {
           annotation = BinaryOp(OrOr, annotation, BinaryOp(AndAnd, Not(guard, CodeLoc(0, 0)), annotations(thenNode), CodeLoc(0, 0)), CodeLoc(0, 0))
         }
@@ -73,7 +85,7 @@ class PathSubsumption(constraintSolver: ConstraintSolver) {
         }
       }
       val elseNode = node.succ.maxBy(node => node.id)
-      if (annotations.contains(elseNode)) {
+      if (annotations.contains(elseNode) && !Utility.isLoopAnnotation(annotations(elseNode))) {
         if (thenBranch.asInstanceOf[NestedBlockStmt].body.isEmpty) {
           annotation = BinaryOp(OrOr, annotation, BinaryOp(AndAnd, guard, annotations(elseNode), CodeLoc(0, 0)), CodeLoc(0, 0))
         }
@@ -83,7 +95,8 @@ class PathSubsumption(constraintSolver: ConstraintSolver) {
       if (annotation == Number(0, CodeLoc(0, 0))) {
         return
       }
-      annotations.put(node, Utility.simplifyArithExpr(annotation))
+      annotation = Utility.simplifyArithExpr(annotation)
+      annotations.put(node, annotation)
     }
     if (node.succ.size == 1) {
       if (annotations.contains(node.succ.head)) {
@@ -91,12 +104,14 @@ class PathSubsumption(constraintSolver: ConstraintSolver) {
         val newAnnotation = node.ast match {
           case AssignStmt(Identifier(name, _), _, _) if Utility.isSubsumptionVar(name) =>
             annotation
+          case AssignStmt(left, Input(loc), _) =>
+            Utility.replaceExpr(annotation, left, SymbolicVal(CodeLoc(0, 0)))
           case AssignStmt(left, right, _) =>
             Utility.replaceExpr(annotation, left, right)
           case _ =>
             annotation
         }
-        annotations.put(node, newAnnotation)
+        annotations.put(node, Utility.simplifyArithExpr(newAnnotation))
       }
     }
   }
@@ -132,7 +147,7 @@ class PathSubsumption(constraintSolver: ConstraintSolver) {
     val (generalState, states) = if (!pathsInLoop.contains(loop)) {
       val generalState = LoopSummarization.createSymbolicStateWithAllValuesSymbolic(symbolicState, new mutable.HashMap[Val, Expr]())
       val generalState2 = generalState.deepCopy()
-      val states = LoopSummarization.getAllPaths(generalState2.programLocation.succ.minBy(node => node.id), generalState2.programLocation.id, generalState2, executor)
+      val states = LoopSummarization.getAllPaths(loop.succ.minBy(node => node.id), loop.id, generalState2, executor)
       pathsInLoop.put(loop, (generalState, states))
       (generalState, states)
     }

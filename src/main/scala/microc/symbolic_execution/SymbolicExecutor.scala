@@ -12,8 +12,9 @@ import microc.symbolic_execution.optimizations.subsumption.PathSubsumption
 
 import scala.collection.mutable
 
-case class ExecutionException(message: String, loc: Loc, symbolicState: SymbolicState) extends ProgramException(message + "\nloc: " + symbolicState.programLocation.ast) {
-  override def format(reporter: Reporter): String = reporter.formatError("execution", message + " loc: " + symbolicState.programLocation.ast, loc)
+case class ExecutionException(message: String, loc: Loc, symbolicState: SymbolicState) extends ProgramException(message + "\nloc: " + (if (symbolicState != null) symbolicState.programLocation.ast.toString else "")) {
+  override def format(reporter: Reporter): String = reporter.formatError("execution", message + " loc: " +
+    (if (symbolicState != null) symbolicState.programLocation.ast.toString else ""), loc)
 }
 
 object ExecutionException {
@@ -142,7 +143,7 @@ class SymbolicExecutor(program: ProgramCfg,
         history.initial = initialState
       case None =>
     }
-    searchStrategy.addState(initialState)
+    searchStrategy.addState(initialState)//this is the worklist
     var res: Option[Val] = None
     while (searchStrategy.statesCount() != 0) {
       if (printStats) {
@@ -151,7 +152,7 @@ class SymbolicExecutor(program: ProgramCfg,
       var path = searchStrategy.getState()
       currentPathStopped = false
       step(path)
-      while (path.callStack.nonEmpty && !currentPathStopped) {
+      while (path.callStack.nonEmpty && !currentPathStopped) {//If the path did not stop and there is something on the call stack -> execute it
         val lastFceCall = path.callStack.last
         path.symbolicStore.popFrame()
         // in the normalized ast, all function calls are in the form of assignments
@@ -171,16 +172,15 @@ class SymbolicExecutor(program: ProgramCfg,
         path.goTo(lastFceCall._1.succ.head, lastFceCall._2)
         step(path)
       }
-      //println(path.associatedPathsCount())
       statistics.numPaths += path.associatedPathsCount()
       if (path.returnValue.nonEmpty) {
         res = path.returnValue
       }
     }
-    if (res.isEmpty) {//TODO look at this
+    if (res.isEmpty) {//This may happen when the return is unreachable
       return 0
     }
-    res.get match {//TODO handle returning non number better
+    res.get match {// return the result of the last path or just zero
       case Number(value, _) =>
         value
       case i: IteVal =>
@@ -247,11 +247,11 @@ class SymbolicExecutor(program: ProgramCfg,
     val loop: CfgNode = symbolicState.programLocation
     val loopAst = loop.ast.asInstanceOf[WhileStmt]
     if (subsumption.nonEmpty) {
-      if (!loops.contains(loop)) {
-        val loopIter = createSubsumptionLoopVar()
-        loops.put(loop, loopIter)
+      if (!loops.contains(loop)) {// run subsumption only once for each loop
         solver.solveCondition(symbolicState.pathCondition, loopAst.guard, symbolicState) match {
           case Status.SATISFIABLE | Status.UNKNOWN =>
+            val loopIter = createSubsumptionLoopVar()
+            loops.put(loop, loopIter)
             val nextState = symbolicState.getIfTrueState()
             var goOutOfSubsumptionIteration = false
             if (!inSubsumptionIteration) {
@@ -261,11 +261,8 @@ class SymbolicExecutor(program: ProgramCfg,
             val loopIterCond = BinaryOp(LowerEqual, loopIter, Number(0, CodeLoc(0, 0)), CodeLoc(0, 0))
             val lastLoopStmt = loop.pred.maxBy(node => node.id)
             subsumption.get.addAnnotations(program.nodes.filter(node => node.id > loop.id && node.id <= lastLoopStmt.id).toList, loopIterCond)
-            //subsumption.get.addAnnotation(loop, loopIterCond)
+
             val decreaseLoopIter = AssignStmt(loopIter, BinaryOp(Minus, loopIter, Number(1, CodeLoc(0, 0)), CodeLoc(0, 0)), CodeLoc(0, 0))
-            val lastBody = loopAst.block.asInstanceOf[NestedBlockStmt].body
-            val body = lastBody.appended(decreaseLoopIter)
-            loop.ast = WhileStmt(loopAst.guard, NestedBlockStmt(body, loopAst.block.loc), loopAst.loc)
 
             val newStmt = new CfgStmtNode(lastLoopStmt.id + 0.5, decreaseLoopIter)
 
@@ -281,6 +278,8 @@ class SymbolicExecutor(program: ProgramCfg,
 
             step(nextState)
 
+            subsumption.get.computeAnnotationFromSuccessors(symbolicState.programLocation, true)
+
             subsumption.get.performInduction(
               program.nodes.filter(node => node.id >= loop.id && node.id <= newStmt.id).toList,
               loopIter,
@@ -294,28 +293,24 @@ class SymbolicExecutor(program: ProgramCfg,
             loop.pred.add(lastLoopStmt)
             loop.pred.remove(newStmt)
 
-
-//            symbolicState.pathCondition = nextState.pathCondition.prev.get
             symbolicState.returnValue = nextState.returnValue
-//            symbolicState.symbolicStore = nextState.symbolicStore
 
             loop.ast = loopAst
 
-            subsumption.get.computeAnnotationFromSuccessors(symbolicState.programLocation, true)
+            if (goOutOfSubsumptionIteration) {
+              inSubsumptionIteration = false
+            }
+
+
             if (subsumption.get.checkSubsumption(symbolicState)) {
               statistics.stoppedWithSubsumption += 1
               currentPathStopped = true
               return
             }
+            //If subsumption is not successful, remove the annotations
+            program.nodes.filter(node => node.id > loop.id && node.id <= lastLoopStmt.id).toList.foreach(node => subsumption.get.removeAnnotation(node))
 
-            if (goOutOfSubsumptionIteration) {
-              inSubsumptionIteration = false
-            }
-            else {
-              null
-            }
-
-          case Status.UNSATISFIABLE =>//TODO look at this
+          case Status.UNSATISFIABLE =>
             subsumption.get.computeAnnotationFromSuccessors(symbolicState.programLocation)
         }
       }
@@ -458,7 +453,7 @@ class SymbolicExecutor(program: ProgramCfg,
   }
 
 
-  private def computeBinaryOperation(operator: BinaryOperator, val1: Val, val2: Val, symbolicState: SymbolicState, loc: Loc, ignoreErrors: Boolean): Val = {
+  private def computeBinaryOperation(operator: BinaryOperator, val1: Val, val2: Val, symbolicState: SymbolicState, loc: Loc, ignoreUncertainErrors: Boolean): Val = {
     (val1, val2) match {
       case (Number(l, _), Number(r, _)) =>
         operator match {
@@ -485,15 +480,15 @@ class SymbolicExecutor(program: ProgramCfg,
       case (NullRef, PointerVal(_)) => Number(0, loc)
       case (IteVal(trueState, falseState, expr, loc), other) =>
         IteVal(
-          symbolicState.addVal(computeBinaryOperation(operator, symbolicState.getValOnMemoryLocation(trueState).get, other, symbolicState, loc, ignoreErrors)),
-          symbolicState.addVal(computeBinaryOperation(operator, symbolicState.getValOnMemoryLocation(falseState).get, other, symbolicState, loc, ignoreErrors)),
+          symbolicState.addVal(computeBinaryOperation(operator, symbolicState.getValOnMemoryLocation(trueState).get, other, symbolicState, loc, ignoreUncertainErrors)),
+          symbolicState.addVal(computeBinaryOperation(operator, symbolicState.getValOnMemoryLocation(falseState).get, other, symbolicState, loc, ignoreUncertainErrors)),
           expr,
           loc
         )
       case (other, IteVal(trueState, falseState, expr, loc)) =>
         IteVal(
-          symbolicState.addVal(computeBinaryOperation(operator, symbolicState.getValOnMemoryLocation(trueState).get, other, symbolicState, loc, ignoreErrors)),
-          symbolicState.addVal(computeBinaryOperation(operator, symbolicState.getValOnMemoryLocation(falseState).get, other, symbolicState, loc, ignoreErrors)),
+          symbolicState.addVal(computeBinaryOperation(operator, symbolicState.getValOnMemoryLocation(trueState).get, other, symbolicState, loc, ignoreUncertainErrors)),
+          symbolicState.addVal(computeBinaryOperation(operator, symbolicState.getValOnMemoryLocation(falseState).get, other, symbolicState, loc, ignoreUncertainErrors)),
           expr,
           loc
         )
@@ -503,9 +498,6 @@ class SymbolicExecutor(program: ProgramCfg,
           case Minus => Utility.removeUnnecessarySymbolicExpr(SymbolicExpr(BinaryOp(Minus, e1, e2, loc), loc))
           case Times => Utility.removeUnnecessarySymbolicExpr(SymbolicExpr(BinaryOp(Times, e1, e2, loc), loc))
           case Divide => {
-            if (ignoreErrors) {
-              return SymbolicExpr(BinaryOp(operator, val1.asInstanceOf[Symbolic], val2.asInstanceOf[Symbolic], loc), loc)
-            }
             e2 match {
               case Number(v, _) =>
                 if (v == 0) {
@@ -513,6 +505,9 @@ class SymbolicExecutor(program: ProgramCfg,
                 }
                 Utility.removeUnnecessarySymbolicExpr(SymbolicExpr(BinaryOp(Divide, e1, e2, loc), loc))
               case _ =>
+                if (ignoreUncertainErrors) {
+                  return SymbolicExpr(BinaryOp(operator, val1.asInstanceOf[Symbolic], val2.asInstanceOf[Symbolic], loc), loc)
+                }
                 solver.solveConstraint(
                   solver.createConstraint(BinaryOp(AndAnd, BinaryOp(Equal, e2, Number(0, loc), loc), symbolicState.pathCondition, loc), symbolicState)) match {
                   case Status.UNSATISFIABLE => SymbolicExpr(BinaryOp(Divide, e1, e2, loc), loc)
@@ -567,18 +562,18 @@ class SymbolicExecutor(program: ProgramCfg,
     RecVal(fieldsMap)
   }
 
-  def evaluate(expr: Expr, symbolicState: SymbolicState, ignoreErrors: Boolean = false): Val = {
+  def evaluate(expr: Expr, symbolicState: SymbolicState, ignoreUncertainErrors: Boolean = false): Val = {
     expr match {
       case BinaryOp(operator, left, right, loc) =>
-        (operator, evaluate(left, symbolicState, ignoreErrors), evaluate(right, symbolicState, ignoreErrors)) match {
+        (operator, evaluate(left, symbolicState, ignoreUncertainErrors), evaluate(right, symbolicState, ignoreUncertainErrors)) match {
           case (Equal, NullRef, NullRef) => Number(1, loc)
           case (Equal, PointerVal(address1), PointerVal(address2)) => if (address1.equals(address2)) Number(1, loc) else Number(0, loc)
           case (Equal, PointerVal(_), NullRef) => Number(0, loc)
           case (Equal, NullRef, PointerVal(_)) => Number(0, loc)
-          case (op, val1, val2) => computeBinaryOperation(op, val1, val2, symbolicState, loc, ignoreErrors)
+          case (op, val1, val2) => computeBinaryOperation(op, val1, val2, symbolicState, loc, ignoreUncertainErrors)
         }
       case Not(expr, loc) =>
-        evaluate(expr, symbolicState, ignoreErrors) match {
+        evaluate(expr, symbolicState, ignoreUncertainErrors) match {
           case Number(value, _) => Number(if (value == 0) 1 else 0, loc)
           case v@SymbolicVal(_) => SymbolicExpr(Not(v, loc), loc)
           case SymbolicExpr(value, _) => SymbolicExpr(Not(value, loc), loc)
@@ -609,16 +604,16 @@ class SymbolicExecutor(program: ProgramCfg,
         symbolicState.getSymbolicValOpt(id.name).get
       case Null(_) => NullRef
       case Alloc(expr, _) =>
-        symbolicState.addVal(evaluate(expr, symbolicState, ignoreErrors))
+        symbolicState.addVal(evaluate(expr, symbolicState, ignoreUncertainErrors))
       case Deref(pointer, loc) =>
-        evaluate(pointer, symbolicState, ignoreErrors) match {
+        evaluate(pointer, symbolicState, ignoreUncertainErrors) match {
           case PointerVal(address) =>
             symbolicState.getValOnMemoryLocation(PointerVal(address)).get
           case NullRef =>
             throw errorNullDereference(loc, symbolicState)
           case IteVal(trueState: PointerVal, falseState: PointerVal, expr, loc) =>
             IteVal(symbolicState.addVal(symbolicState.getValOnMemoryLocation(trueState).get), symbolicState.addVal(symbolicState.getValOnMemoryLocation(falseState).get), expr, loc)
-          case IteVal(trueState, falseState, expr, loc) if symbolicState.getValOnMemoryLocation(falseState).get == NullRef || symbolicState.getValOnMemoryLocation(trueState).get == NullRef =>
+          case IteVal(trueState, falseState, _, loc) if symbolicState.getValOnMemoryLocation(falseState).get == NullRef || symbolicState.getValOnMemoryLocation(trueState).get == NullRef =>
             throw errorNullDereference(loc, symbolicState)
           case e =>
             throw errorNonPointerDereference(loc, e.toString, symbolicState)
@@ -626,9 +621,9 @@ class SymbolicExecutor(program: ProgramCfg,
       case a@ArrayNode(_, _) =>
         loadArray(a, symbolicState)
       case ArrayAccess(array, index, loc) =>
-        evaluate(array, symbolicState, ignoreErrors) match {
+        evaluate(array, symbolicState, ignoreUncertainErrors) match {
           case ArrVal(elems) => {
-            evaluate(index, symbolicState, ignoreErrors) match {
+            evaluate(index, symbolicState, ignoreUncertainErrors) match {
               case Number(value, _) =>
                 if (value >= elems.length || value < 0) {
                   throw errorArrayOutOfBounds(loc, elems.length, value, symbolicState)
@@ -691,7 +686,6 @@ class SymbolicExecutor(program: ProgramCfg,
                                 throw new Exception("this should never happen.")
                             }
                             if (subsumption.nonEmpty) {
-                              //TODO take return value???
                               step(newState)
                             }
                             else {
@@ -712,12 +706,12 @@ class SymbolicExecutor(program: ProgramCfg,
             }
           }
           case _ =>
-            throw errorNonArrayAccess(loc, evaluate(array, symbolicState, ignoreErrors).toString, symbolicState)
+            throw errorNonArrayAccess(loc, evaluate(array, symbolicState, ignoreUncertainErrors).toString, symbolicState)
         }
       case r@Record(_, _) =>
-        loadRecord(r, symbolicState, ignoreErrors)
+        loadRecord(r, symbolicState, ignoreUncertainErrors)
       case FieldAccess(record, field, loc) =>
-        evaluate(record, symbolicState, ignoreErrors) match {
+        evaluate(record, symbolicState, ignoreUncertainErrors) match {
           case RecVal(fields) =>
             fields.get(field) match {
               case Some(PointerVal(res)) =>
@@ -809,7 +803,6 @@ class SymbolicExecutor(program: ProgramCfg,
                                 throw new Exception("this should never happen.")
                             }
                             if (subsumption.nonEmpty) {
-                              //TODO take return value???
                               step(newState)
                             }
                             else {
@@ -824,29 +817,11 @@ class SymbolicExecutor(program: ProgramCfg,
                 }
               case _ => throw errorNonIntArithmetics(loc, symbolicState)
             }
-          case other =>
+          case _ =>
             throw errorNonArrayAccess(loc, evaluate(array, symbolicState).toString, symbolicState)
         }
       case e =>
         throw errorNotAssignableExpression(e, symbolicState)
-    }
-  }
-
-  def isConditionBounded(expr: Expr, symbolicState: SymbolicState): Boolean = {
-    expr match {
-      case BinaryOp(_, lhs, rhs, _) => isConditionBounded(lhs, symbolicState) || isConditionBounded(rhs, symbolicState)
-      case Not(expr, _) => isConditionBounded(expr, symbolicState)
-      case id@Identifier(_, _) =>
-        symbolicState.getValueOfVar(id.name, id.loc) match {
-          case SymbolicVal(_) => true
-          case SymbolicExpr(_, _) => true
-          case _ => false
-        }
-      case Alloc(expr, _) => isConditionBounded(expr, symbolicState)
-      case Deref(pointer, _) => isConditionBounded(pointer, symbolicState)
-      case ArrayNode(elems, _) => elems.exists(isConditionBounded(_, symbolicState))
-      case ArrayAccess(array, index, _) => isConditionBounded(array, symbolicState) || isConditionBounded(index, symbolicState)
-      case _ => false
     }
   }
 

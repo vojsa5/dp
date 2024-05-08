@@ -6,7 +6,7 @@ import microc.analysis.{QueryCountAnalyses, SemanticAnalysis}
 import microc.ast.{Decl, Program}
 import microc.cfg.{CfgNode, IntraproceduralCfgFactory, ProgramCfg}
 import microc.parser.Parser
-import microc.symbolic_execution.optimizations.merging.{AggressiveStateMerging, HeuristicBasedStateMerging}
+import microc.symbolic_execution.optimizations.merging.{AggressiveStateMerging, DynamicStateMerging, HeuristicBasedStateMerging}
 import microc.symbolic_execution.optimizations.subsumption.PathSubsumption
 import microc.symbolic_execution.optimizations.summarization.LoopSummarization
 
@@ -24,7 +24,7 @@ class SymbolicExecutorFactory(useSummarizaiton: Boolean, useSubsumption: Boolean
     if (useSubsumption) {
       pathSubsumption = Some(new PathSubsumption(new ConstraintSolver(ctx)))
     }
-    var stateHistory: Option[ExecutionTree] = None
+    var executionTree: Option[ExecutionTree] = None
     var covered: Option[mutable.HashSet[CfgNode]] = None
 
     val searchStrategy = searchStrategyType match {
@@ -35,15 +35,15 @@ class SymbolicExecutorFactory(useSummarizaiton: Boolean, useSubsumption: Boolean
       case "random" =>
         new RandomSearchStrategy()
       case "tree" =>
-        stateHistory = Some(new ExecutionTree())
-        new RandomPathSelectionStrategy(stateHistory.get)
+        executionTree = Some(new ExecutionTree())
+        new RandomPathSelectionStrategy(executionTree.get)
       case "coverage" =>
         covered = Some(new mutable.HashSet[CfgNode]())
         new CoverageSearchStrategy(covered.get)
       case "klee" =>
-        stateHistory = Some(new ExecutionTree())
+        executionTree = Some(new ExecutionTree())
         covered = Some(new mutable.HashSet[CfgNode]())
-        new KleeSearchStrategy(stateHistory.get, covered.get)
+        new KleeSearchStrategy(executionTree.get, covered.get)
       case _ =>
         throw new InvalidApplicationException()
     }
@@ -78,10 +78,10 @@ class SymbolicExecutorFactory(useSummarizaiton: Boolean, useSubsumption: Boolean
 
 
     if (useSummarizaiton) {
-      new LoopSummarization(programCfg, pathSubsumption, ctx, possiblyMergingSearchStrategy, stateHistory, covered, printStats = false)
+      new LoopSummarization(programCfg, pathSubsumption, ctx, possiblyMergingSearchStrategy, executionTree, covered, printStats = false)
     }
     else {
-      new SymbolicExecutor(programCfg, pathSubsumption, ctx, possiblyMergingSearchStrategy, stateHistory, covered, printStats = false)
+      new SymbolicExecutor(programCfg, pathSubsumption, ctx, possiblyMergingSearchStrategy, executionTree, covered, printStats = false)
     }
   }
 }

@@ -54,7 +54,7 @@ class ConstraintSolver(val ctx: Context) {
       case PointerVal(address) => ctx.mkInt(address)
       case NullRef => ctx.mkInt(0)
       case _ =>
-        throw new Exception("IMPLEMENT")
+        throw new Exception("this should never happen")
     }
   }
 
@@ -165,7 +165,7 @@ class ConstraintSolver(val ctx: Context) {
       case f@FieldAccess(_, _, _) =>
         valToExpr(getTarget(f, state, allowNonInitializedVals), state)
       case _ =>
-        throw new Exception("IMPLEMENT")
+        throw new Exception("this should never happen")
     }
   }
 
@@ -191,11 +191,10 @@ class ConstraintSolver(val ctx: Context) {
               case ArrVal(elems) =>
                 symbolicState.getValOnMemoryLocation(elems(value), true).get.asInstanceOf[Symbolic]
               case _ =>
-                throw new Exception("IMPLEMENT")
+                throw new Exception("this should never happen")
             }
           case _ =>
-            throw new Exception("IMPLEMENT")
-
+            throw new Exception("this should never happen")
         }
       case FieldAccess(record, field, loc) =>
         val rec = getTargetInner(record, symbolicState)
@@ -212,7 +211,7 @@ class ConstraintSolver(val ctx: Context) {
           case p@PointerVal(_) =>
             symbolicState.getValOnMemoryLocation(p, true).get.asInstanceOf[Symbolic]
           case _ =>
-            throw new Exception("IMPLEMENT")
+            throw new Exception("this should never happen")
         }
       case a@ArrayNode(_, _) => a
       case r@Record(_, _) => r
@@ -220,7 +219,7 @@ class ConstraintSolver(val ctx: Context) {
       case recVal: RecVal => recVal
       case pointerVal: PointerVal => pointerVal
       case _ =>
-        throw new Exception("IMPLEMENT")
+        throw new Exception("this should never happen")
     }
   }
 

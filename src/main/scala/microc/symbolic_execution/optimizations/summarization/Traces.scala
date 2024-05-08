@@ -35,11 +35,13 @@ case class Traces() {
       }
     }
     else if (pda.exitStates.contains(currPath.path)) {
-      if (rec.isEmpty) {
-        res.add(BinaryOp(AndAnd, Utility.applyTheState(Utility.applyPointers(Not(currPath.condition, CodeLoc(0, 0)), symbolicState), symbolicState, true), traceCondition, CodeLoc(0, 0)), updated_variables, incrementedVars)
-      }
-      else {
-        res.add(traceCondition, updated_variables, incrementedVars)
+      if (currPath.change.isEmpty) {
+        if (rec.isEmpty) {
+          res.add(BinaryOp(AndAnd, Utility.applyTheState(Utility.applyPointers(Not(currPath.condition, CodeLoc(0, 0)), symbolicState), symbolicState, true), traceCondition, CodeLoc(0, 0)), updated_variables, incrementedVars)
+        }
+        else {
+          res.add(traceCondition, updated_variables, incrementedVars)
+        }
       }
     }
     else {
@@ -58,15 +60,18 @@ case class Traces() {
               newUpdatedVariables.put(update._1, update._2)
             }
             for (update <- edge.change) {
-              if (newUpdatedVariables.contains(update._1)) {
-                newUpdatedVariables.put(update._1, pda.combineFunctions(Plus, update._2, newUpdatedVariables(update._1)))
-              }
-              else {
+//              if (newUpdatedVariables.contains(update._1)) {
+//                newUpdatedVariables.put(update._1, pda.combineFunctions(Plus, update._2, newUpdatedVariables(update._1)))
+//                newState.updateMemoryLocation(symbolicState.getMemoryLoc(update._1), Utility.removeUnnecessarySymbolicExpr(
+//                  SymbolicExpr(pda.combineFunctions(Plus, update._2, newUpdatedVariables(update._1)).apply(symbolicState.getValAtMemoryLoc(update._1, true).asInstanceOf[Symbolic]).apply(newState), CodeLoc(0, 0)))
+//                )
+//              }
+//              else {
                 newUpdatedVariables.put(update._1, update._2)
                 newState.updateMemoryLocation(symbolicState.getMemoryLoc(update._1), Utility.removeUnnecessarySymbolicExpr(
                   SymbolicExpr(update._2.apply(symbolicState.getValAtMemoryLoc(update._1, true).asInstanceOf[Symbolic]).apply(newState), CodeLoc(0, 0)))
                 )
-              }
+//              }
             }
             nrec.put(currPath, (ncond, edge.change))
             if (!summarizeTrace(pda, newState, edge.destination, ncond, newUpdatedVariables, nrec, incrementedVars)) {

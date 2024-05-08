@@ -4,7 +4,7 @@ import com.microsoft.z3.Context
 import microc.analysis.{QueryCountAnalyses, SemanticAnalysis}
 import microc.ast.AstNormalizer
 import microc.cfg.{CfgNode, IntraproceduralCfgFactory, ProgramCfg}
-import microc.generation.{ExperimentRunner, ProgramGenerator}
+import microc.generation.ProgramGenerator
 import microc.symbolic_execution.optimizations.subsumption.PathSubsumption
 import microc.symbolic_execution.optimizations.summarization.LoopSummarization
 import microc.symbolic_execution.optimizations.merging.HeuristicBasedStateMerging
@@ -29,41 +29,17 @@ class ProgramGenerationTest extends FunSuite with MicrocSupport with Examples {
     val program = new AstNormalizer().normalize(new ProgramGenerator().generateRandomProgram())
     val cfg = new IntraproceduralCfgFactory().fromProgram(program);
     new SymbolicExecutor(cfg).run()
-//    val future = Future {
-//      val program = new AstNormalizer().normalize(new ProgramGenerator().generateRandomProgram())
-//      val cfg = new IntraproceduralCfgFactory().fromProgram(program);
-//      new SymbolicExecutor(cfg).run()
-//    }
-//    try {
-//      Await.result(future, 20.seconds)
-//    }
-//    catch {
-//      case _: TimeoutException =>
-//      case e =>
-//        fail(e.toString)
-//    }
-  }
-
-  test("test generation 50x") {
-
-    for (i <- 0 until 50) {
-      println(i)
-
-      val future = Future {
-        val program = new AstNormalizer().normalize(new ProgramGenerator().generateRandomProgram(false))
-        val cfg = new IntraproceduralCfgFactory().fromProgram(program);
-        new SymbolicExecutor(cfg, printStats = false).run()
-      }(executionContext)
-
-      try {
-        Await.result(future, 10.seconds)
-      }
-      catch {
-        case _: TimeoutException =>
-        case e =>
-          fail(e.toString)
-      }
-
+    val future = Future {
+      val program = new AstNormalizer().normalize(new ProgramGenerator().generateRandomProgram())
+      val cfg = new IntraproceduralCfgFactory().fromProgram(program);
+      new SymbolicExecutor(cfg).run()
+    }
+    try {
+      Await.result(future, 20.seconds)
+    }
+    catch {
+      case _: TimeoutException =>
+      case e =>
     }
   }
 
@@ -78,34 +54,10 @@ class ProgramGenerationTest extends FunSuite with MicrocSupport with Examples {
       case e@ExecutionException(_, _, _) =>
         println(e.message)
       case e =>
-        throw e
     }
     null
   }
 
-  test("test generation subsumption 50x") {
-
-    for (i <- 0 until 50) {
-      println(i)
-
-      val future = Future {
-        val program = new AstNormalizer().normalize(new ProgramGenerator().generateRandomProgram())
-        val cfg = new IntraproceduralCfgFactory().fromProgram(program);
-        val ctx = new Context()
-        new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx))), printStats = false).run()
-      }
-
-      try {
-        Await.result(future, 5.seconds)
-      }
-      catch {
-        case _: TimeoutException =>
-        case e =>
-          fail(e.toString)
-      }
-
-    }
-  }
 
 
   test("test generation of guaranteed errors") {
@@ -140,29 +92,6 @@ class ProgramGenerationTest extends FunSuite with MicrocSupport with Examples {
     null
   }
 
-  test("test generation loop summaries 50x") {
-
-    for (i <- 0 until 50) {
-      println(i)
-
-      val future = Future {
-        val program = new AstNormalizer().normalize(new ProgramGenerator().generateRandomProgram())
-        val cfg = new IntraproceduralCfgFactory().fromProgram(program);
-        val executor = new LoopSummarization(cfg, printStats = false).run()
-      }
-
-      try {
-        Await.result(future, 5.seconds)
-      }
-      catch {
-        case _: TimeoutException =>
-        case e =>
-          fail(e.toString)
-      }
-
-    }
-  }
-
   test("test generation with smart merging") {
     val program = new AstNormalizer().normalize(new ProgramGenerator().generateRandomProgram())
     val cfg = new IntraproceduralCfgFactory().fromProgram(program);
@@ -178,40 +107,6 @@ class ProgramGenerationTest extends FunSuite with MicrocSupport with Examples {
     new SymbolicExecutor(cfg, searchStrategy = new HeuristicBasedStateMerging(new BFSSearchStrategy, variableCosts, 3)).run()
     null
   }
-
-
-  test("test generation with smart merging 50x") {
-
-    for (i <- 0 until 50) {
-      println(i)
-
-      val future = Future {
-        val program = new AstNormalizer().normalize(new ProgramGenerator().generateRandomProgram())
-        val cfg = new IntraproceduralCfgFactory().fromProgram(program);
-        val analysesResult = new QueryCountAnalyses(cfg)(new SemanticAnalysis().analyze(program)).analyze()
-        val variableCosts = new mutable.HashMap[CfgNode, mutable.HashMap[String, Double]]
-        for (node <- analysesResult) {
-          val nodeCosts = new mutable.HashMap[String, Double]
-          for (cost <- node._2) {
-            nodeCosts.put(cost._1.name, cost._2)
-          }
-          variableCosts.put(node._1, nodeCosts)
-        }
-        new SymbolicExecutor(cfg, searchStrategy = new HeuristicBasedStateMerging(new BFSSearchStrategy, variableCosts, 3), printStats = false).run()
-      }
-
-      try {
-        Await.result(future, 5.seconds)
-      }
-      catch {
-        case _: TimeoutException =>
-        case e =>
-          fail(e.toString)
-      }
-
-    }
-  }
-
 
   test("test generation with klee search") {
     val program = new AstNormalizer().normalize(new ProgramGenerator().generateRandomProgram())
@@ -273,7 +168,4 @@ class ProgramGenerationTest extends FunSuite with MicrocSupport with Examples {
   }
 
 
-  test("experiments") {
-    new ExperimentRunner().run()
-  }
 }

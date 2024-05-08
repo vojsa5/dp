@@ -14,7 +14,12 @@ class SymbolicStateNotAssociatedWithAPath(symbolicState: SymbolicState) extends
     new SymbolicStateNotAssociatedWithAPath(ast match {
       case WhileStmt(guard, thenBranch, loc) =>
         val next = if (thenBranch.asInstanceOf[NestedBlockStmt].body.isEmpty) {
-          programLocation.succ.find(s => s.ast == ast).get
+          if (!programLocation.succ.exists(s => s.ast == ast)) {
+            programLocation.succ.find(s => s.id - programLocation.id == 0.5).get
+          }
+          else {
+            programLocation.succ.find(s => s.ast == ast).get
+          }
         }
         else {
           val firstThenStatement = thenBranch.asInstanceOf[NestedBlockStmt].body.head

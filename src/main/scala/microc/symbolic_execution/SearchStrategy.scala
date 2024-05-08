@@ -7,7 +7,7 @@ import scala.collection.immutable.Queue
 import scala.collection.mutable
 import scala.util.Random
 
-class RandomAccessSet[T] {//TODO look at this
+class RandomAccessSet[T] {
   private val elements = mutable.ArrayBuffer[T]()
   private val indexMap = mutable.HashMap[T, Int]()
   private val random = new Random()

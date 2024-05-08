@@ -7,8 +7,8 @@ import scala.collection.mutable
 import scala.util.Random
 
 class ProgramGenerator(loopGenerationProbability: Double = 1.0 / 6.0, forLoopGenerationProbability: Double = 1.0 / 6.0,
-                       maxStmtDepth: Int = 2, maxTopLvlStmtsCount: Int = 15, maxStmtsWithinABlock: Int = 7,
-                       guaranteedError: Boolean = false, tryNotToGenerateRandomError: Boolean = true) {
+                       maxBlockDepth: Int = 2, maxTopLvlStmtsCount: Int = 15, maxStmtsWithinABlock: Int = 7,
+                       guaranteedError: Boolean = false, doNotGenerateDivisions: Boolean = true) {
   val random = new Random()
 
   val existingTypes: mutable.HashSet[VarType] = mutable.HashSet[VarType]()
@@ -32,7 +32,7 @@ class ProgramGenerator(loopGenerationProbability: Double = 1.0 / 6.0, forLoopGen
     if (isPointer) {
       if (random.nextBoolean()) Equal else NotEqual
     } else {
-      val operators = if (tryNotToGenerateRandomError) {
+      val operators = if (doNotGenerateDivisions) {
         List(Plus, Minus, Times)
       }
       else {
@@ -139,7 +139,7 @@ class ProgramGenerator(loopGenerationProbability: Double = 1.0 / 6.0, forLoopGen
   }
 
   def randomStmt(depth: Int = 0, declaredIdentifiers: Map[String, VarType]): StmtInNestedBlock = {
-    if (depth > maxStmtDepth) {
+    if (depth > maxBlockDepth) {
       random.nextInt(2) match {
         case 0 =>
           OutputStmt(randomExpr(NumType(), declaredIdentifiers = declaredIdentifiers), randomLoc())

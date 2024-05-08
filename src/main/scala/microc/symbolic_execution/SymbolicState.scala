@@ -94,17 +94,17 @@ class SymbolicState(
                 }
                 elems(value)
               case _ =>
-                throw new Exception("IMPLEMENT")
+                throw new Exception("this should never happen")
             }
           case _ =>
-            throw new Exception("IMPLEMENT")
+            throw new Exception("this should never happen")
         }
       case FieldAccess(record, field, loc) =>
         symbolicStore.getValOfPtr(getMemoryLoc(record)) match {
           case Some(RecVal(fields)) =>
             fields(field)
           case _ =>
-            throw new Exception("IMPLEMENT")
+            throw new Exception("this should never happen")
         }
       case _ =>
         throw new Exception("this should never happen")
@@ -187,7 +187,12 @@ class SymbolicState(
     ast match {
       case WhileStmt(guard, thenBranch, loc) =>
         val next = if (thenBranch.asInstanceOf[NestedBlockStmt].body.isEmpty) {
-          programLocation.succ.find(s => s.ast == ast).get
+          if (!programLocation.succ.exists(s => s.ast == ast)) {
+            programLocation.succ.find(s => s.id - programLocation.id == 0.5).get
+          }
+          else {
+            programLocation.succ.find(s => s.ast == ast).get
+          }
         }
         else {
           val firstThenStatement = thenBranch.asInstanceOf[NestedBlockStmt].body.head

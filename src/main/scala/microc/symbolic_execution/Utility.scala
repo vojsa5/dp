@@ -2,6 +2,7 @@ package microc.symbolic_execution
 
 import microc.ast.{Alloc, AndAnd, ArrayAccess, ArrayNode, AssignStmt, AstPrinter, BinaryOp, CallFuncExpr, CodeLoc, Decl, Deref, Divide, Equal, Expr, FieldAccess, GreaterEqual, GreaterThan, Identifier, IfStmt, Input, LowerEqual, LowerThan, Minus, NestedBlockStmt, Not, NotEqual, Null, Number, OrOr, OutputStmt, Plus, Record, RecordField, ReturnStmt, Stmt, Times, VarRef, WhileStmt}
 import microc.cfg.CfgNode
+import microc.symbolic_execution.ExecutionException.errorDivByZero
 import microc.symbolic_execution.Value.{ArrVal, IteVal, NullRef, PointerVal, RecVal, Symbolic, SymbolicExpr, SymbolicVal, Val}
 
 import scala.collection.immutable.HashSet
@@ -84,7 +85,8 @@ object Utility {
         case ReturnStmt(expr, _) => expressionCanCauseError(expr)
         case IfStmt(expr, _, _, _) => expressionCanCauseError(expr)
         case WhileStmt(expr, _, _) => expressionCanCauseError(expr)
-        case AssignStmt(_, right, _) => expressionCanCauseError(right)
+        case AssignStmt(left, right, _) => expressionCanCauseError(left) || expressionCanCauseError(right)
+        case _ => false
       }
   }
 
@@ -124,7 +126,7 @@ object Utility {
     }
   }
 
-  def simplifyArithExpr(expr: Expr): Expr = {//TODO if changed, repeat
+  def simplifyArithExpr(expr: Expr): Expr = {
     var res = expr match {
       case n@Number(_, _) => n
       case BinaryOp(AndAnd, Number(1, _), expr, _) => simplifyArithExpr(expr)
@@ -150,7 +152,12 @@ object Utility {
               case Plus => Number(value + value2, loc)
               case Minus => Number(value - value2, loc)
               case Times => Number(value * value2, loc)
-              case Divide => Number(value / value2, loc)
+              case Divide => {
+                if (value2 == 0) {
+                  throw errorDivByZero(loc, null)
+                }
+                Number(value / value2, loc)
+              }
               case LowerThan => Number(if (value < value2) 1 else 0, loc)
               case LowerEqual => Number(if (value <= value2) 1 else 0, loc)
               case GreaterThan => Number(if (value > value2) 1 else 0, loc)
@@ -192,10 +199,10 @@ object Utility {
           case (a, b: Symbolic) => IteVal(state.addVal(SymbolicExpr(a, loc)), state.addVal(b), applyTheState(cond, state, allowReturnNonInitialized), loc)
           case (a, b) => IteVal(state.addVal(SymbolicExpr(a, loc)), state.addVal(SymbolicExpr(b, loc)), applyTheState(cond, state, allowReturnNonInitialized), loc)
         }
-      case r@RecVal(fields) => r
-      case a@ArrVal(elems) => a
+      case r@RecVal(_) => r
+      case a@ArrVal(_) => a
       case _ =>
-        throw new Exception("IMPLEMENT")
+        throw new Exception("this should never happen")
     }
   }
 
@@ -268,8 +275,6 @@ object Utility {
       case FieldAccess(record, field, loc) => FieldAccess(replaceExpr(record, toReplace, newValue), field, loc)
       case Record(fields, loc) => Record(fields.map(field => RecordField(field.name, replaceExpr(field.expr, toReplace, newValue), field.loc)), loc)
       case Alloc(expr, loc) => Alloc(replaceExpr(expr, toReplace, newValue), loc)
-      case _ =>
-        throw new Exception("IMPLEMENT")
     }
   }
 
@@ -356,6 +361,46 @@ object Utility {
         true
       case _ =>
         false
+    }
+  }
+
+  def getMemoryLocationsFromExpr(expr: Expr, printer: AstPrinter): mutable.HashSet[String] = {
+    expr match {
+      case BinaryOp(_, left, right, _) =>
+        val res = getMemoryLocationsFromExpr(left, printer)
+        res.addAll(getMemoryLocationsFromExpr(right, printer))
+        res
+      case Not(expr, _) =>
+        getMemoryLocationsFromExpr(expr, printer)
+      case id@Identifier(_, _) =>
+        mutable.HashSet(printer.print(id))
+      case a@ArrayAccess(_, _, _) =>
+        mutable.HashSet(printer.print(a))
+      case f@FieldAccess(_, _, _) =>
+        mutable.HashSet(printer.print(f))
+      case d@Deref(_, _) =>
+        mutable.HashSet(printer.print(d))
+      case SymbolicExpr(v, _) =>
+        getMemoryLocationsFromExpr(v, printer)
+      case _ =>
+        mutable.HashSet()
+    }
+  }
+
+  def isNotUpdatedByUnpredictableLoc(name: String, locationsWithUnpredictability: mutable.HashSet[String],
+                                     updatedBy: mutable.HashMap[String, mutable.HashSet[String]], visited: mutable.HashSet[String]): Boolean = {
+    if (locationsWithUnpredictability.contains(name)) {
+      return false
+    }
+    if (visited.contains(name)) {
+      return true
+    }
+    visited.add(name)
+    updatedBy.get(name) match {
+      case Some(updated) =>
+        updated.forall(up => isNotUpdatedByUnpredictableLoc(up, locationsWithUnpredictability, updatedBy, visited))
+      case None =>
+        true
     }
   }
 
@@ -619,6 +664,18 @@ object Utility {
         ids.exists(i => i.equals(id))
       case _ =>
         false
+    }
+  }
+
+  def isLoopAnnotation(expr: Expr): Boolean = {
+    expr match {
+      case BinaryOp(operator, left, right, loc) =>
+        (left, right) match {
+          case (Identifier("_l1", CodeLoc(0, 0)), Number(0, CodeLoc(0, 0))) =>
+            true
+          case _ => false
+        }
+      case _ => false
     }
   }
 }

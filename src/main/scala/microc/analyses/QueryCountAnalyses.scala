@@ -8,12 +8,6 @@ import microc.symbolic_execution.Utility
 
 import scala.collection.immutable.HashSet
 
-/** A variable is live at a program point if there exists an execution in which its value will be read later without
- * being written to in between. For each of the CFG node the analysis provides a set of variables that are live
- * *before* the node executes.
- * @param cfg
- * @param declarations
- */
 class QueryCountAnalyses(cfg: ProgramCfg)(implicit declarations: Declarations) extends DataflowAnalysis(cfg)(declarations) {
   type NodeElem = Set[(Decl, Double)]
   override def analyze(): ProgLattice#Element = {

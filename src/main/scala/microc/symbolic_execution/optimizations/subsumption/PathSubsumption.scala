@@ -12,12 +12,28 @@ import scala.collection.mutable
 
 
 
+/**
+ *  Implements the subsumption technique
+ * @param constraintSolver
+ */
+
 
 
 class PathSubsumption(constraintSolver: ConstraintSolver) {
   val annotations = mutable.HashMap[CfgNode, Expr]()
 
   val pathsInLoop = mutable.HashMap[CfgNode, (SymbolicState, mutable.HashSet[SymbolicState])]()
+
+
+  /**
+   * Performs induction to keep only inductive annotations.
+   *
+   * @param nodes The list of CFG nodes within the loop.
+   * @param identifier The loop variable identifier.
+   * @param symbolicState The current symbolic state at the loop.
+   * @param executor The symbolic executor instance.
+   * @param loop The loop CFG node.
+   */
 
 
   def performInduction(nodes: List[CfgNode], identifier: Identifier,
@@ -43,21 +59,20 @@ class PathSubsumption(constraintSolver: ConstraintSolver) {
     annotations(node) = Utility.simplifyArithExpr(BinaryOp(OrOr, annotations.getOrElseUpdate(node, Number(0, CodeLoc(0, 0))), expr, CodeLoc(0, 0)))
   }
 
-  def getAnnotation(node: CfgNode): Expr = {
-    annotations(node)
-  }
-
-  def setAnnotation(node: CfgNode, expr: Expr): Unit = {
-    annotations(node) = expr
-  }
 
   def removeAnnotation(node: CfgNode): Unit = {
     annotations.remove(node)
   }
 
+  /**
+   * Computes an annotation for a node based on its successors.
+   *
+   * @param node The CFG node to compute the annotation for.
+   * @param considerTrueBranchForWhile If true, considers the true branch annotations for while loops.
+   */
+
 
   def computeAnnotationFromSuccessors(node: CfgNode, considerTrueBranchForWhile: Boolean = false): Unit = {
-    val t: util.LinkedList[mutable.HashSet[Expr]] = new util.LinkedList[mutable.HashSet[Expr]]
     if (node.succ.size == 2) {
       var annotation: Expr = Number(0, CodeLoc(0, 0))
       val (guard, thenBranch) = node.ast match {
@@ -116,6 +131,12 @@ class PathSubsumption(constraintSolver: ConstraintSolver) {
     }
   }
 
+  /**
+   * Checks if a symbolic state can be subsumed based on the annotation.
+   *
+   * @param symbolicState The symbolic state to check for subsumption.
+   * @return True if the state can be subsumed, otherwise false.
+   */
 
 
   def checkSubsumption(symbolicState: SymbolicState): Boolean = {

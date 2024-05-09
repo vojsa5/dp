@@ -65,10 +65,6 @@ abstract class DataflowAnalysis(val cfg: ProgramCfg)(implicit declarations: Decl
     }
   }
 
-  // TODO: each dataflow analysis needs the following:
-  //       - a direction to you can get node dependencies and reverse dependencies
-  //       - a transfer function
-  //       - a lattice that shall be computed for each node
 
   def analyze(): ProgLattice#Element = {
     ???

@@ -18,6 +18,17 @@ import scala.collection.mutable
 class SymbolicExecutorFactory(useSummarizaiton: Boolean, useSubsumption: Boolean, mergingStrategyType: Option[String],
                               smartMergingCost: Int, kappa: Int, searchStrategyType: String) {
   def get(program: Program): SymbolicExecutor = {
+    if (useSubsumption && useSubsumption) {
+      throw new InvalidApplicationException("subsumption and summarization can not be used at the same time")
+    }
+    if (useSubsumption || useSubsumption) {
+      mergingStrategyType match {
+        case None =>
+        case Some("none") =>
+        case _ =>
+      }
+      throw new InvalidApplicationException("subsumption or summarization can not be used with state merging")
+    }
     val programCfg = new IntraproceduralCfgFactory().fromProgram(program)
     val ctx = new Context()
     var pathSubsumption: Option[PathSubsumption] = None
@@ -36,7 +47,7 @@ class SymbolicExecutorFactory(useSummarizaiton: Boolean, useSubsumption: Boolean
         new RandomSearchStrategy()
       case "tree" =>
         executionTree = Some(new ExecutionTree())
-        new RandomPathSelectionStrategy(executionTree.get)
+        new TreeBasedStrategy(executionTree.get)
       case "coverage" =>
         covered = Some(new mutable.HashSet[CfgNode]())
         new CoverageSearchStrategy(covered.get)
@@ -45,7 +56,7 @@ class SymbolicExecutorFactory(useSummarizaiton: Boolean, useSubsumption: Boolean
         covered = Some(new mutable.HashSet[CfgNode]())
         new KleeSearchStrategy(executionTree.get, covered.get)
       case _ =>
-        throw new InvalidApplicationException()
+        throw new InvalidApplicationException("unknown search strategy: ", searchStrategyType)
     }
 
     val possiblyMergingSearchStrategy = mergingStrategyType match {
@@ -55,7 +66,7 @@ class SymbolicExecutorFactory(useSummarizaiton: Boolean, useSubsumption: Boolean
         searchStrategy
       case Some("aggresive") =>
         new AggressiveStateMerging(searchStrategy)
-      case Some("querycount") => {
+      case Some("lattice-based") => {
         val analysesResult = new QueryCountAnalyses(programCfg)(new SemanticAnalysis().analyze(program)).analyze()
         val variableCosts = new mutable.HashMap[CfgNode, mutable.HashMap[String, Double]]
         for (node <- analysesResult) {
@@ -69,11 +80,11 @@ class SymbolicExecutorFactory(useSummarizaiton: Boolean, useSubsumption: Boolean
       }
       case Some("recursive") => {
         val tmp = new RecursionBasedAnalyses()(new SemanticAnalysis().analyze(program), kappa)
-        tmp.tmp2(programCfg)
+        tmp.compute(programCfg)
         new HeuristicBasedStateMerging(searchStrategy, tmp.mapping, smartMergingCost)
       }
       case Some(_) =>
-        throw new InvalidApplicationException()
+        throw new InvalidApplicationException("unknown merge strategy: ", mergingStrategyType)
     }
 
 

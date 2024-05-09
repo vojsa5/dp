@@ -12,14 +12,23 @@ import scala.collection.mutable
 
 object LoopSummarization {
 
+  /**
+   * Recursively collects all possible paths through a loop's body starting from a given CFG node.
+   *
+   * @param stmt current node of the loop.
+   * @param loopId Identifier for the loop, used to prevent infinite recursion.
+   * @param symbolicState The current state of symbolic execution at the loop's entry.
+   * @param executor Instance of SymbolicExecutor used to update the general symbolic states.
+   * @return A set of symbolic states representing execution of all paths.
+   */
+
   def getAllPaths(stmt: CfgNode, loopId: Double, symbolicState: SymbolicState, executor: SymbolicExecutor): mutable.HashSet[SymbolicState] = {
-    var tmpState = symbolicState.deepCopy()
     var paths = List[Path]()
     paths = paths.appended(new Path(List[Stmt](), Number(1, CodeLoc(0, 0)), List.empty, mutable.HashSet[Expr]()))
     var curr = stmt
     while (curr.id > loopId) {
       curr.ast match {
-        case IfStmt(guard, thenBranch, _, _) =>
+        case IfStmt(_, _, _, _) =>
           val trueBranch = Utility.getTrueBranch(curr)
           val elseBranch = Utility.getFalseBranch(curr)
           val trueState = symbolicState.deepCopy()
@@ -36,7 +45,7 @@ object LoopSummarization {
             res.addAll(getAllPaths(curr.succ.filter(node => node.ast != thenStmt).head, loopId, state, executor))
           }
           return res
-        case otherStmt@AssignStmt(left, right, _) =>
+        case otherStmt@AssignStmt(left, _, _) =>
           if (Utility.varIsFromOriginalProgram(Utility.getName(left))) {
             executor.stepOnAssign(otherStmt, symbolicState, true)
           }
@@ -100,22 +109,22 @@ object LoopSummarization {
     res
   }
 
-  def tmp(idDecl: Expr, tmpSymVal: Val, mapping: mutable.HashMap[Val, Expr], state: SymbolicState): Unit = {
+  def fillMapping(idDecl: Expr, tmpSymVal: Val, mapping: mutable.HashMap[Val, Expr], state: SymbolicState): Unit = {
     mapping.put(tmpSymVal, idDecl)
     tmpSymVal match {
       case ArrVal(elems) =>
         var i = 0
         for (elem <- elems) {
-          tmp(ArrayAccess(idDecl, Number(i, CodeLoc(0, 0)), CodeLoc(0, 0)), state.getValOnMemoryLocation(elem).get, mapping, state)
+          fillMapping(ArrayAccess(idDecl, Number(i, CodeLoc(0, 0)), CodeLoc(0, 0)), state.getValOnMemoryLocation(elem).get, mapping, state)
           i = i + 1
         }
       case RecVal(fields) => {
         for (field <- fields) {
-          tmp(FieldAccess(idDecl, field._1, CodeLoc(0, 0)), state.getValOnMemoryLocation(field._2).get, mapping, state)
+          fillMapping(FieldAccess(idDecl, field._1, CodeLoc(0, 0)), state.getValOnMemoryLocation(field._2).get, mapping, state)
         }
       }
       case PointerVal(addr) =>
-        tmp(Deref(idDecl, CodeLoc(0, 0)), state.getValOnMemoryLocation(PointerVal(addr)).get, mapping, state)
+        fillMapping(Deref(idDecl, CodeLoc(0, 0)), state.getValOnMemoryLocation(PointerVal(addr)).get, mapping, state)
       case _ =>
     }
   }
@@ -124,7 +133,7 @@ object LoopSummarization {
     var newState = new SymbolicState(oldState.programLocation, Number(1, CodeLoc(0, 0)), new SymbolicStore(Map.empty))
     for (v <- oldState.symbolicStore.lastFrameVars()) {
       val tmpSymVal = getSymbolicRepressentation(oldState.getValueOfVar(v, CodeLoc(0, 0), true), v, oldState, newState, mapping)
-      tmp(Identifier(v, CodeLoc(0, 0)), tmpSymVal, mapping, newState)
+      fillMapping(Identifier(v, CodeLoc(0, 0)), tmpSymVal, mapping, newState)
     }
     newState
   }
@@ -176,8 +185,6 @@ class LoopSummarization(program: ProgramCfg,
     }
   }
 
-
-//TODO remove
   val pathToVertex: mutable.LinkedHashMap[Path, List[(Expr, Expr => Expr => SymbolicState => Expr)]] = mutable.LinkedHashMap[Path, List[(Expr, Expr => Expr => SymbolicState => Expr)]]()
   val pathToState: mutable.HashMap[Path, SymbolicState] = mutable.HashMap[Path, SymbolicState]()
   var generalState: SymbolicState = null
@@ -196,11 +203,6 @@ class LoopSummarization(program: ProgramCfg,
       }
     }
     res
-  }
-
-  def checkConditionInduction(cfg: ProgramCfg, loop: CfgNode, symbolicState: SymbolicState): Boolean = {
-    getAllConditionsInALoop(cfg, loop)
-    false
   }
 
 
@@ -254,7 +256,7 @@ class LoopSummarization(program: ProgramCfg,
       for (path <- paths) {
         vertices = vertices.appended(summarization.Vertex(path, path.condition, pathToVertex(path), path.iterations))
       }
-      val pda = PDA(this, vertices, symbolicState.variableDecls, solver, Number(1, CodeLoc(0, 0)), newState, mapping)
+      val pda = PDA(this, vertices, solver, Number(1, CodeLoc(0, 0)), newState, mapping)
       pda.initialize()
       if (pda.checkForConnectedCycles()) {
         return None
@@ -382,7 +384,7 @@ class LoopSummarization(program: ProgramCfg,
               idMapping.put(id, right)
             case _ =>
           }
-          val changeOpt = computeVariableChange2(otherStmt, symbolicState, incrementedMemoryLocations, updatedVars,
+          val changeOpt = computeVariableChange(otherStmt, symbolicState, incrementedMemoryLocations, updatedVars,
             incrementedVars, conditionMemoryCells, updatedBy, locationsWithUnpredictability, mapping)
           if (changeOpt.nonEmpty) {
             (left, right) match {
@@ -390,8 +392,6 @@ class LoopSummarization(program: ProgramCfg,
               case (id@Identifier(_, _), id2@Identifier(_, _)) =>
                 val s = symbolicState.getValAtMemoryLoc(id2)
                 if (mapping.contains(s)) {
-                  //TODO look at this
-                  val v = mapping(s)
                   mapping.put(s, left)
                 }
               case _ =>
@@ -435,13 +435,31 @@ class LoopSummarization(program: ProgramCfg,
   private def sameSymbolicVal(state: SymbolicState, ptr1: PointerVal, ptr2: PointerVal): Boolean = state.getValOnMemoryLocation(ptr1) == state.getValOnMemoryLocation(ptr2)
 
 
-  def computeVariableChange2(stmt: Stmt, symbolicState: SymbolicState,
-                             incrementedMemoryLocations: mutable.HashMap[PointerVal, (Expr) => ((Expr) => SymbolicState => Expr)],
-                             updatedVariables: mutable.HashSet[Expr], incrementedVariables: mutable.HashSet[Expr],
-                             conditionMemoryCells: mutable.HashSet[String],
-                             updatedBy: mutable.HashMap[String, mutable.HashSet[String]],
-                             locationsWithUnpredictability: mutable.HashSet[String],
-                             mapping: mutable.HashMap[Val, Expr]
+
+/**
+ * Computes the changes to a variable as a function
+ *
+ * @param stmt The statement to be analyzed.
+ * @param symbolicState general state.
+ * @param incrementedMemoryLocations A mapping from memory locations to functions that describe how their values are incremented.
+ * @param updatedVariables A set of variables that are updated within the loop.
+ * @param incrementedVariables A set of variables that are incremented within the loop.
+ * @param conditionMemoryCells A set of memory locations present in the condition.
+ * @param updatedBy A mapping of memory locations to the variables that update them, used to track dependencies.
+ * @param locationsWithUnpredictability A set of memory locations known to introduce unpredictability into the execution, affecting determinism.
+ * @param mapping A mapping between symbolic values in the general symbolic state and the values from the original variables
+ * @return An Option containing a tuple of a left side of the assign statement and the update function.
+ */
+
+
+
+  def computeVariableChange(stmt: Stmt, symbolicState: SymbolicState,
+                            incrementedMemoryLocations: mutable.HashMap[PointerVal, (Expr) => ((Expr) => SymbolicState => Expr)],
+                            updatedVariables: mutable.HashSet[Expr], incrementedVariables: mutable.HashSet[Expr],
+                            conditionMemoryCells: mutable.HashSet[String],
+                            updatedBy: mutable.HashMap[String, mutable.HashSet[String]],
+                            locationsWithUnpredictability: mutable.HashSet[String],
+                            mapping: mutable.HashMap[Val, Expr]
                             ): Option[(Expr, Expr => Expr => SymbolicState => Expr)] = {
     stmt match {
       case AssignStmt(ArrayAccess(_, Identifier(_, _), _), _, _) =>
@@ -672,6 +690,23 @@ class LoopSummarization(program: ProgramCfg,
     }
   }
 
+/**
+ * Computes all executable paths through a loop's body given a specific control flow graph (CFG) node. This function
+ * explores all branches and conditions within the loop, recursively analyzing sub-paths to account for all possible
+ * execution scenarios.
+ *
+ * @param stmt The CFG node representing the start of the loop.
+ * @param originalSymbolicState the state we had before reaching the loop.
+ * @param symbolicState general state.
+ * @param conditionMemoryCells A set of memory locations that affect the loop's execution conditions.
+ * @param updatedBy A mapping of memory locations to the variables that update them, used to track dependencies.
+ * @param updatedVars A set of variables that are updated within the loop.
+ * @param incrementedVars A set of variables that are incremented within the loop.
+ * @param locationsWithUnpredictability A set of locations known to introduce unpredictability.
+ * @param mapping A mapping between symbolic values in the general symbolic state and the values from the original variables
+ * @return An Option containing a list of all paths if the paths can be successfully computed, None if any part of the path
+ *         computation fails, typically due to an inability to resolve complex conditions or due to contradictory states.
+ */
 
 
   def getAllPathsInALoop(stmt: CfgNode, originalSymbolicState: SymbolicState, symbolicState: SymbolicState, conditionMemoryCells: mutable.HashSet[String],
@@ -707,20 +742,15 @@ class LoopSummarization(program: ProgramCfg,
     Some(paths)
   }
 
+/**
+ * Determine whether there is an edge between two vertices in PDA
+ * @param vertex1 The source vertex
+ * @param vertex2 The target vertex
+ * @param mapping A mapping between symbolic values in the general symbolic state and the values from the original variables
+ * @return An Option containing an Edge if it exists.
+ */
 
-  def getUpdatedVars(loop: WhileStmt): mutable.HashSet[String] = {
-    val res = mutable.HashSet[String]()
-    for (stmt <- loop.block.asInstanceOf[NestedBlockStmt].body) {
-      stmt match {
-        case AssignStmt(left: Identifier, _, _) if Utility.varIsFromOriginalProgram(left.name) => res.add(left.name)
-        case _ =>
-      }
-    }
-    res
-  }
-
-
-  def computePathRelationship(vertex1: Vertex, vertex2: Vertex, variables: List[IdentifierDecl],
+  def computePathRelationship(vertex1: Vertex, vertex2: Vertex,
                               mapping: mutable.HashMap[Val, Expr]): Option[Edge] = {
     val ctx = new Context()
     val solver = new ConstraintSolver(ctx)
@@ -738,7 +768,6 @@ class LoopSummarization(program: ProgramCfg,
           {
             symbolicState.symbolicStore.storage.getVal(valLocation) match {
               case None =>
-                System.out.print("df")
                 symbolicState.getMemoryLoc(change._1)
               case _ =>
             }
@@ -781,14 +810,24 @@ class LoopSummarization(program: ProgramCfg,
     ctxSolver.add(ConstraintSolver.getCondition(ctx, constraint))
     ctxSolver.check() match {
       case Status.SATISFIABLE =>
-        val tmp = applyMapping(pathsConstraints, mapping)
-        Some(summarization.Edge(vertex2, tmp, resChanges))
+        Some(summarization.Edge(vertex2, applyMapping(pathsConstraints, mapping), resChanges))
       case _ =>
         None
     }
   }
 
-  def computePeriod(vertex1: Vertex, vertex2: Vertex, vertex3: Vertex): Option[Int] = {
+/**
+ * Computes the period of a vertex in a loop
+ * of a loop by analyzing the constraints of successive iterations and checking if they can be satisfied
+ * repeatedly for some integer period.
+ *
+ * @param vertex1 predecessor of the vertex to compute the priod for.
+ * @param vertex2 vertex to compute the priod for.
+ * @param vertex3 successor of the vertex to compute the priod for.
+ * @return An Option containing the integer period if a consistent repeating pattern is found, None otherwise.
+ */
+
+def computePeriod(vertex1: Vertex, vertex2: Vertex, vertex3: Vertex): Option[Int] = {
     val symbolicState = generalState.deepCopy()
     val symbolicState2 = generalState.deepCopy()
 

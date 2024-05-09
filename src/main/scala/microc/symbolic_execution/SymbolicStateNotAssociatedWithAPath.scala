@@ -25,7 +25,7 @@ class SymbolicStateNotAssociatedWithAPath(symbolicState: SymbolicState) extends
           val firstThenStatement = thenBranch.asInstanceOf[NestedBlockStmt].body.head
           programLocation.succ.find(s => s.ast == firstThenStatement).get
         }
-        new SymbolicState(next, addToPathCondition(guard), symbolicStore.deepCopy(), copyCallStack(callStack), variableDecls)
+        new SymbolicState(next, addToPathCondition(guard), symbolicStore.deepCopy(), copyCallStack(callStack))
       case IfStmt(guard, thenBranch, None, loc) =>
         val next = if (thenBranch.asInstanceOf[NestedBlockStmt].body.isEmpty) {
           programLocation.succ.find(s => s.ast == ast).get
@@ -34,7 +34,7 @@ class SymbolicStateNotAssociatedWithAPath(symbolicState: SymbolicState) extends
           val firstThenStatement = thenBranch.asInstanceOf[NestedBlockStmt].body.head
           programLocation.succ.find(s => s.ast == firstThenStatement).get
         }
-        new SymbolicState(next, addToPathCondition(guard), symbolicStore.deepCopy(), copyCallStack(callStack), variableDecls)
+        new SymbolicState(next, addToPathCondition(guard), symbolicStore.deepCopy(), copyCallStack(callStack))
       case IfStmt(guard, thenBranch, Some(NestedBlockStmt(elseBranch, loc)), _) =>
         if (elseBranch.isEmpty) {
           val next = if (thenBranch.asInstanceOf[NestedBlockStmt].body.isEmpty) {
@@ -44,10 +44,10 @@ class SymbolicStateNotAssociatedWithAPath(symbolicState: SymbolicState) extends
             val firstThenStatement = thenBranch.asInstanceOf[NestedBlockStmt].body.head
             programLocation.succ.find(s => s.ast == firstThenStatement).get
           }
-          return new SymbolicState(next, addToPathCondition(guard), symbolicStore.deepCopy(), copyCallStack(callStack), variableDecls)
+          return new SymbolicState(next, addToPathCondition(guard), symbolicStore.deepCopy(), copyCallStack(callStack))
         }
         val next = programLocation.succ.find(s => s.ast != elseBranch.head).get
-        new SymbolicState(next, addToPathCondition(guard), symbolicStore.deepCopy(), copyCallStack(callStack), variableDecls)
+        new SymbolicState(next, addToPathCondition(guard), symbolicStore.deepCopy(), copyCallStack(callStack))
     })
   }
 
@@ -62,7 +62,7 @@ class SymbolicStateNotAssociatedWithAPath(symbolicState: SymbolicState) extends
           val firstThenStatement = thenBranch.asInstanceOf[NestedBlockStmt].body.head
           programLocation.succ.find(s => s.ast != firstThenStatement).get
         }
-        new SymbolicState(next, addToPathCondition(Not(guard, loc)), symbolicStore.deepCopy(), copyCallStack(callStack), variableDecls)
+        new SymbolicState(next, addToPathCondition(Not(guard, loc)), symbolicStore.deepCopy(), copyCallStack(callStack))
       case IfStmt(guard, thenBranch, None, loc) =>
         val next = if (thenBranch.asInstanceOf[NestedBlockStmt].body.isEmpty) {
           programLocation.succ.find(s => s.ast != ast).get
@@ -71,7 +71,7 @@ class SymbolicStateNotAssociatedWithAPath(symbolicState: SymbolicState) extends
           val firstThenStatement = thenBranch.asInstanceOf[NestedBlockStmt].body.head
           programLocation.succ.find(s => s.ast != firstThenStatement).get
         }
-        new SymbolicState(next, addToPathCondition(Not(guard, loc)), symbolicStore.deepCopy(), copyCallStack(callStack), variableDecls)
+        new SymbolicState(next, addToPathCondition(Not(guard, loc)), symbolicStore.deepCopy(), copyCallStack(callStack))
       case IfStmt(guard, thenBranch, Some(NestedBlockStmt(elseBranch, loc)), _) =>
         if (elseBranch.isEmpty) {
           val next = if (thenBranch.asInstanceOf[NestedBlockStmt].body.isEmpty) {
@@ -81,10 +81,10 @@ class SymbolicStateNotAssociatedWithAPath(symbolicState: SymbolicState) extends
             val firstThenStatement = thenBranch.asInstanceOf[NestedBlockStmt].body.head
             programLocation.succ.find(s => s.ast != firstThenStatement).get
           }
-          return new SymbolicState(next, addToPathCondition(Not(guard, loc)), symbolicStore.deepCopy(), copyCallStack(callStack), variableDecls)
+          return new SymbolicState(next, addToPathCondition(Not(guard, loc)), symbolicStore.deepCopy(), copyCallStack(callStack))
         }
         val next = programLocation.succ.find(s => s.ast == elseBranch.head).get
-        new SymbolicState(next, addToPathCondition(Not(guard, loc)), symbolicStore.deepCopy(), copyCallStack(callStack), variableDecls)
+        new SymbolicState(next, addToPathCondition(Not(guard, loc)), symbolicStore.deepCopy(), copyCallStack(callStack))
     })
   }
 

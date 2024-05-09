@@ -44,20 +44,6 @@ object Utility {
     }
   }
 
-//  def getCountOfPotentialErrors(expr: Expr): Int = {
-//    expr match {
-//      case BinaryOp(Divide, left, right, _) =>
-//        getCountOfPotentialErrors(left) + getCountOfPotentialErrors(right)+ (if (Utility.expressionCanCauseError(right)) 1 else 0)
-//      case BinaryOp(_, left, right, _) => getCountOfPotentialErrors(left) + getCountOfPotentialErrors(right)
-//      case Not(expr, _) => getCountOfPotentialErrors(expr)
-//      case Alloc(expr, _) => getCountOfPotentialErrors(expr)
-//      case Input(_) => 0
-//      case CallFuncExpr(targetFun, args, loc) => ???
-//      case Identifier(name, loc) => 0
-//      case Number(value, loc) => 0
-//      case Null(_) => 0
-//    }
-//  }
 
   def expressionCanCauseError(expr: Expr): Boolean = {
     expr match {
@@ -66,7 +52,7 @@ object Utility {
       case Not(expr, _) => expressionCanCauseError(expr)
       case Alloc(expr, _) => expressionCanCauseError(expr)
       case Input(_) => false
-      case CallFuncExpr(targetFun, args, loc) => false//TODO
+      case CallFuncExpr(targetFun, args, loc) => args.exists(arg => expressionCanCauseError(arg))
       case Identifier(_, _) => false
       case Number(_, _) => false
       case Null(_) => false
@@ -143,6 +129,8 @@ object Utility {
       case BinaryOp(Times, expr, Number(1, _), _) => simplifyArithExpr(expr)
       case BinaryOp(Plus, Number(0, _), expr, _) => simplifyArithExpr(expr)
       case BinaryOp(Times, Number(1, _), expr, _) => simplifyArithExpr(expr)
+      case BinaryOp(Times, Number(0, _), _, loc) => Number(0, loc)
+      case BinaryOp(Times, _, Number(0, _), loc) => Number(0, loc)
       case BinaryOp(OrOr, Not(expr1, _), expr2, loc) if expr1.equals(expr2) => Number(1, loc)
       case BinaryOp(OrOr, expr1, Not(expr2, _), loc) if expr1.equals(expr2) => Number(1, loc)
       case BinaryOp(operator, left, right, loc) =>
@@ -288,12 +276,6 @@ object Utility {
         SymbolicExpr(replaceWithMapping(expr, mapping, symbolicState), loc)
       case ArrayAccess(array, index, loc) =>
         ArrayAccess(replaceWithMapping(array, mapping, symbolicState), replaceWithMapping(index, mapping, symbolicState), loc)
-//      case ArrayNode(elems, loc) => ???
-//      case Deref
-//      case VarRef
-//      case FieldAccess(record, field, loc)
-//      case Record
-//      case Alloc(expr, loc)
       case v@SymbolicVal(_) if mapping.contains(v) =>
         symbolicState.getValAtMemoryLoc(mapping(v)).asInstanceOf[Symbolic]
       case e => e

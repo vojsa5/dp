@@ -140,9 +140,6 @@ class ConstraintSolver(val ctx: Context) {
       case SymbolicExpr(expr, _) => createConstraint(expr, state, allowNonInitializedVals)
       case Null(_) => ctx.mkInt(0)
       case IteVal(trueState, falseState, expr, _) =>
-        val a1 = ConstraintSolver.getCondition(ctx, createConstraint(expr, state, allowNonInitializedVals))
-        val a2 = ConstraintSolver.getCondition(ctx, valToExpr(state.getValOnMemoryLocation(trueState, true).get, state, allowNonInitializedVals))
-        val a3 = ConstraintSolver.getCondition(ctx, valToExpr(state.getValOnMemoryLocation(falseState, true).get, state, allowNonInitializedVals))
         ctx.mkITE(
           ConstraintSolver.getCondition(ctx, createConstraint(expr, state, allowNonInitializedVals)),
           ConstraintSolver.getCondition(ctx, valToExpr(state.getValOnMemoryLocation(trueState, true).get, state, allowNonInitializedVals)),

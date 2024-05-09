@@ -41,7 +41,9 @@ object Main {
   }
 
   @main(doc = "precomputeVariableCosts")
-  def precomputeVariableCosts(program: String,
+  def precomputeVariableCosts(
+                       @arg(name = "program", doc = "Output file path for the generated program")
+                       program: String,
                         @arg(name = "merging-strategy", doc = "merging strategy (string argument)")
                         smartMerging: Option[String] = None,
                         @arg(name = "kappa", doc = "kappa for recursive merging (optional int argument)")
@@ -55,12 +57,12 @@ object Main {
       case Some(file) => new FileOutputStream(file)
       case None => System.out
     }
-    new PrecomputeVariableCosts(programInput, smartMerging, kappa, timeout, output).run()
+    new PrecomputeVariableCostsAction(programInput, smartMerging, kappa, timeout, output).run()
   }
 
   @main(doc = "Generate program")
   def generateProgram(
-                       @arg(name = "file", doc = "Output file path for the generated program")
+                       @arg(name = "program", doc = "Output file path for the generated program")
                        file: String,
                        @arg(name = "loopGenProb", doc = "Probability of generating a loop")
                        loopGenProb: Double = 1/6,

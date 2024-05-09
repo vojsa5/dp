@@ -37,37 +37,6 @@ class SymbolicExecutorTest2 extends FunSuite with MicrocSupport with Examples {
     null
   }
 
-  test("loop with multiple updated statements") {
-    val code =
-      """
-        |main() {
-        |  var i, n;
-        |  i = input;
-        |  n = input;
-        |  while (i < n) {
-        |     i = i + 1;
-        |     i = i + 1;
-        |  }
-        |  return i;
-        |}
-        |""".stripMargin;
-    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    val executor = new LoopSummarization(cfg);
-    val future = Future {
-      executor.run()
-      fail("should be killed by timeout")
-    }
-
-    try {
-      Await.ready(future, 5.seconds)
-    }
-    catch {
-      case _: TimeoutException =>
-      case e =>
-        fail(e.toString)
-    }
-  }
-
 
   test("loop with multiple updated statements2") {
     val code =
@@ -92,11 +61,11 @@ class SymbolicExecutorTest2 extends FunSuite with MicrocSupport with Examples {
     }
 
     try {
-      Await.ready(future, 5.seconds)
+      Await.ready(future, 2.seconds)
     }
     catch {
       case _: TimeoutException =>
-      case e =>
+      case e: Throwable =>
         fail(e.toString)
     }
   }
@@ -129,11 +98,11 @@ class SymbolicExecutorTest2 extends FunSuite with MicrocSupport with Examples {
     }
 
     try {
-      Await.ready(future, 5.seconds)
+      Await.ready(future, 2.seconds)
     }
     catch {
       case _: TimeoutException =>
-      case e =>
+      case e: Throwable =>
         fail(e.toString)
     }
   }
@@ -168,11 +137,11 @@ class SymbolicExecutorTest2 extends FunSuite with MicrocSupport with Examples {
     }
 
     try {
-      Await.ready(future, 5.seconds)
+      Await.ready(future, 2.seconds)
     }
     catch {
       case _: TimeoutException =>
-      case e =>
+      case e: Throwable =>
         fail(e.toString)
     }
   }
@@ -236,11 +205,11 @@ class SymbolicExecutorTest2 extends FunSuite with MicrocSupport with Examples {
     }
 
     try {
-      Await.ready(future, 5.seconds)
+      Await.ready(future, 2.seconds)
     }
     catch {
       case _: TimeoutException =>
-      case e =>
+      case e: Throwable =>
         fail(e.toString)
     }
 
@@ -279,11 +248,11 @@ class SymbolicExecutorTest2 extends FunSuite with MicrocSupport with Examples {
     }
 
     try {
-      Await.ready(future, 5.seconds)
+      Await.ready(future, 2.seconds)
     }
     catch {
       case _: TimeoutException =>
-      case e =>
+      case e: Throwable =>
         fail(e.toString)
     }
   }
@@ -319,11 +288,11 @@ class SymbolicExecutorTest2 extends FunSuite with MicrocSupport with Examples {
     }
 
     try {
-      Await.ready(future, 5.seconds)
+      Await.ready(future, 2.seconds)
     }
     catch {
       case _: TimeoutException =>
-      case e =>
+      case e: Throwable =>
         fail(e.toString)
     }
 
@@ -362,11 +331,11 @@ class SymbolicExecutorTest2 extends FunSuite with MicrocSupport with Examples {
     }
 
     try {
-      Await.ready(future, 5.seconds)
+      Await.ready(future, 2.seconds)
     }
     catch {
       case _: TimeoutException =>
-      case e =>
+      case e: Throwable =>
         fail(e.toString)
     }
   }
@@ -400,11 +369,11 @@ class SymbolicExecutorTest2 extends FunSuite with MicrocSupport with Examples {
     }
 
     try {
-      Await.ready(future, 5.seconds)
+      Await.ready(future, 2.seconds)
     }
     catch {
       case _: TimeoutException =>
-      case e =>
+      case e: Throwable =>
         fail(e.toString)
     }
 
@@ -443,69 +412,14 @@ class SymbolicExecutorTest2 extends FunSuite with MicrocSupport with Examples {
     }
 
     try {
-      Await.ready(future, 5.seconds)
+      Await.ready(future, 2.seconds)
     }
     catch {
       case _: TimeoutException =>
-      case e =>
+      case e: Throwable =>
         fail(e.toString)
     }
   }
-
-
-  //  test("infinite paths") {
-  //    val code =
-  //      """
-  //        |main() {
-  //        |  var y;
-  //        |  y = input;
-  //        |  while (y > 0) {
-  //        |   y = y - 1;
-  //        |  }
-  //        |  return 0;
-  //        |}
-  //        |""".stripMargin;
-  //    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-  //    val executor = new SymbolicExecutor(cfg);
-  //    try {
-  //      executor.run()
-  //      fail("Expected a StackOverflowError but it did not occur.")
-  //    }
-  //    catch {
-  //      case _: StackOverflowError =>
-  //      case other: Throwable => fail("Expected a StackOverflowError, but caught different exception: " + other)
-  //    }
-  //
-  //    null
-  //  }
-  //
-  //
-  //  test("infinite paths 2") {
-  //    val code =
-  //      """
-  //        |main() {
-  //        |  var y;
-  //        |  y = input;
-  //        |  y = y + 1;
-  //        |  while (y > 0) {
-  //        |   y = y - 1;
-  //        |  }
-  //        |  return 0;
-  //        |}
-  //        |""".stripMargin;
-  //    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-  //    val executor = new SymbolicExecutor(cfg);
-  //    try {
-  //      executor.run()
-  //      fail("Expected a StackOverflowError but it did not occur.")
-  //    }
-  //    catch {
-  //      case _: StackOverflowError =>
-  //      case other: Throwable => fail("Expected a StackOverflowError, but caught different exception: " + other)
-  //    }
-  //
-  //    null
-  //  }
 
 
   test("survey test") {

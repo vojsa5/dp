@@ -69,10 +69,9 @@ class SymbolicExecuteAction(
        Await.result(future, timeoutI.seconds)
      }
      catch {
-       case e: TimeoutException =>
+       case _: TimeoutException =>
          println("Execution timed out!")
-       case e =>
-         println(e)
+       case _: Throwable =>
          errorEncountered = 1
      }
      val endTime = System.currentTimeMillis()
@@ -81,14 +80,12 @@ class SymbolicExecuteAction(
      outputFolderPathOpt match {
        case Some(outputFolderPath) =>
          val coverageOutputPath = s"$outputFolderPath/coverage.txt"
-         println(coverageOutputPath)
          val coverageOutput = new FileOutputStream(coverageOutputPath)
          try {
            coverageOutput.write(executor.statistics.numPaths.toString.getBytes(StandardCharsets.UTF_8))
          } finally {
            coverageOutput.close()
          }
-         println(executor.statistics.numPaths)
 
          val timeOutputPath = s"$outputFolderPath/time.txt"
          val timeOutput = new FileOutputStream(timeOutputPath)
@@ -97,7 +94,6 @@ class SymbolicExecuteAction(
          } finally {
            timeOutput.close()
          }
-         println(elapsedTime)
 
 
          val errorOutputPath = s"$outputFolderPath/error.txt"
@@ -107,7 +103,6 @@ class SymbolicExecuteAction(
          } finally {
            errorOutput.close()
          }
-         println(errorEncountered)
        case None =>
      }
 

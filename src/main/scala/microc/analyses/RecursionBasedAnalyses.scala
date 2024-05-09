@@ -12,16 +12,16 @@ class RecursionBasedAnalyses(implicit declarations: Declarations, beta: Double =
   val mapping = new mutable.HashMap[CfgNode, mutable.HashMap[String, Double]]
 
 
-  def tmp2(programCfg: ProgramCfg): Unit = {
-    programCfg.function.foreach(fce => tmp(fce, mutable.HashSet()))
+  def compute(programCfg: ProgramCfg): Unit = {
+    programCfg.function.foreach(fce => computeNode(fce, mutable.HashSet()))
   }
 
-  def tmp(cfgNode: CfgNode, whiles: mutable.HashSet[WhileStmt]): mutable.HashMap[String, Double] = {
+  def computeNode(cfgNode: CfgNode, whiles: mutable.HashSet[WhileStmt]): mutable.HashMap[String, Double] = {
     cfgNode.ast match {
       case FunDecl(_, _, _, _) => {
         val res = mutable.HashMap[String, Double]()
         res.addAll(
-          cfgNode.succ.map(node => tmp(node, whiles))
+          cfgNode.succ.map(node => computeNode(node, whiles))
             .flatMap(_.toList)
             .groupBy(_._1)
             .view
@@ -34,7 +34,7 @@ class RecursionBasedAnalyses(implicit declarations: Declarations, beta: Double =
       case VarStmt(_, _) => {
         val res = mutable.HashMap[String, Double]()
         res.addAll(
-          cfgNode.succ.map(node => tmp(node, whiles))
+          cfgNode.succ.map(node => computeNode(node, whiles))
             .flatMap(_.toList)
             .groupBy(_._1)
             .view
@@ -55,7 +55,7 @@ class RecursionBasedAnalyses(implicit declarations: Declarations, beta: Double =
       case OutputStmt(expr, _) => {
         val res = mutable.HashMap[String, Double]()
         res.addAll(
-          cfgNode.succ.map(node => tmp(node, whiles))
+          cfgNode.succ.map(node => computeNode(node, whiles))
             .flatMap(_.toList)
             .groupBy(_._1)
             .view
@@ -71,7 +71,7 @@ class RecursionBasedAnalyses(implicit declarations: Declarations, beta: Double =
       case AssignStmt(left, right, _) => {
         val res = mutable.HashMap[String, Double]()
         res.addAll(
-          cfgNode.succ.map(node => tmp(node, whiles))
+          cfgNode.succ.map(node => computeNode(node, whiles))
             .flatMap(_.toList)
             .groupBy(_._1)
             .view
@@ -118,11 +118,11 @@ class RecursionBasedAnalyses(implicit declarations: Declarations, beta: Double =
         for (id <- Utility.getAllIdentifierNames(expr)) {
           res.put(id.name, 1.0)
         }
-        for (v <- tmp(cfgNode.succ.maxBy(node => node.id), newWhiles)) {
+        for (v <- computeNode(cfgNode.succ.maxBy(node => node.id), newWhiles)) {
           res.put(v._1, res.getOrElse(v._1, 0.0) + v._2)
         }
         mapping.put(cfgNode, res)
-        for (v <- tmp(cfgNode.succ.minBy(node => node.id), newWhiles)) {
+        for (v <- computeNode(cfgNode.succ.minBy(node => node.id), newWhiles)) {
           res.put(v._1, res.getOrElse(v._1, 0.0) + v._2 * kappa)
         }
         mapping.put(cfgNode, res)
@@ -130,8 +130,8 @@ class RecursionBasedAnalyses(implicit declarations: Declarations, beta: Double =
       }
       case IfStmt(expr, _, _, _) =>
         val res = mutable.HashMap[String, Double]()
-        res.addAll(tmp(cfgNode.succ.head, whiles))
-        for (v <- tmp(cfgNode.succ.tail.head, whiles)) {
+        res.addAll(computeNode(cfgNode.succ.head, whiles))
+        for (v <- computeNode(cfgNode.succ.tail.head, whiles)) {
           res.put(v._1, res.getOrElse(v._1, 0.0) + v._2)
         }
         for (id <- Utility.getAllIdentifierNames(expr)) {

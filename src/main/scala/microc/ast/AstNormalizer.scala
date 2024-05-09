@@ -23,10 +23,6 @@ class AstNormalizer {
 
   def getTarget(expr: Expr, newStmts: ListBuffer[StmtInNestedBlock], newVars: ListBuffer[IdentifierDecl], declaredVars: List[VarStmt]): Expr = {
     expr match {
-//      case Deref(FieldAccess(record, field, _), loc) =>
-//        val rightSide = createVar(newVars, declaredVars, loc)
-//        newStmts.append(AssignStmt(rightSide, FieldAccess(record, field, loc), loc))
-//        Deref(rightSide, loc)
       case Deref(pointer, loc) =>
         val pointerNormalized = getTarget(pointer, newStmts, newVars, declaredVars)
         val rightSide = createVar(newVars, declaredVars, loc)
@@ -37,11 +33,6 @@ class AstNormalizer {
         val rightSide = createVar(newVars, declaredVars, loc)
         newStmts.append(AssignStmt(rightSide, ArrayAccess(array, indexNormalized, loc), loc))
         rightSide
-//      case FieldAccess(record, field, loc) =>
-//        val pointerNormalized = getTarget(index, newStmts, newVars, declaredVars)
-//        val rightSide = createVar(newVars, declaredVars, loc)
-//        newStmts.append(AssignStmt(rightSide, Deref(pointerNormalized, loc), loc))
-//        rightSide
       case _ =>
         expr
     }
@@ -70,15 +61,6 @@ class AstNormalizer {
   def normalizeStatement(stmt: StmtInNestedBlock, stmts: ListBuffer[StmtInNestedBlock], vars: ListBuffer[IdentifierDecl], declaredVars: List[VarStmt]): Unit = {
       stmt match {
         case AssignStmt(left, right, loc) =>
-//          val newLeft: Expr = left match {
-//            case Deref(pointer, loc) => Deref(getTarget(pointer, stmts, vars, declaredVars), loc)
-//            case ArrayAccess(array, index, loc) =>
-//              ArrayAccess(getTarget(array, stmts, vars, declaredVars), index, loc)
-//            case FieldAccess(record, field, loc) =>
-//              FieldAccess(getTarget(record, stmts, vars, declaredVars), field, loc)
-//            case left => left
-//          }
-//          normalizeAssign(getTarget(left, stmts, vars, declaredVars), right, stmts, vars, declaredVars, loc)
           normalizeAssign(left, right, stmts, vars, declaredVars, loc)
         case OutputStmt(expr, loc) =>
           stmts.append(OutputStmt(normalizeExpr(expr, stmts, vars, declaredVars), loc))

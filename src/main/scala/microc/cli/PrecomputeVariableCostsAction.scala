@@ -14,7 +14,7 @@ import scala.collection.mutable
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.{Await, Future, TimeoutException}
 
-class PrecomputeVariableCosts(
+class PrecomputeVariableCostsAction(
                                program: InputStream,
                                smartMerging: Option[String],
                                kappa: Option[Int],
@@ -39,8 +39,8 @@ class PrecomputeVariableCosts(
             case None => 1
           }
           val tmp = new RecursionBasedAnalyses()(new SemanticAnalysis().analyze(programParsed), kappaI)
-          tmp.tmp2(programCfg)
-        case Some("querycount") =>
+          tmp.compute(programCfg)
+        case Some("lattice-based") =>
           val analysesResult = new QueryCountAnalyses(programCfg)(new SemanticAnalysis().analyze(programParsed)).analyze()
           val variableCosts = new mutable.HashMap[CfgNode, mutable.HashMap[String, Double]]
           for (node <- analysesResult) {
@@ -51,7 +51,7 @@ class PrecomputeVariableCosts(
             variableCosts.put(node._1, nodeCosts)
           }
         case _ =>
-          throw new IllegalArgumentException("use recursive or querycount as the smart-merging")
+          throw new IllegalArgumentException("use recursive or lattice-based as the smart-merging")
       }
     }
 
@@ -63,8 +63,7 @@ class PrecomputeVariableCosts(
     catch {
       case e: TimeoutException =>
         println("Execution timed out!")
-      case e =>
-        println(e)
+      case _: Throwable =>
     }
 
     val endTime = System.currentTimeMillis()

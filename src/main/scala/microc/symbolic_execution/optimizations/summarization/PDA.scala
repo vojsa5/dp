@@ -8,7 +8,7 @@ import microc.symbolic_execution.{ConstraintSolver, SymbolicState, Utility}
 
 import scala.collection.mutable
 
-case class PDA(loopSummary: LoopSummarization, vertices: List[Vertex], variables: List[IdentifierDecl],
+case class PDA(loopSummary: LoopSummarization, vertices: List[Vertex],
                solver: ConstraintSolver, precond: Expr, symbolicState: SymbolicState, mapping: mutable.HashMap[Val, Expr]) {
 
   val edges = new mutable.HashMap[Path, mutable.HashSet[Edge]]()
@@ -54,7 +54,7 @@ case class PDA(loopSummary: LoopSummarization, vertices: List[Vertex], variables
       for (vertex2 <- vertices) {
         if (vertex1 != vertex2) {
           var newState = symbolicState.deepCopy()
-          val edge = loopSummary.computePathRelationship(vertex1, vertex2, variables, mapping)
+          val edge = loopSummary.computePathRelationship(vertex1, vertex2, mapping)
           if (edge.nonEmpty) {
             edges(vertex1.path).add(edge.get)
           }
@@ -75,7 +75,7 @@ case class PDA(loopSummary: LoopSummarization, vertices: List[Vertex], variables
       val constraint = solver.createConstraint(BinaryOp(AndAnd, path.condition, symbolicState.pathCondition, CodeLoc(0, 0)), symbolicState, true)
       solver.solveConstraint(constraint) match {
         case Status.SATISFIABLE =>
-          val trace = Traces()
+          val trace = Trace()
           val summarizable = trace.summarizeTrace(
             this,
             symbolicState,

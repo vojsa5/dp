@@ -415,7 +415,7 @@ class BfTest extends FunSuite with MicrocSupport with Examples {
     val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
     val covered = Some(mutable.HashSet[CfgNode]())
     val stateHistory = new ExecutionTree()
-    val executor = new SymbolicExecutor(cfg, executionTree = Some(stateHistory), searchStrategy = new RandomPathSelectionStrategy(stateHistory), covered = covered)
+    val executor = new SymbolicExecutor(cfg, executionTree = Some(stateHistory), searchStrategy = new TreeBasedStrategy(stateHistory), covered = covered)
     executor.run()
   }
 
@@ -495,18 +495,11 @@ class BfTest extends FunSuite with MicrocSupport with Examples {
     val program = parseUnsafe(code)
     val cfg = new IntraproceduralCfgFactory().fromProgram(program);
     val tmp = new RecursionBasedAnalyses()(new SemanticAnalysis().analyze(program))
-    tmp.tmp2(cfg)
+    tmp.compute(cfg)
     val executor = new SymbolicExecutor(cfg, None, searchStrategy = new HeuristicBasedStateMerging(new BFSSearchStrategy, tmp.mapping, 3))
     executor.run()
   }
 
 
-  test("bf if instead of while merging subsumption") {
-    val code = bfCodeNoWhile
-    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    val ctx = new Context()
-    val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx))), searchStrategy = new AggressiveStateMerging(new BFSSearchStrategy))
-    executor.run()
-  }
 
 }

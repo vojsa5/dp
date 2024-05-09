@@ -7,10 +7,15 @@ import microc.symbolic_execution.{SymbolicState, Utility}
 
 import scala.collection.mutable
 
-case class Traces() {
+case class Trace() {
 
   var res = new mutable.HashSet[(Expr, mutable.LinkedHashMap[Expr, Expr => SymbolicState => Expr], mutable.HashSet[Expr])]()
 
+
+  /*
+
+  Returns the traces
+   */
 
 
   def summarizeTrace(
@@ -60,18 +65,10 @@ case class Traces() {
               newUpdatedVariables.put(update._1, update._2)
             }
             for (update <- edge.change) {
-//              if (newUpdatedVariables.contains(update._1)) {
-//                newUpdatedVariables.put(update._1, pda.combineFunctions(Plus, update._2, newUpdatedVariables(update._1)))
-//                newState.updateMemoryLocation(symbolicState.getMemoryLoc(update._1), Utility.removeUnnecessarySymbolicExpr(
-//                  SymbolicExpr(pda.combineFunctions(Plus, update._2, newUpdatedVariables(update._1)).apply(symbolicState.getValAtMemoryLoc(update._1, true).asInstanceOf[Symbolic]).apply(newState), CodeLoc(0, 0)))
-//                )
-//              }
-//              else {
                 newUpdatedVariables.put(update._1, update._2)
                 newState.updateMemoryLocation(symbolicState.getMemoryLoc(update._1), Utility.removeUnnecessarySymbolicExpr(
                   SymbolicExpr(update._2.apply(symbolicState.getValAtMemoryLoc(update._1, true).asInstanceOf[Symbolic]).apply(newState), CodeLoc(0, 0)))
                 )
-//              }
             }
             nrec.put(currPath, (ncond, edge.change))
             if (!summarizeTrace(pda, newState, edge.destination, ncond, newUpdatedVariables, nrec, incrementedVars)) {
@@ -83,6 +80,19 @@ case class Traces() {
     }
     true
   }
+
+
+/**
+ * Constructs and cycle state
+ *
+ * @param pda current PDA.
+ * @param rec A record of vertices we went through so far.
+ * @param currPath The current vertex in the cycle analysis.
+ * @param traceCondition The current trace condition.
+ * @param updated_variables Variables and their update functions as determined in the cycle analysis.
+ * @param symbolicState The current symbolic state.
+ * @return option of new trace condition and update functions.
+ */
 
   def constructCycleState(pda: PDA, rec: mutable.LinkedHashMap[Vertex, (Expr, mutable.LinkedHashMap[Expr, Expr => SymbolicState => Expr])],
                           currPath: Vertex, traceCondition: Expr, updated_variables: mutable.LinkedHashMap[Expr, Expr => SymbolicState => Expr],
@@ -116,24 +126,6 @@ case class Traces() {
     for (r <- cycleRecWithNext) {
       for (update <- r._1._2._2) {
         val name = Utility.getName(update._1)
-//        if (newUpdatedVariables.contains(update._1) && Utility.varIsFromOriginalProgram(name)) {
-//          val prev = newUpdatedVariables(update._1)
-//          pda.loopSummary.computePeriod(lastNode._1, r._1._1, r._2._1) match {
-//            case Some(period) =>
-//              newUpdatedVariables.put(update._1, variable => s =>
-//                BinaryOp(
-//                  OrOr,
-//                  pda.applyIterationsCount(update._2.apply(variable).apply(s), r._1._1.iterationsVal, Number(period, CodeLoc(0, 0))),
-//                  prev.apply(variable).apply(s), CodeLoc(0, 0)
-//                )
-//              )
-//            case None =>
-//              return None
-//          }
-//        }
-//        else {
-//          newUpdatedVariables.put(update._1, update._2)
-//        }
         if (Utility.varIsFromOriginalProgram(name)) {
           pda.loopSummary.computePeriod(lastNode._1, r._1._1, r._2._1) match {
             case Some(period) =>

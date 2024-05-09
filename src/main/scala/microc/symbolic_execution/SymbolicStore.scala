@@ -8,72 +8,12 @@ import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
 
-object SymbolicStore {
+/**
+ * Manages a symbolic execution store that map the values for the variables.
+ *
+ * @param functionDeclarations A map of function declarations to handle function values symbolically.
+ */
 
-  def mergePathCondition(pathCondition: Expr, symbolicStore: SymbolicStore, res: SymbolicStore, pointerMapping: mutable.HashMap[Int, Int]): Expr = {
-    pathCondition match {
-      case PointerVal(address) =>
-        pointerMapping.get(address) match {
-          case Some(addr) =>
-            res.storage.getVal(PointerVal(addr)).get.asInstanceOf[Symbolic]
-          case None =>
-            val v = mergePathCondition(
-              symbolicStore.getValOfPtr(PointerVal(address)).get.asInstanceOf[Symbolic],
-              symbolicStore,
-              res,
-              pointerMapping
-            ).asInstanceOf[Symbolic]
-            val ptr = res.storage.addNewVal(v)
-            pointerMapping.put(address, ptr.address)
-            v
-        }
-      case IteVal(trueState, falseState, expr, loc) =>
-        val ite = IteVal(
-          pointerMapping.get(trueState.address) match {
-            case Some(addr) =>
-              PointerVal(addr)
-            case None =>
-              val v = mergePathCondition(
-                trueState,
-                symbolicStore,
-                res,
-                pointerMapping
-              ).asInstanceOf[Symbolic]
-              val ptr = res.storage.addNewVal(v)
-              pointerMapping.put(trueState.address, ptr.address)
-              ptr
-          },
-          pointerMapping.get(falseState.address) match {
-            case Some(addr) =>
-              PointerVal(addr)
-            case None =>
-              val v = mergePathCondition(
-                falseState,
-                symbolicStore,
-                res,
-                pointerMapping
-              ).asInstanceOf[Symbolic]
-              val ptr = res.storage.addNewVal(v)
-              pointerMapping.put(falseState.address, ptr.address)
-              ptr
-          },
-          expr,
-          loc
-        )
-        ite
-      case BinaryOp(op, left, right, loc) =>
-        BinaryOp(
-          op,
-          mergePathCondition(left, symbolicStore, res, pointerMapping),
-          mergePathCondition(right, symbolicStore, res, pointerMapping),
-          loc
-        )
-      case Not(expr, loc) => Not(mergePathCondition(expr, symbolicStore, res, pointerMapping), loc)
-      case other => other
-    }
-  }
-
-}
 
 
 class SymbolicStore(functionDeclarations: Map[String, FunVal]) {
@@ -103,16 +43,6 @@ class SymbolicStore(functionDeclarations: Map[String, FunVal]) {
       memory += UninitializedRef
       res
     }
-
-//    private def iteContainsUninitialized(iteVal: IteVal): Boolean = {
-//      iteVal match {
-//        case IteVal(trueState, falseState, _, _) if falseState == UninitializedRef || trueState == UninitializedRef => true
-//        case IteVal(trueState: IteVal, falseState: IteVal, _, _) => iteContainsUninitialized(trueState) || iteContainsUninitialized(falseState)
-//        case IteVal(trueState: IteVal, _, _, _) => iteContainsUninitialized(trueState)
-//        case IteVal(_, falseState: IteVal, _, _) => iteContainsUninitialized(falseState)
-//        case _ => false
-//      }
-//    }
 
     private def iteContainsUninitialized(iteVal: IteVal, store: Storage): Boolean = {
       iteVal match {
@@ -209,12 +139,6 @@ class SymbolicStore(functionDeclarations: Map[String, FunVal]) {
   }
 
   def findVar(name: String): Option[PointerVal] = {
-//    for (frame <- frames.reverse) {
-//      if (frame.contains(name)) {
-//        return Some(frame(name))
-//      }
-//    }
-//    None
     frames.last.get(name)
   }
 
@@ -299,7 +223,6 @@ class SymbolicStore(functionDeclarations: Map[String, FunVal]) {
           return true
         }
         false
-        //TODO records
       case (IteVal(trueState1, falseState1, expr1, _), IteVal(trueState2, falseState2, expr2, _)) =>
         (store1.storage.getVal(trueState1), store2.storage.getVal(trueState2), store1.storage.getVal(falseState1), store2.storage.getVal(falseState2)) match {
           case (Some(s1), Some(s2), Some(s3), Some(s4)) =>
@@ -336,10 +259,6 @@ class SymbolicStore(functionDeclarations: Map[String, FunVal]) {
                   if (!res) {
                     resMap.add(variable)
                   }
-//                case (NullRef, _) =>
-//                  resMap.add(variable)
-//                case (_, NullRef) =>
-//                  resMap.add(variable)
                 case _ =>
               }
             }
@@ -368,10 +287,6 @@ class SymbolicStore(functionDeclarations: Map[String, FunVal]) {
                   if (!res) {
                     return false
                   }
-//                case (NullRef, _) =>
-//                  return false
-//                case (_, NullRef) =>
-//                  return false
                 case _ =>
               }
             }
@@ -388,6 +303,16 @@ class SymbolicStore(functionDeclarations: Map[String, FunVal]) {
     }
     false
   }
+
+  /**
+   * Recursively moves a value from one symbolic store to another.
+   *
+   * @param res The destination symbolic store where values are being moved.
+   * @param store The source symbolic store from which values are being moved.
+   * @param ptr The pointer value in the source store pointing to the value to be moved.
+   * @param pointerMapping A mapping from source pointer addresses to destination pointer addresses.
+   * @return The new pointer in the destination store that now points to the moved value.
+   */
 
 
   def moveValue(res: SymbolicStore,
@@ -429,6 +354,21 @@ class SymbolicStore(functionDeclarations: Map[String, FunVal]) {
     pointerMapping.put(ptr.address, addr.address)
     addr
   }
+
+
+  /**
+   * Moves values from two stores to a new store and handles the situation when the values are the same or not.
+   *
+   * @param res The destination symbolic store where values are being moved.
+   * @param store1 The first source symbolic store.
+   * @param store2 The second source symbolic store.
+   * @param ptr1 The pointer value in the first source store pointing to the value to be moved.
+   * @param ptr2 The pointer value in the second source store pointing to the value to be moved.
+   * @param pointerMapping1 Mapping from addresses in the first store to the new store.
+   * @param pointerMapping2 Mapping from addresses in the second store to the new store.
+   * @param pathCondition The conditional expression used to create ITEVals.
+   * @return A tuple containing the new pointers in the destination store corresponding to the original pointers.
+   */
 
 
 
@@ -620,6 +560,15 @@ class SymbolicStore(functionDeclarations: Map[String, FunVal]) {
     }
   }
 
+
+  /**
+   * Merges two symbolic stores into a new one .
+   *
+   * @param other The other symbolic store to merge with.
+   * @param pathCondition The path condition associated with the current store.
+   * @param pathCondition2 The path condition associated with the other store.
+   * @return An option containing a tuple of the new merged store and the new path condition, if the merge is successful.
+   */
 
 
   // states should have the same number of frames

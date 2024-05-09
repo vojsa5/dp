@@ -62,7 +62,7 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
     }
     catch {
       case _: TimeoutException =>
-      case e =>
+      case e: Throwable =>
         throw e
     }
   }
@@ -763,9 +763,8 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
       Await.ready(future, 5.seconds) // Use Await.result if you need the result of the future
       fail("the program should timeout")
     } catch {
-      case _: TimeoutException => println("Test terminated due to timeout")
+      case _: TimeoutException =>
       case NonFatal(e) =>
-        println(s"Test failed due to an unexpected error: ${e.getMessage}")
         fail("")
     }
   }
@@ -800,8 +799,8 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
     try {
       Await.ready(future, 5.seconds) // Use Await.result if you need the result of the future
     } catch {
-      case _: TimeoutException => println("Test terminated due to timeout")
-      case NonFatal(e) => println(s"Test failed due to an unexpected error: ${e.getMessage}")
+      case _: TimeoutException =>
+      case NonFatal(e) => fail("")
     }
   }
 
@@ -1015,8 +1014,8 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
     try {
       Await.ready(future, 5.seconds) // Use Await.result if you need the result of the future
     } catch {
-      case _: TimeoutException => println("Test terminated due to timeout")
-      case NonFatal(e) => println(s"Test failed due to an unexpected error: ${e.getMessage}")
+      case _: TimeoutException =>
+      case NonFatal(e) => fail("")
     }
   }
 
@@ -1246,8 +1245,8 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
     try {
       Await.ready(future, 5.seconds) // Use Await.result if you need the result of the future
     } catch {
-      case _: TimeoutException => println("Test terminated due to timeout")
-      case NonFatal(e) => println(s"Test failed due to an unexpected error: ${e.getMessage}")
+      case _: TimeoutException =>
+      case NonFatal(e) => fail("")
     }
   }
 
@@ -1492,15 +1491,15 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
       }
       val stateHistory = new ExecutionTree()
       val ctx = new Context()
-      val executor = new SymbolicExecutor(cfg, searchStrategy = new RandomPathSelectionStrategy(stateHistory), executionTree = Some(stateHistory))
+      val executor = new SymbolicExecutor(cfg, searchStrategy = new TreeBasedStrategy(stateHistory), executionTree = Some(stateHistory))
       executor.run()
     }
 
     try {
       Await.ready(future, 5.seconds) // Use Await.result if you need the result of the future
     } catch {
-      case _: TimeoutException => println("Test terminated due to timeout")
-      case NonFatal(e) => println(s"Test failed due to an unexpected error: ${e.getMessage}")
+      case _: TimeoutException =>
+      case NonFatal(e) => fail("")
     }
   }
 
@@ -1577,15 +1576,15 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
       val cfg = new IntraproceduralCfgFactory().fromProgram(program)
 
       val stateHistory = new ExecutionTree()
-      val executor = new SymbolicExecutor(cfg, searchStrategy = new RandomPathSelectionStrategy(stateHistory), executionTree = Some(stateHistory))
+      val executor = new SymbolicExecutor(cfg, searchStrategy = new TreeBasedStrategy(stateHistory), executionTree = Some(stateHistory))
       executor.run()
     }
 
     try {
       Await.ready(future, 5.seconds) // Use Await.result if you need the result of the future
     } catch {
-      case _: TimeoutException => println("Test terminated due to timeout")
-      case NonFatal(e) => println(s"Test failed due to an unexpected error: ${e.getMessage}")
+      case _: TimeoutException =>
+      case NonFatal(e) => fail("")
     }
   }
 
@@ -1678,7 +1677,7 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
       val program = parseUnsafe(code)
       val cfg = new IntraproceduralCfgFactory().fromProgram(program)
       val stateHistory = new ExecutionTree()
-      val tree = new RandomPathSelectionStrategy(stateHistory)
+      val tree = new TreeBasedStrategy(stateHistory)
 
       val executor = new LoopSummarization(cfg, searchStrategy = tree, stateHistory = Some(stateHistory))
       executor.run()
@@ -1687,8 +1686,8 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
     try {
       Await.ready(future, 5.seconds) // Use Await.result if you need the result of the future
     } catch {
-      case _: TimeoutException => println("Test terminated due to timeout")
-      case NonFatal(e) => println(s"Test failed due to an unexpected error: ${e.getMessage}")
+      case _: TimeoutException =>
+      case NonFatal(e) => fail("")
     }
 
   }
@@ -1917,7 +1916,7 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
     val program = parseUnsafe(code)
     val cfg = new IntraproceduralCfgFactory().fromProgram(program)
     val stateHistory = new ExecutionTree()
-    val tree = new RandomPathSelectionStrategy(stateHistory)
+    val tree = new TreeBasedStrategy(stateHistory)
 
     val future = Future {
       val executor = new LoopSummarization(cfg, searchStrategy = tree, stateHistory = Some(stateHistory))
@@ -1928,7 +1927,7 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
     }
     catch {
       case _: TimeoutException =>
-      case e =>
+      case e: Throwable =>
         throw e
     }
 
@@ -2513,7 +2512,7 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
     val program = parseUnsafe(code)
     val cfg = new IntraproceduralCfgFactory().fromProgram(program)
     val stateHistory = new ExecutionTree()
-    val tree = new RandomPathSelectionStrategy(stateHistory)
+    val tree = new TreeBasedStrategy(stateHistory)
 
     val future = Future {
       val executor = new LoopSummarization(cfg, searchStrategy = tree, stateHistory = Some(stateHistory))
@@ -2524,7 +2523,7 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
     }
     catch {
       case _: TimeoutException =>
-      case e =>
+      case e: Throwable =>
         throw e
     }
 
@@ -2561,7 +2560,7 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
       val program = parseUnsafe(code)
       val cfg = new IntraproceduralCfgFactory().fromProgram(program)
       val stateHistory = new ExecutionTree()
-      val tree = new RandomPathSelectionStrategy(stateHistory)
+      val tree = new TreeBasedStrategy(stateHistory)
 
       val executor = new LoopSummarization(cfg, searchStrategy = tree, stateHistory = Some(stateHistory))
       executor.run()
@@ -2570,8 +2569,8 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
     try {
       Await.ready(future, 5.seconds) // Use Await.result if you need the result of the future
     } catch {
-      case _: TimeoutException => println("Test terminated due to timeout")
-      case NonFatal(e) => println(s"Test failed due to an unexpected error: ${e.getMessage}")
+      case _: TimeoutException =>
+      case NonFatal(e) => fail("")
     }
 
   }
@@ -3348,7 +3347,7 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
       val program = parseUnsafe(code)
       val cfg = new IntraproceduralCfgFactory().fromProgram(program)
       val stateHistory = new ExecutionTree()
-      val tree = new RandomPathSelectionStrategy(stateHistory)
+      val tree = new TreeBasedStrategy(stateHistory)
 
       val executor = new LoopSummarization(cfg, searchStrategy = tree, stateHistory = Some(stateHistory))
       executor.run()
@@ -3357,8 +3356,8 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
     try {
       Await.ready(future, 5.seconds) // Use Await.result if you need the result of the future
     } catch {
-      case _: TimeoutException => println("Test terminated due to timeout")
-      case NonFatal(e) => println(s"Test failed due to an unexpected error: ${e.getMessage}")
+      case _: TimeoutException =>
+      case NonFatal(e) => fail("")
     }
   }
 
@@ -3706,7 +3705,7 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
       val program = parseUnsafe(code)
       val cfg = new IntraproceduralCfgFactory().fromProgram(program)
       val stateHistory = new ExecutionTree()
-      val tree = new RandomPathSelectionStrategy(stateHistory)
+      val tree = new TreeBasedStrategy(stateHistory)
 
       val executor = new LoopSummarization(cfg, searchStrategy = tree, stateHistory = Some(stateHistory))
       executor.run()
@@ -3715,8 +3714,8 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
     try {
       Await.ready(future, 5.seconds) // Use Await.result if you need the result of the future
     } catch {
-      case _: TimeoutException => println("Test terminated due to timeout")
-      case NonFatal(e) => println(s"Test failed due to an unexpected error: ${e.getMessage}")
+      case _: TimeoutException =>
+      case NonFatal(e) => fail("")
     }
 
   }
@@ -3984,7 +3983,7 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
       val program = parseUnsafe(code)
       val cfg = new IntraproceduralCfgFactory().fromProgram(program)
       val stateHistory = new ExecutionTree()
-      val tree = new RandomPathSelectionStrategy(stateHistory)
+      val tree = new TreeBasedStrategy(stateHistory)
 
       val executor = new LoopSummarization(cfg, searchStrategy = tree, stateHistory = Some(stateHistory))
       executor.run()
@@ -3993,8 +3992,8 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
     try {
       Await.ready(future, 5.seconds) // Use Await.result if you need the result of the future
     } catch {
-      case _: TimeoutException => println("Test terminated due to timeout")
-      case NonFatal(e) => println(s"Test failed due to an unexpected error: ${e.getMessage}")
+      case _: TimeoutException =>
+      case NonFatal(e) => fail("")
     }
 
   }
@@ -4650,7 +4649,7 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
       val program = parseUnsafe(code)
       val cfg = new IntraproceduralCfgFactory().fromProgram(program)
       val stateHistory = new ExecutionTree()
-      val tree = new RandomPathSelectionStrategy(stateHistory)
+      val tree = new TreeBasedStrategy(stateHistory)
 
       val executor = new LoopSummarization(cfg, searchStrategy = tree, stateHistory = Some(stateHistory))
       executor.run()
@@ -4659,8 +4658,8 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
     try {
       Await.ready(future, 5.seconds) // Use Await.result if you need the result of the future
     } catch {
-      case _: TimeoutException => println("Test terminated due to timeout")
-      case NonFatal(e) => println(s"Test failed due to an unexpected error: ${e.getMessage}")
+      case _: TimeoutException =>
+      case NonFatal(e) => fail("")
     }
 
   }
@@ -4734,8 +4733,8 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
     try {
       Await.ready(future, 5.seconds) // Use Await.result if you need the result of the future
     } catch {
-      case _: TimeoutException => println("Test terminated due to timeout")
-      case NonFatal(e) => println(s"Test failed due to an unexpected error: ${e.getMessage}")
+      case _: TimeoutException =>
+      case NonFatal(e) => fail("")
     }
 
   }
@@ -4874,8 +4873,8 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
     try {
       Await.ready(future, 5.seconds) // Use Await.result if you need the result of the future
     } catch {
-      case _: TimeoutException => println("Test terminated due to timeout")
-      case NonFatal(e) => println(s"Test failed due to an unexpected error: ${e.getMessage}")
+      case _: TimeoutException =>
+      case NonFatal(e) => fail("")
     }
 
   }
@@ -5074,14 +5073,14 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
 
     val future = Future {
       val program = parseUnsafe(code)
-      new SymbolicExecutorFactory(false, false, Some("querycount"), 1, 5, "tree").get(program).run()
+      new SymbolicExecutorFactory(false, false, Some("lattice-based"), 1, 5, "tree").get(program).run()
     }
 
     try {
       Await.ready(future, 5.seconds) // Use Await.result if you need the result of the future
     } catch {
-      case _: TimeoutException => println("Test terminated due to timeout")
-      case NonFatal(e) => println(s"Test failed due to an unexpected error: ${e.getMessage}")
+      case _: TimeoutException =>
+      case NonFatal(e) => fail("")
     }
 
 
@@ -5443,7 +5442,7 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
     }
     catch  {
       case _: ExecutionException =>
-      case _ =>
+      case _: Throwable =>
         fail("")
     }
   }
@@ -5655,8 +5654,8 @@ class SymbolicExecutorTest extends FunSuite with MicrocSupport with Examples {
     try {
       Await.ready(future, 5.seconds) // Use Await.result if you need the result of the future
     } catch {
-      case _: TimeoutException => println("Test terminated due to timeout")
-      case NonFatal(e) => println(s"Test failed due to an unexpected error: ${e.getMessage}")
+      case _: TimeoutException =>
+      case NonFatal(e) => fail("")
     }
   }
 

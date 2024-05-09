@@ -8,7 +8,7 @@ import munit.FunSuite
 import scala.collection.mutable
 
 class SymbolicStoreTest extends FunSuite with MicrocSupport with Examples {
-  test("test equals") {//TODO split tests
+  test("test equals") {
     var store1 = new SymbolicStore(Map.empty)
     var store2 = new SymbolicStore(Map.empty)
 

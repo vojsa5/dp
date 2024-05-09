@@ -269,8 +269,8 @@ class SymbolicExecutorTest3 extends FunSuite with MicrocSupport with Examples {
     try {
       Await.ready(future, 5.seconds) // Use Await.result if you need the result of the future
     } catch {
-      case _: TimeoutException => println("Test terminated due to timeout")
-      case NonFatal(e) => println(s"Test failed due to an unexpected error: ${e.getMessage}")
+      case _: TimeoutException =>
+      case NonFatal(e) => fail("")
     }
 
 
@@ -1229,7 +1229,7 @@ class SymbolicExecutorTest3 extends FunSuite with MicrocSupport with Examples {
     }
     catch {
       case _: TimeoutException =>
-      case e =>
+      case e: Throwable =>
         fail(e.toString)
     }
 
@@ -1312,239 +1312,10 @@ class SymbolicExecutorTest3 extends FunSuite with MicrocSupport with Examples {
     }
     catch {
       case _: TimeoutException =>
-      case e =>
+      case e: Throwable =>
         fail(e.toString)
     }
   }
-
-
-  //  test("unbounded periodic loop finishes with summarization correctly irregular symbolic increment") {
-  //    var code =
-  //      """
-  //        |main() {
-  //        |  var n, x, z, inc;
-  //        |  n = input;
-  //        |  x = input;
-  //        |  z = input;
-  //        |  inc = input;
-  //        |  if (x >= n) {
-  //        |   x = n - 1;
-  //        |  }
-  //        |  if (z >= n) {
-  //        |   z = n - 1;
-  //        |  }
-  //        |  while (x < n) {
-  //        |   if (z > x) {
-  //        |     x = x + 1;
-  //        |   }
-  //        |   else {
-  //        |     z = z + inc;
-  //        |   }
-  //        |  }
-  //        |  return 1 / (x - n - 1);
-  //        |}
-  //        |""".stripMargin;
-  //
-  //    var cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-  //    var executor = new LoopSummary(cfg)
-  //    executor.run()
-  //
-  //
-  //    code =
-  //      """
-  //        |main() {
-  //        |  var n, x, z, inc;
-  //        |  n = input;
-  //        |  x = input;
-  //        |  z = input;
-  //        |  inc = input;
-  //        |  if (x >= n) {
-  //        |   x = n - 1;
-  //        |  }
-  //        |  if (z >= n) {
-  //        |   z = n - 1;
-  //        |  }
-  //        |  while (x < n) {
-  //        |   if (z > x) {
-  //        |     x = x + 1;
-  //        |   }
-  //        |   else {
-  //        |     z = z + inc;
-  //        |   }
-  //        |  }
-  //        |  return 1 / (x - n);
-  //        |}
-  //        |""".stripMargin;
-  //
-  //    cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-  //    executor = new LoopSummary(cfg)
-  //    try {
-  //      executor.run()
-  //      fail("Expected a ExecutionException but it did not occur.")
-  //    }
-  //    catch {
-  //      case _: ExecutionException =>
-  //      case other: Throwable => fail("Expected a ExecutionException, but caught different exception: " + other)
-  //    }
-  //
-  //
-  //    code =
-  //      """
-  //        |main() {
-  //        |  var n, x, z, inc;
-  //        |  n = input;
-  //        |  x = input;
-  //        |  z = input;
-  //        |  inc = input;
-  //        |  if (x >= n) {
-  //        |   x = n - 1;
-  //        |  }
-  //        |  if (z >= n) {
-  //        |   z = n - 1;
-  //        |  }
-  //        |  while (x < n) {
-  //        |   if (z > x) {
-  //        |     x = x + 1;
-  //        |   }
-  //        |   else {
-  //        |     z = z + input;
-  //        |   }
-  //        |  }
-  //        |  return 1 / (x - n + 1);
-  //        |}
-  //        |""".stripMargin;
-  //
-  //    cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-  //    executor = new LoopSummary(cfg)
-  //    executor.run()
-  //  }
-
-
-  //  test("path cycle not at the beginning of the loop") {
-  //    var code =
-  //      """
-  //        |main() {
-  //        |  var n, x, z, a;
-  //        |  n = input;
-  //        |  x = input;
-  //        |  z = input;
-  //        |  a = input;
-  //        |  if (a < 10) {
-  //        |   a = 1;
-  //        |  }
-  //        |  if (x >= n) {
-  //        |   x = n - 1;
-  //        |  }
-  //        |  if (z >= n) {
-  //        |   z = n - 1;
-  //        |  }
-  //        |  while (x < n) {
-  //        |   if (a < 10) {
-  //        |     a = a + 1;
-  //        |   }
-  //        |   else {
-  //        |     if (z > x) {
-  //        |       x = x + 1;
-  //        |     }
-  //        |     else {
-  //        |       z = z + 2;
-  //        |     }
-  //        |   }
-  //        |  }
-  //        |  return 1 / (x - n - 1);
-  //        |}
-  //        |""".stripMargin;
-  //
-  //    var cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-  //    var executor = new LoopSummary(cfg)
-  //    executor.run()
-  //
-  //
-  //    code =
-  //      """
-  //        |main() {
-  //        |  var n, x, z, a;
-  //        |  n = input;
-  //        |  x = input;
-  //        |  z = input;
-  //        |  a = input;
-  //        |  if (a < 10) {
-  //        |   a = 1;
-  //        |  }
-  //        |  if (x >= n) {
-  //        |   x = n - 1;
-  //        |  }
-  //        |  if (z >= n) {
-  //        |   z = n - 1;
-  //        |  }
-  //        |  while (x < n) {
-  //        |   if (a < 10) {
-  //        |     a = a + 1;
-  //        |   }
-  //        |   else {
-  //        |     if (z > x) {
-  //        |       x = x + 1;
-  //        |     }
-  //        |     else {
-  //        |       z = z + 2;
-  //        |     }
-  //        |   }
-  //        |  }
-  //        |  return 1 / (x - n);
-  //        |}
-  //        |""".stripMargin;
-  //
-  //    cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-  //    executor = new LoopSummary(cfg)
-  //    try {
-  //      executor.run()
-  //      fail("Expected a ExecutionException but it did not occur.")
-  //    }
-  //    catch {
-  //      case _: ExecutionException =>
-  //      case other: Throwable => fail("Expected a ExecutionException, but caught different exception: " + other)
-  //    }
-  //
-  //
-  //    code =
-  //      """
-  //        |main() {
-  //        |  var n, x, z, a;
-  //        |  n = input;
-  //        |  x = input;
-  //        |  z = input;
-  //        |  a = input;
-  //        |  if (a < 10) {
-  //        |   a = 1;
-  //        |  }
-  //        |  if (x >= n) {
-  //        |   x = n - 1;
-  //        |  }
-  //        |  if (z >= n) {
-  //        |   z = n - 1;
-  //        |  }
-  //        |  while (x < n) {
-  //        |   if (a < 10) {
-  //        |     a = a + 1;
-  //        |   }
-  //        |   else {
-  //        |     if (z > x) {
-  //        |       x = x + 1;
-  //        |     }
-  //        |     else {
-  //        |       z = z + 2;
-  //        |     }
-  //        |   }
-  //        |  }
-  //        |  return 1 / (x - n + 1);
-  //        |}
-  //        |""".stripMargin;
-  //
-  //    cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-  //    executor = new LoopSummary(cfg)
-  //    executor.run()
-  //  }
-
 
   test("unrolled nested summarization") {
     var code =

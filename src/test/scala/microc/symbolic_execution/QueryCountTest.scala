@@ -9,7 +9,7 @@ import munit.FunSuite
 
 class QueryCountTest extends FunSuite with MicrocSupport with Examples {
 
-    test("basic for paper 3") {
+    test("basic from paper 3") {
 
         val code =
             """
@@ -64,33 +64,33 @@ class QueryCountTest extends FunSuite with MicrocSupport with Examples {
         assert(res.find(_._1.id == 29).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "r"))
         assert(res.find(_._1.id == 29).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "r").get._2 == 1.0)
         assert(res.find(_._1.id == 29).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "argv"))
-        assert(res.find(_._1.id == 29).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argv").get._2 == 2.0)
+        assert(res.find(_._1.id == 29).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argv").get._2 == 10.0)
         assert(res.find(_._1.id == 29).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "argc"))
         assert(res.find(_._1.id == 29).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argc").get._2 == 1.0)
         assert(res.find(_._1.id == 29).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "arg"))
-        assert(res.find(_._1.id == 29).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "arg").get._2 == 2.0)
+        assert(res.find(_._1.id == 29).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "arg").get._2 == 10.0)
 
 
         assert(res.find(_._1.id == 28).get._2.size >= 4)
         assert(res.find(_._1.id == 28).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "r"))
         assert(res.find(_._1.id == 28).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "r").get._2 == 1.0)
         assert(res.find(_._1.id == 28).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "argv"))
-        assert(res.find(_._1.id == 28).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argv").get._2 == 2.0)
+        assert(res.find(_._1.id == 28).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argv").get._2 == 10.0)
         assert(res.find(_._1.id == 28).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "argc"))
         assert(res.find(_._1.id == 28).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argc").get._2 == 1.0)
         assert(res.find(_._1.id == 28).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "arg"))
-        assert(res.find(_._1.id == 28).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "arg").get._2 == 2.0)
+        assert(res.find(_._1.id == 28).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "arg").get._2 == 10.0)
 
 
         assert(res.find(_._1.id == 27).get._2.size >= 5)
         assert(res.find(_._1.id == 27).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "r"))
         assert(res.find(_._1.id == 27).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "r").get._2 == 1.0)
         assert(res.find(_._1.id == 27).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "argv"))
-        assert(res.find(_._1.id == 27).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argv").get._2 == 2.0)
+        assert(res.find(_._1.id == 27).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argv").get._2 == 10.0)
         assert(res.find(_._1.id == 27).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "argc"))
         assert(res.find(_._1.id == 27).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argc").get._2 == 1.0)
         assert(res.find(_._1.id == 27).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "arg"))
-        assert(res.find(_._1.id == 27).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "arg").get._2 == 2.0)
+        assert(res.find(_._1.id == 27).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "arg").get._2 == 10.0)
         assert(res.find(_._1.id == 27).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "i"))
         assert(res.find(_._1.id == 27).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "i").get._2 == 0.0)
 
@@ -98,11 +98,11 @@ class QueryCountTest extends FunSuite with MicrocSupport with Examples {
         assert(res.find(_._1.id == 26).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "r"))
         assert(res.find(_._1.id == 26).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "r").get._2 == 1.0)
         assert(res.find(_._1.id == 26).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "argv"))
-        assert(res.find(_._1.id == 26).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argv").get._2 == 2.0)
+        assert(res.find(_._1.id == 26).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argv").get._2 == 10.0)
         assert(res.find(_._1.id == 26).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "argc"))
         assert(res.find(_._1.id == 26).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argc").get._2 == 1.0)
         assert(res.find(_._1.id == 26).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "arg"))
-        assert(res.find(_._1.id == 26).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "arg").get._2 == 2.0)
+        assert(res.find(_._1.id == 26).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "arg").get._2 == 10.0)
         assert(res.find(_._1.id == 26).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "i"))
         assert(res.find(_._1.id == 26).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "i").get._2 == 0.0)
 
@@ -110,11 +110,11 @@ class QueryCountTest extends FunSuite with MicrocSupport with Examples {
         assert(res.find(_._1.id == 25).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "r"))
         assert(res.find(_._1.id == 25).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "r").get._2 == 1.0)
         assert(res.find(_._1.id == 25).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "argv"))
-        assert(res.find(_._1.id == 25).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argv").get._2 == 2.0)
+        assert(res.find(_._1.id == 25).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argv").get._2 == 10.0)
         assert(res.find(_._1.id == 25).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "argc"))
         assert(res.find(_._1.id == 25).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argc").get._2 == 1.0)
         assert(res.find(_._1.id == 25).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "arg"))
-        assert(res.find(_._1.id == 25).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "arg").get._2 == 2.0)
+        assert(res.find(_._1.id == 25).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "arg").get._2 == 10.0)
         assert(res.find(_._1.id == 25).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "i"))
         assert(res.find(_._1.id == 25).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "i").get._2 == 0.0)
 
@@ -122,11 +122,11 @@ class QueryCountTest extends FunSuite with MicrocSupport with Examples {
         assert(res.find(_._1.id == 24).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "r"))
         assert(res.find(_._1.id == 24).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "r").get._2 == 1.0)
         assert(res.find(_._1.id == 24).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "argv"))
-        assert(res.find(_._1.id == 24).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argv").get._2 == 2.0)
+        assert(res.find(_._1.id == 24).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argv").get._2 == 10.0)
         assert(res.find(_._1.id == 24).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "argc"))
         assert(res.find(_._1.id == 24).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argc").get._2 == 1.0)
         assert(res.find(_._1.id == 24).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "arg"))
-        assert(res.find(_._1.id == 24).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "arg").get._2 == 2.0)
+        assert(res.find(_._1.id == 24).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "arg").get._2 == 10.0)
         assert(res.find(_._1.id == 24).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "i"))
         assert(res.find(_._1.id == 24).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "i").get._2 == 0.0)
 
@@ -134,11 +134,11 @@ class QueryCountTest extends FunSuite with MicrocSupport with Examples {
         assert(res.find(_._1.id == 23).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "r"))
         assert(res.find(_._1.id == 23).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "r").get._2 == 1.0)
         assert(res.find(_._1.id == 23).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "argv"))
-        assert(res.find(_._1.id == 23).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argv").get._2 == 2.0)
+        assert(res.find(_._1.id == 23).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argv").get._2 == 10.0)
         assert(res.find(_._1.id == 23).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "argc"))
         assert(res.find(_._1.id == 23).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argc").get._2 == 1.0)
         assert(res.find(_._1.id == 23).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "arg"))
-        assert(res.find(_._1.id == 23).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "arg").get._2 == 2.0)
+        assert(res.find(_._1.id == 23).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "arg").get._2 == 10.0)
         assert(res.find(_._1.id == 23).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "i"))
         assert(res.find(_._1.id == 23).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "i").get._2 == 0.0)
 
@@ -146,11 +146,11 @@ class QueryCountTest extends FunSuite with MicrocSupport with Examples {
         assert(res.find(_._1.id == 22).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "r"))
         assert(res.find(_._1.id == 22).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "r").get._2 == 1.0)
         assert(res.find(_._1.id == 22).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "argv"))
-        assert(res.find(_._1.id == 22).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argv").get._2 == 2.0)
+        assert(res.find(_._1.id == 22).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argv").get._2 == 10.0)
         assert(res.find(_._1.id == 22).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "argc"))
         assert(res.find(_._1.id == 22).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argc").get._2 == 1.0)
         assert(res.find(_._1.id == 22).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "arg"))
-        assert(res.find(_._1.id == 22).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "arg").get._2 == 2.0)
+        assert(res.find(_._1.id == 22).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "arg").get._2 == 10.0)
         assert(res.find(_._1.id == 22).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "i"))
         assert(res.find(_._1.id == 22).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "i").get._2 == 0.0)
 
@@ -158,11 +158,11 @@ class QueryCountTest extends FunSuite with MicrocSupport with Examples {
         assert(res.find(_._1.id == 21).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "r"))
         assert(res.find(_._1.id == 21).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "r").get._2 == 1.0)
         assert(res.find(_._1.id == 21).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "argv"))
-        assert(res.find(_._1.id == 21).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argv").get._2 == 2.0)
+        assert(res.find(_._1.id == 21).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argv").get._2 == 10.0)
         assert(res.find(_._1.id == 21).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "argc"))
         assert(res.find(_._1.id == 21).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argc").get._2 == 1.0)
         assert(res.find(_._1.id == 21).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "arg"))
-        assert(res.find(_._1.id == 21).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "arg").get._2 == 2.0)
+        assert(res.find(_._1.id == 21).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "arg").get._2 == 10.0)
         assert(res.find(_._1.id == 21).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "i"))
         assert(res.find(_._1.id == 21).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "i").get._2 == 0.0)
 
@@ -171,11 +171,11 @@ class QueryCountTest extends FunSuite with MicrocSupport with Examples {
         assert(res.find(_._1.id == 21).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "r"))
         assert(res.find(_._1.id == 21).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "r").get._2 == 1.0)
         assert(res.find(_._1.id == 21).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "argv"))
-        assert(res.find(_._1.id == 21).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argv").get._2 == 2.0)
+        assert(res.find(_._1.id == 21).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argv").get._2 == 10.0)
         assert(res.find(_._1.id == 21).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "argc"))
         assert(res.find(_._1.id == 21).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argc").get._2 == 1.0)
         assert(res.find(_._1.id == 21).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "arg"))
-        assert(res.find(_._1.id == 21).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "arg").get._2 == 2.0)
+        assert(res.find(_._1.id == 21).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "arg").get._2 == 10.0)
         assert(res.find(_._1.id == 21).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "i"))
         assert(res.find(_._1.id == 21).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "i").get._2 == 0.0)
 
@@ -184,11 +184,11 @@ class QueryCountTest extends FunSuite with MicrocSupport with Examples {
         assert(res.find(_._1.id == 20).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "r"))
         assert(res.find(_._1.id == 20).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "r").get._2 == 1.0)
         assert(res.find(_._1.id == 20).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "argv"))
-        assert(res.find(_._1.id == 20).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argv").get._2 == 2.0)
+        assert(res.find(_._1.id == 20).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argv").get._2 == 10.0)
         assert(res.find(_._1.id == 20).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "argc"))
         assert(res.find(_._1.id == 20).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argc").get._2 == 1.0)
         assert(res.find(_._1.id == 20).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "arg"))
-        assert(res.find(_._1.id == 20).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "arg").get._2 == 2.0)
+        assert(res.find(_._1.id == 20).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "arg").get._2 == 10.0)
         assert(res.find(_._1.id == 20).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "i"))
         assert(res.find(_._1.id == 20).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "i").get._2 == 0.0)
 
@@ -197,11 +197,11 @@ class QueryCountTest extends FunSuite with MicrocSupport with Examples {
         assert(res.find(_._1.id == 19).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "r"))
         assert(res.find(_._1.id == 19).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "r").get._2 == 1.0)
         assert(res.find(_._1.id == 19).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "argv"))
-        assert(res.find(_._1.id == 19).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argv").get._2 == 2.0)
+        assert(res.find(_._1.id == 19).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argv").get._2 == 10.0)
         assert(res.find(_._1.id == 19).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "argc"))
         assert(res.find(_._1.id == 19).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argc").get._2 == 1.0)
         assert(res.find(_._1.id == 19).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "arg"))
-        assert(res.find(_._1.id == 19).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "arg").get._2 == 2.0)
+        assert(res.find(_._1.id == 19).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "arg").get._2 == 10.0)
         assert(res.find(_._1.id == 19).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "i"))
         assert(res.find(_._1.id == 19).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "i").get._2 == 0.0)
 
@@ -210,11 +210,11 @@ class QueryCountTest extends FunSuite with MicrocSupport with Examples {
         assert(res.find(_._1.id == 18).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "r"))
         assert(res.find(_._1.id == 18).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "r").get._2 == 1.0)
         assert(res.find(_._1.id == 18).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "argv"))
-        assert(res.find(_._1.id == 18).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argv").get._2 == 2.0)
+        assert(res.find(_._1.id == 18).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argv").get._2 == 10.0)
         assert(res.find(_._1.id == 18).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "argc"))
         assert(res.find(_._1.id == 18).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argc").get._2 == 1.0)
         assert(res.find(_._1.id == 18).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "arg"))
-        assert(res.find(_._1.id == 18).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "arg").get._2 == 2.0)
+        assert(res.find(_._1.id == 18).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "arg").get._2 == 10.0)
         assert(res.find(_._1.id == 18).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "i"))
         assert(res.find(_._1.id == 18).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "i").get._2 == 0.0)
 
@@ -223,11 +223,11 @@ class QueryCountTest extends FunSuite with MicrocSupport with Examples {
         assert(res.find(_._1.id == 17).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "r"))
         assert(res.find(_._1.id == 17).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "r").get._2 == 1.0)
         assert(res.find(_._1.id == 17).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "argv"))
-        assert(res.find(_._1.id == 17).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argv").get._2 == 2.0)
+        assert(res.find(_._1.id == 17).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argv").get._2 == 10.0)
         assert(res.find(_._1.id == 17).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "argc"))
         assert(res.find(_._1.id == 17).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argc").get._2 == 1.0)
         assert(res.find(_._1.id == 17).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "arg"))
-        assert(res.find(_._1.id == 17).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "arg").get._2 == 2.0)
+        assert(res.find(_._1.id == 17).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "arg").get._2 == 10.0)
         assert(res.find(_._1.id == 17).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "i"))
         assert(res.find(_._1.id == 17).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "i").get._2 == 0.0)
 
@@ -236,108 +236,108 @@ class QueryCountTest extends FunSuite with MicrocSupport with Examples {
         assert(res.find(_._1.id == 16).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "r"))
         assert(res.find(_._1.id == 16).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "r").get._2 == 1.0)
         assert(res.find(_._1.id == 16).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "argv"))
-        assert(res.find(_._1.id == 16).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argv").get._2 == 2.0)
+        assert(res.find(_._1.id == 16).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argv").get._2 == 10.0)
         assert(res.find(_._1.id == 16).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "argc"))
         assert(res.find(_._1.id == 16).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argc").get._2 == 1.0)
         assert(res.find(_._1.id == 16).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "arg"))
-        assert(res.find(_._1.id == 16).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "arg").get._2 == 2.0)
+        assert(res.find(_._1.id == 16).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "arg").get._2 == 10.0)
 
 
         assert(res.find(_._1.id == 15).get._2.size >= 4)
         assert(res.find(_._1.id == 15).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "r"))
         assert(res.find(_._1.id == 15).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "r").get._2 == 1.0)
         assert(res.find(_._1.id == 15).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "argv"))
-        assert(res.find(_._1.id == 15).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argv").get._2 == 2.0)
+        assert(res.find(_._1.id == 15).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argv").get._2 == 10.0)
         assert(res.find(_._1.id == 15).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "argc"))
         assert(res.find(_._1.id == 15).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argc").get._2 == 1.0)
         assert(res.find(_._1.id == 15).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "arg"))
-        assert(res.find(_._1.id == 15).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "arg").get._2 == 2.0)
+        assert(res.find(_._1.id == 15).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "arg").get._2 == 10.0)
 
 
         assert(res.find(_._1.id == 14).get._2.size >= 4)
         assert(res.find(_._1.id == 14).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "r"))
         assert(res.find(_._1.id == 14).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "r").get._2 == 1.0)
         assert(res.find(_._1.id == 14).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "argv"))
-        assert(res.find(_._1.id == 14).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argv").get._2 == 2.0)
+        assert(res.find(_._1.id == 14).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argv").get._2 == 10.0)
         assert(res.find(_._1.id == 14).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "argc"))
         assert(res.find(_._1.id == 14).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argc").get._2 == 1.0)
         assert(res.find(_._1.id == 14).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "arg"))
-        assert(res.find(_._1.id == 14).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "arg").get._2 == 2.0)
+        assert(res.find(_._1.id == 14).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "arg").get._2 == 10.0)
 
 
         assert(res.find(_._1.id == 13).get._2.size >= 4)
         assert(res.find(_._1.id == 13).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "r"))
         assert(res.find(_._1.id == 13).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "r").get._2 == 1.0)
         assert(res.find(_._1.id == 13).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "argv"))
-        assert(res.find(_._1.id == 13).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argv").get._2 == 2.0)
+        assert(res.find(_._1.id == 13).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argv").get._2 == 10.0)
         assert(res.find(_._1.id == 13).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "argc"))
         assert(res.find(_._1.id == 13).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argc").get._2 == 1.0)
         assert(res.find(_._1.id == 13).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "arg"))
-        assert(res.find(_._1.id == 13).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "arg").get._2 == 2.0)
+        assert(res.find(_._1.id == 13).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "arg").get._2 == 10.0)
 
 
         assert(res.find(_._1.id == 12).get._2.size >= 3)
         assert(res.find(_._1.id == 12).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "argv"))
-        assert(res.find(_._1.id == 12).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argv").get._2 == 2.0)
+        assert(res.find(_._1.id == 12).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argv").get._2 == 10.0)
         assert(res.find(_._1.id == 12).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "argc"))
         assert(res.find(_._1.id == 12).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argc").get._2 == 1.0)
         assert(res.find(_._1.id == 12).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "arg"))
-        assert(res.find(_._1.id == 12).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "arg").get._2 == 2.0)
+        assert(res.find(_._1.id == 12).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "arg").get._2 == 10.0)
 
 
         assert(res.find(_._1.id == 11).get._2.size >= 4)
         assert(res.find(_._1.id == 11).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "r"))
         assert(res.find(_._1.id == 11).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "r").get._2 == 1.0)
         assert(res.find(_._1.id == 11).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "argv"))
-        assert(res.find(_._1.id == 11).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argv").get._2 == 2.0)
+        assert(res.find(_._1.id == 11).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argv").get._2 == 10.0)
         assert(res.find(_._1.id == 11).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "argc"))
         assert(res.find(_._1.id == 11).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argc").get._2 == 1.0)
         assert(res.find(_._1.id == 11).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "arg"))
-        assert(res.find(_._1.id == 11).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "arg").get._2 == 2.0)
+        assert(res.find(_._1.id == 11).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "arg").get._2 == 10.0)
 
 
         assert(res.find(_._1.id == 10).get._2.size >= 4)
         assert(res.find(_._1.id == 10).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "r"))
         assert(res.find(_._1.id == 10).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "r").get._2 == 1.0)
         assert(res.find(_._1.id == 10).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "argv"))
-        assert(res.find(_._1.id == 10).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argv").get._2 == 2.0)
+        assert(res.find(_._1.id == 10).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argv").get._2 == 10.0)
         assert(res.find(_._1.id == 10).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "argc"))
         assert(res.find(_._1.id == 10).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argc").get._2 == 1.0)
         assert(res.find(_._1.id == 10).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "arg"))
-        assert(res.find(_._1.id == 10).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "arg").get._2 == 2.0)
+        assert(res.find(_._1.id == 10).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "arg").get._2 == 10.0)
 
 
         assert(res.find(_._1.id == 9).get._2.size >= 4)
         assert(res.find(_._1.id == 9).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "r"))
         assert(res.find(_._1.id == 9).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "r").get._2 == 1.0)
         assert(res.find(_._1.id == 9).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "argv"))
-        assert(res.find(_._1.id == 9).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argv").get._2 == 2.0)
+        assert(res.find(_._1.id == 9).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argv").get._2 == 10.0)
         assert(res.find(_._1.id == 9).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "argc"))
         assert(res.find(_._1.id == 9).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argc").get._2 == 1.0)
         assert(res.find(_._1.id == 9).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "arg"))
-        assert(res.find(_._1.id == 9).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "arg").get._2 == 2.0)
+        assert(res.find(_._1.id == 9).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "arg").get._2 == 10.0)
 
 
         assert(res.find(_._1.id == 8).get._2.size >= 4)
         assert(res.find(_._1.id == 8).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "r"))
         assert(res.find(_._1.id == 8).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "r").get._2 == 1.0)
         assert(res.find(_._1.id == 8).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "argv"))
-        assert(res.find(_._1.id == 8).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argv").get._2 == 2.0)
+        assert(res.find(_._1.id == 8).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argv").get._2 == 10.0)
         assert(res.find(_._1.id == 8).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "argc"))
         assert(res.find(_._1.id == 8).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argc").get._2 == 1.0)
         assert(res.find(_._1.id == 8).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "arg"))
-        assert(res.find(_._1.id == 8).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "arg").get._2 == 2.0)
+        assert(res.find(_._1.id == 8).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "arg").get._2 == 10.0)
 
 
         assert(res.find(_._1.id == 7).get._2.size >= 4)
         assert(res.find(_._1.id == 7).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "r"))
         assert(res.find(_._1.id == 7).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "r").get._2 == 1.0)
         assert(res.find(_._1.id == 7).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "argv"))
-        assert(res.find(_._1.id == 7).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argv").get._2 == 2.0)
+        assert(res.find(_._1.id == 7).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argv").get._2 == 10.0)
         assert(res.find(_._1.id == 7).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "argc"))
         assert(res.find(_._1.id == 7).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argc").get._2 == 1.0)
         assert(res.find(_._1.id == 7).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "arg"))
-        assert(res.find(_._1.id == 7).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "arg").get._2 == 2.0)
+        assert(res.find(_._1.id == 7).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "arg").get._2 == 10.0)
 
 
         assert(res.find(_._1.id == 6).get._2.size >= 3)
@@ -346,14 +346,14 @@ class QueryCountTest extends FunSuite with MicrocSupport with Examples {
         assert(res.find(_._1.id == 6).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "argc"))
         assert(res.find(_._1.id == 6).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "argc").get._2 == 1.0)
         assert(res.find(_._1.id == 6).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "arg"))
-        assert(res.find(_._1.id == 6).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "arg").get._2 == 2.0)
+        assert(res.find(_._1.id == 6).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "arg").get._2 == 10.0)
 
 
         assert(res.find(_._1.id == 5).get._2.size >= 2)
         assert(res.find(_._1.id == 5).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "r"))
         assert(res.find(_._1.id == 5).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "r").get._2 == 1.0)
         assert(res.find(_._1.id == 5).get._2.exists(_._1.asInstanceOf[IdentifierDecl].name == "arg"))
-        assert(res.find(_._1.id == 5).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "arg").get._2 == 2.0)
+        assert(res.find(_._1.id == 5).get._2.find(_._1.asInstanceOf[IdentifierDecl].name == "arg").get._2 == 10.0)
 
 
         assert(res.find(_._1.id == 4).get._2.size >= 1)
@@ -370,7 +370,7 @@ class QueryCountTest extends FunSuite with MicrocSupport with Examples {
     }
 
 
-    test("basic for paper 3 recursive") {
+    test("basic from paper 3 recursive") {
 
         val code =
             """
@@ -410,7 +410,7 @@ class QueryCountTest extends FunSuite with MicrocSupport with Examples {
         implicit val declarations = new SemanticAnalysis().analyze(program)
 
         val analyses = new RecursionBasedAnalyses()(new SemanticAnalysis().analyze(program))
-        analyses.tmp2(cfg)
+        analyses.compute(cfg)
         val res = analyses.mapping
 
         //assert(res.find(_._1.id == 33).get._2.isEmpty)
@@ -711,7 +711,7 @@ class QueryCountTest extends FunSuite with MicrocSupport with Examples {
     }
 
 
-    test("basic for paper 1") {
+    test("basic from paper 1") {
         val code =
             """
               |main() {
@@ -768,7 +768,7 @@ class QueryCountTest extends FunSuite with MicrocSupport with Examples {
 
 
 
-    test("basic for paper 1 strategy 2") {
+    test("basic from paper 1 strategy 2") {
         val code =
             """
               |main() {
@@ -792,7 +792,7 @@ class QueryCountTest extends FunSuite with MicrocSupport with Examples {
         val cfg = new IntraproceduralCfgFactory().fromProgram(program);
         val tmp = new RecursionBasedAnalyses()(new SemanticAnalysis().analyze(program))
 
-        tmp.tmp2(cfg)
+        tmp.compute(cfg)
 
         val res = tmp.mapping
 
@@ -824,7 +824,7 @@ class QueryCountTest extends FunSuite with MicrocSupport with Examples {
     }
 
 
-    test("basic for paper 2") {
+    test("basic from paper 2") {
 
         val code =
             """
@@ -928,7 +928,7 @@ class QueryCountTest extends FunSuite with MicrocSupport with Examples {
 
 
 
-    test("basic for paper 2 strategy 2") {
+    test("basic from paper 2 strategy 2") {
 
         val code =
             """
@@ -958,7 +958,7 @@ class QueryCountTest extends FunSuite with MicrocSupport with Examples {
         val cfg = new IntraproceduralCfgFactory().fromProgram(program);
         val tmp = new RecursionBasedAnalyses()(new SemanticAnalysis().analyze(program), 1.0, 1.0)
 
-        tmp.tmp2(cfg)
+        tmp.compute(cfg)
 
         val res = tmp.mapping
 
@@ -983,42 +983,42 @@ class QueryCountTest extends FunSuite with MicrocSupport with Examples {
         assert(res.find(_._1.id == 10).get._2.exists(_._1 == "r"))
         assert(res.find(_._1.id == 10).get._2.find(_._1 == "r").get._2 == 1.0)
         assert(res.find(_._1.id == 10).get._2.exists(_._1 == "argv"))
-        assert(res.find(_._1.id == 10).get._2.find(_._1 == "argv").get._2 == 2.0)
+        assert(res.find(_._1.id == 10).get._2.find(_._1 == "argv").get._2 == 1.0)
 
         assert(res.find(_._1.id == 9).get._2.size >= 2)
         assert(res.find(_._1.id == 9).get._2.exists(_._1 == "r"))
         assert(res.find(_._1.id == 9).get._2.find(_._1 == "r").get._2 == 1.0)
         assert(res.find(_._1.id == 9).get._2.exists(_._1 == "argv"))
-        assert(res.find(_._1.id == 9).get._2.find(_._1 == "argv").get._2 == 2.0)
+        assert(res.find(_._1.id == 9).get._2.find(_._1 == "argv").get._2 == 1.0)
 
         assert(res.find(_._1.id == 8).get._2.size >= 2)
         assert(res.find(_._1.id == 8).get._2.exists(_._1 == "r"))
-        assert(res.find(_._1.id == 8).get._2.find(_._1 == "r").get._2 == 1.0)
+        assert(res.find(_._1.id == 8).get._2.find(_._1 == "r").get._2 == 2.0)
         assert(res.find(_._1.id == 8).get._2.exists(_._1 == "argv"))
-        assert(res.find(_._1.id == 8).get._2.find(_._1 == "argv").get._2 == 2.0)
+        assert(res.find(_._1.id == 8).get._2.find(_._1 == "argv").get._2 == 1.0)
 
         assert(res.find(_._1.id == 7).get._2.size >= 3)
         assert(res.find(_._1.id == 7).get._2.exists(_._1 == "r"))
-        assert(res.find(_._1.id == 7).get._2.find(_._1 == "r").get._2 == 1.0)
+        assert(res.find(_._1.id == 7).get._2.find(_._1 == "r").get._2 == 2.0)
         assert(res.find(_._1.id == 7).get._2.exists(_._1 == "argv"))
-        assert(res.find(_._1.id == 7).get._2.find(_._1 == "argv").get._2 == 2.0)
+        assert(res.find(_._1.id == 7).get._2.find(_._1 == "argv").get._2 == 1.0)
         assert(res.find(_._1.id == 7).get._2.exists(_._1 == "argc"))
         assert(res.find(_._1.id == 7).get._2.find(_._1 == "argc").get._2 == 1.0)
 
         assert(res.find(_._1.id == 6).get._2.size >= 2)
         assert(res.find(_._1.id == 6).get._2.exists(_._1 == "r"))
-        assert(res.find(_._1.id == 6).get._2.find(_._1 == "r").get._2 == 1.0)
+        assert(res.find(_._1.id == 6).get._2.find(_._1 == "r").get._2 == 2.0)
         assert(res.find(_._1.id == 6).get._2.exists(_._1 == "argc"))
         assert(res.find(_._1.id == 6).get._2.find(_._1 == "argc").get._2 == 1.0)
 
         assert(res.find(_._1.id == 5).get._2.size >= 1)
         assert(res.find(_._1.id == 5).get._2.exists(_._1 == "r"))
-        assert(res.find(_._1.id == 5).get._2.find(_._1 == "r").get._2 == 1.0)
+        assert(res.find(_._1.id == 5).get._2.find(_._1 == "r").get._2 == 2.0)
 
 
         assert(res.find(_._1.id == 4).get._2.size >= 1)
         assert(res.find(_._1.id == 4).get._2.exists(_._1 == "r"))
-        assert(res.find(_._1.id == 4).get._2.find(_._1 == "r").get._2 == 1.0)
+        assert(res.find(_._1.id == 4).get._2.find(_._1 == "r").get._2 == 2.0)
 
         assert(res.find(_._1.id == 3).get._2.isEmpty)
         assert(res.find(_._1.id == 2).get._2.isEmpty)
@@ -1030,7 +1030,7 @@ class QueryCountTest extends FunSuite with MicrocSupport with Examples {
     }
 
 
-    test("basic for paper 4") {
+    test("basic from paper 4") {
 
         val code =
             """
@@ -1121,7 +1121,7 @@ class QueryCountTest extends FunSuite with MicrocSupport with Examples {
 
 
 
-    test("basic for paper 4 strategy 2") {
+    test("basic from paper 4 strategy 2") {
 
         val code =
             """
@@ -1147,7 +1147,7 @@ class QueryCountTest extends FunSuite with MicrocSupport with Examples {
         val cfg = new IntraproceduralCfgFactory().fromProgram(program);
         val tmp = new RecursionBasedAnalyses()(new SemanticAnalysis().analyze(program))
 
-        tmp.tmp2(cfg)
+        tmp.compute(cfg)
 
         val res = tmp.mapping
 
@@ -1168,35 +1168,31 @@ class QueryCountTest extends FunSuite with MicrocSupport with Examples {
         assert(res.find(_._1.id == 9).get._2.exists(_._1 == "i"))
         assert(res.find(_._1.id == 9).get._2.find(_._1 == "i").get._2 == 1.0)
 
-        assert(res.find(_._1.id == 8).get._2.size >= 4)
+        assert(res.find(_._1.id == 8).get._2.size >= 3)
         assert(res.find(_._1.id == 8).get._2.exists(_._1 == "r"))
         assert(res.find(_._1.id == 8).get._2.find(_._1 == "r").get._2 == 1.0)
         assert(res.find(_._1.id == 8).get._2.exists(_._1 == "i"))
         assert(res.find(_._1.id == 8).get._2.find(_._1 == "i").get._2 == 1.0)
-        assert(res.find(_._1.id == 8).get._2.exists(_._1 == "argv"))
-        assert(res.find(_._1.id == 8).get._2.find(_._1 == "argv").get._2 == 2.0)
         assert(res.find(_._1.id == 8).get._2.exists(_._1 == "arg"))
-        assert(res.find(_._1.id == 8).get._2.find(_._1 == "arg").get._2 == 2.0)
+        assert(res.find(_._1.id == 8).get._2.find(_._1 == "arg").get._2 == 1.0)
 
-        assert(res.find(_._1.id == 7).get._2.size >= 3)
+        assert(res.find(_._1.id == 7).get._2.size >= 2)
         assert(res.find(_._1.id == 7).get._2.exists(_._1 == "r"))
         assert(res.find(_._1.id == 7).get._2.find(_._1 == "r").get._2 == 1.0)
-        assert(res.find(_._1.id == 7).get._2.exists(_._1 == "argv"))
-        assert(res.find(_._1.id == 7).get._2.find(_._1 == "argv").get._2 == 2.0)
         assert(res.find(_._1.id == 7).get._2.exists(_._1 == "arg"))
-        assert(res.find(_._1.id == 7).get._2.find(_._1 == "arg").get._2 == 2.0)
+        assert(res.find(_._1.id == 7).get._2.find(_._1 == "arg").get._2 == 1.0)
 
         assert(res.find(_._1.id == 6).get._2.size >= 2)
         assert(res.find(_._1.id == 6).get._2.exists(_._1 == "r"))
         assert(res.find(_._1.id == 6).get._2.find(_._1 == "r").get._2 == 1.0)
         assert(res.find(_._1.id == 6).get._2.exists(_._1 == "arg"))
-        assert(res.find(_._1.id == 6).get._2.find(_._1 == "arg").get._2 == 2.0)
+        assert(res.find(_._1.id == 6).get._2.find(_._1 == "arg").get._2 == 1.0)
 
         assert(res.find(_._1.id == 5).get._2.size >= 2)
         assert(res.find(_._1.id == 5).get._2.exists(_._1 == "r"))
         assert(res.find(_._1.id == 5).get._2.find(_._1 == "r").get._2 == 1.0)
         assert(res.find(_._1.id == 5).get._2.exists(_._1 == "arg"))
-        assert(res.find(_._1.id == 5).get._2.find(_._1 == "arg").get._2 == 2.0)
+        assert(res.find(_._1.id == 5).get._2.find(_._1 == "arg").get._2 == 1.0)
 
         assert(res.find(_._1.id == 4).get._2.size >= 1)
         assert(res.find(_._1.id == 4).get._2.exists(_._1 == "r"))
@@ -1210,7 +1206,7 @@ class QueryCountTest extends FunSuite with MicrocSupport with Examples {
     }
 
 
-    test("basic for paper 6") {
+    test("basic from paper 6") {
 
         val code =
             """
@@ -1246,7 +1242,7 @@ class QueryCountTest extends FunSuite with MicrocSupport with Examples {
     }
 
 
-    test("basic for paper 5") {
+    test("basic from paper 5") {
 
         val code =
             """

@@ -12,6 +12,16 @@ import microc.symbolic_execution.optimizations.subsumption.PathSubsumption
 
 import scala.collection.mutable
 
+/**
+ * Exception class for handling runtime errors during symbolic execution.
+ * Includes contextual information about the state at the point of exception.
+ *
+ * @param message Descriptive message of the error.
+ * @param loc Location in the source code where the error occurred.
+ * @param symbolicState State of the symbolic execution at the time of the error.
+ */
+
+
 case class ExecutionException(message: String, loc: Loc, symbolicState: SymbolicState) extends ProgramException(message + "\nloc: " + (if (symbolicState != null) symbolicState.programLocation.ast.toString else "")) {
   override def format(reporter: Reporter): String = reporter.formatError("execution", message + " loc: " +
     (if (symbolicState != null) symbolicState.programLocation.ast.toString else ""), loc)
@@ -87,10 +97,10 @@ object ExecutionException {
  * which is useful for handling branches, loops, and function calls.
  *
  * @param program The CFG of the program to be executed symbolically.
- * @param subsumption Optional mechanism to optimize execution by eliminating redundant paths.
+ * @param subsumption Optional technique.
  * @param ctx Z3 Context used for handling symbolic expressions and constraints.
  * @param searchStrategy Strategy for exploring execution paths (e.g., BFS).
- * @param executionTree
+ * @param executionTree Stores predecessors of each state
  * @param covered Optional set to track CFG nodes that have been explored.
  * @param createITEAtSymbolicArrayAccess Flag to decide if ITE expressions should be created at symbolic array accesses.
  * @param printStats Boolean to enable or disable the printing of execution statistics.
@@ -115,11 +125,6 @@ class SymbolicExecutor(program: ProgramCfg,
   var subsumptionLoopVar = 1
   var inSubsumptionIteration = false
 
-  def createSubsumptionLoopVar(): Identifier = {
-    val rightSide = Identifier("_l" + subsumptionLoopVar.toString, CodeLoc(0, 0))
-    subsumptionLoopVar += 1
-    rightSide
-  }
 
 
   for (fun <- program.function) {
@@ -156,7 +161,7 @@ class SymbolicExecutor(program: ProgramCfg,
         val lastFceCall = path.callStack.last
         path.symbolicStore.popFrame()
         // in the normalized ast, all function calls are in the form of assignments
-        lastFceCall._1.ast match {
+        lastFceCall.ast match {
           case AssignStmt(target, _, _) =>
             getTargetMemoryCell(target, path) match {
               case Some(value) =>
@@ -169,7 +174,7 @@ class SymbolicExecutor(program: ProgramCfg,
             throw new Exception("this should never happen")
         }
         path.callStack = path.callStack.dropRight(1)
-        path.goTo(lastFceCall._1.succ.head, lastFceCall._2)
+        path.goTo(lastFceCall.succ.head)
         step(path)
       }
       statistics.numPaths += path.associatedPathsCount()
@@ -194,19 +199,29 @@ class SymbolicExecutor(program: ProgramCfg,
     }
   }
 
+  /**
+   * A method that creates variables to handle loops in subsumption
+   */
+
+  private def createSubsumptionLoopVar(): Identifier = {
+    val rightSide = Identifier("_l" + subsumptionLoopVar.toString, CodeLoc(0, 0))
+    subsumptionLoopVar += 1
+    rightSide
+  }
+
   def runFunction(name: String, symbolicState: SymbolicState, args: List[Expr]): Option[Val] = {
     val fce = program.getFce(name)
     val changes = mutable.HashMap[String, Val]()
     for ((arg, param) <- args.zip(fce.ast.asInstanceOf[FunDecl].params)) {
       changes.put(param.name, evaluate(arg, symbolicState))
     }
-    symbolicState.callStack = symbolicState.callStack.appended((symbolicState.programLocation, fce.ast.asInstanceOf[FunDecl].params))
+    symbolicState.callStack = symbolicState.callStack.appended(symbolicState.programLocation)
     symbolicState.symbolicStore.pushFrame()
     val tmpNextStatement = symbolicState.programLocation
     for ((name, v) <- changes) {
       symbolicState.updateVar(name, v)
     }
-    symbolicState.goTo(fce, fce.fun.params)
+    symbolicState.goTo(fce)
     step(symbolicState)
     symbolicState.symbolicStore.popFrame()
     symbolicState.callStack = symbolicState.callStack.dropRight(1)
@@ -262,6 +277,7 @@ class SymbolicExecutor(program: ProgramCfg,
             val lastLoopStmt = loop.pred.maxBy(node => node.id)
             subsumption.get.addAnnotations(program.nodes.filter(node => node.id > loop.id && node.id <= lastLoopStmt.id).toList, loopIterCond)
 
+            // Modify loop to decrease iteration variable each time.
             val decreaseLoopIter = AssignStmt(loopIter, BinaryOp(Minus, loopIter, Number(1, CodeLoc(0, 0)), CodeLoc(0, 0)), CodeLoc(0, 0))
 
             val newStmt = new CfgStmtNode(lastLoopStmt.id + 0.5, decreaseLoopIter)
@@ -273,6 +289,7 @@ class SymbolicExecutor(program: ProgramCfg,
             newStmt.succ.add(loop)
             newStmt.pred.add(lastLoopStmt)
 
+            // register the subsumption var
             nextState.addVar(IdentifierDecl(loops(loop).name, CodeLoc(0, 0)))
             nextState.updateVar(loops(loop).name, Number(1, CodeLoc(0, 0)))
 
@@ -288,6 +305,7 @@ class SymbolicExecutor(program: ProgramCfg,
               loop
             )
 
+            // remove the inserted statement
             lastLoopStmt.succ.add(loop)
             lastLoopStmt.succ.remove(newStmt)
             loop.pred.add(lastLoopStmt)
@@ -334,7 +352,7 @@ class SymbolicExecutor(program: ProgramCfg,
           executionTree.get.addState(symbolicState, nextState)
         }
         if (inSubsumptionIteration) {
-          statistics.numPaths += 1
+          statistics.numPaths += nextState.associatedPathsCount()
           step(nextState)
         }
         else {
@@ -352,6 +370,14 @@ class SymbolicExecutor(program: ProgramCfg,
       symbolicState.symbolicStore = whileLeavingState.get.symbolicStore
     }
   }
+
+
+  /**
+   * Symbolically executes a statement.
+   * Handles different types of statements like assignments, loops, conditionals, and function calls.
+   * @param symbolicState The current state of the symbolic execution.
+   */
+
 
   def step(symbolicState: SymbolicState): Unit = {
     if (covered.nonEmpty) {
@@ -421,7 +447,7 @@ class SymbolicExecutor(program: ProgramCfg,
               currentPathStopped = false
               step(path)
               subsumption.get.computeAnnotationFromSuccessors(symbolicState.programLocation)
-              statistics.numPaths += 1
+              statistics.numPaths += path.associatedPathsCount()
             }
             else {
               searchStrategy.addState(path)
@@ -561,6 +587,16 @@ class SymbolicExecutor(program: ProgramCfg,
     )
     RecVal(fieldsMap)
   }
+
+  /**
+   * Evaluates the provided expression
+   *
+   * @param expr The expression to evaluate.
+   * @param symbolicState The current symbolic state used for evaluation.
+   * @param ignoreUncertainErrors Boolean flag to determine if uncertain errors should be ignored.
+   * @return The evaluated value of the expression.
+   */
+
 
   def evaluate(expr: Expr, symbolicState: SymbolicState, ignoreUncertainErrors: Boolean = false): Val = {
     expr match {
@@ -722,6 +758,16 @@ class SymbolicExecutor(program: ProgramCfg,
         }
     }
   }
+
+  /**
+   * Retrieves the target memory cell for an expression. This method is pivotal in handling assignments.
+   *
+   * @param expr The expression whose memory cell is to be determined. This could be an identifier, a dereference,
+   *             or an array access.
+   * @param symbolicState The current state of symbolic execution, which holds the context, including variable
+   *                      mappings and their associated memory locations.
+   * @return An optional `PointerVal` representing the memory cell location if it exists.
+   */
 
 
   private def getTargetMemoryCell(expr: Expr, symbolicState: SymbolicState): Option[PointerVal] = {

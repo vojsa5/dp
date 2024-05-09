@@ -7,6 +7,12 @@ import scala.collection.immutable.Queue
 import scala.collection.mutable
 import scala.util.Random
 
+/**
+ * A set-like data structure that supports poping random elements properly.
+ *
+ * @tparam T The type of elements stored in the set.
+ */
+
 class RandomAccessSet[T] {
   private val elements = mutable.ArrayBuffer[T]()
   private val indexMap = mutable.HashMap[T, Int]()
@@ -42,6 +48,12 @@ class RandomAccessSet[T] {
 
   def size: Int = elements.length
 }
+
+
+/**
+ * Defines a common interface for search strategies used in symbolic execution.
+ * Search strategies dictate how states are selected for exploration.
+ */
 
 
 trait SearchStrategy {
@@ -106,7 +118,7 @@ class RandomSearchStrategy extends SearchStrategy {
 }
 
 
-class RandomPathSelectionStrategy(stateHistory: ExecutionTree) extends SearchStrategy {
+class TreeBasedStrategy(stateHistory: ExecutionTree) extends SearchStrategy {
 
   override def addState(symbolicState: SymbolicState): Unit = {}
 
@@ -165,7 +177,7 @@ class CoverageSearchStrategy(covered: mutable.HashSet[CfgNode]) extends SearchSt
 
 class KleeSearchStrategy(stateHistory: ExecutionTree, covered: mutable.HashSet[CfgNode]) extends SearchStrategy {
   val coverageSearchStrategy = new CoverageSearchStrategy(covered)
-  val randomPathSearchStrategy = new RandomPathSelectionStrategy(stateHistory)
+  val randomPathSearchStrategy = new TreeBasedStrategy(stateHistory)
 
   var isCoverageStage = false
 

@@ -9,15 +9,22 @@ import microc.symbolic_execution.optimizations.merging.MergedSymbolicState
 import scala.collection.mutable
 
 
-
+/**
+ * Represents a state in the symbolic execution of a program. This state includes the current location
+ * in the control flow graph, the symbolic state of variables, and the current path condition.
+ *
+ * @param programLocation The current location within the program's control flow graph.
+ * @param pathCondition The current path condition expressed as a symbolic expression that must hold true at this point in the execution.
+ * @param symbolicStore The store maintaining mappings from variable names to their values.
+ * @param callStack The stack of function calls, maintaining the context of nested function executions.
+ */
 
 
 class SymbolicState(
                      var programLocation: CfgNode,
                      var pathCondition: Expr,
                      var symbolicStore: SymbolicStore,
-                     var callStack: List[(CfgNode, List[IdentifierDecl])] = List.empty,
-                     var variableDecls: List[IdentifierDecl] = List.empty
+                     var callStack: List[CfgNode] = List.empty
                    ) {
 
   var returnValue: Option[Val] = None
@@ -29,7 +36,7 @@ class SymbolicState(
   def tookToLongToMerge(): Boolean = false
 
   def deepCopy(): SymbolicState = {
-    new SymbolicState(this.programLocation, this.pathCondition, this.symbolicStore.deepCopy(), this.callStack, this.variableDecls)
+    new SymbolicState(this.programLocation, this.pathCondition, this.symbolicStore.deepCopy(), this.callStack)
   }
 
   def getProgramLocation(): CfgNode = {
@@ -43,7 +50,6 @@ class SymbolicState(
 
   def addVar(variable: IdentifierDecl): SymbolicState = {
     symbolicStore.addNewVar(variable.name)
-    variableDecls = variableDecls.appended(variable)
     this
   }
 
@@ -64,9 +70,8 @@ class SymbolicState(
     this
   }
 
-  def goTo(nextStatement: CfgNode, variableDecls: List[IdentifierDecl]): SymbolicState = {
+  def goTo(nextStatement: CfgNode): SymbolicState = {
     this.programLocation = nextStatement
-    this.variableDecls = variableDecls
     this
   }
 
@@ -198,7 +203,7 @@ class SymbolicState(
           val firstThenStatement = thenBranch.asInstanceOf[NestedBlockStmt].body.head
           programLocation.succ.find(s => s.ast == firstThenStatement).get
         }
-        new SymbolicState(next, addToPathCondition(guard), symbolicStore.deepCopy(), copyCallStack(callStack), variableDecls)
+        new SymbolicState(next, addToPathCondition(guard), symbolicStore.deepCopy(), copyCallStack(callStack))
       case IfStmt(guard, thenBranch, None, loc) =>
         val next = if (thenBranch.asInstanceOf[NestedBlockStmt].body.isEmpty) {
           programLocation.succ.head
@@ -207,7 +212,7 @@ class SymbolicState(
           val firstThenStatement = thenBranch.asInstanceOf[NestedBlockStmt].body.head
           programLocation.succ.find(s => s.ast == firstThenStatement).get
         }
-        new SymbolicState(next, addToPathCondition(guard), symbolicStore.deepCopy(), copyCallStack(callStack), variableDecls)
+        new SymbolicState(next, addToPathCondition(guard), symbolicStore.deepCopy(), copyCallStack(callStack))
       case IfStmt(guard, thenBranch, Some(NestedBlockStmt(elseBranch, loc)), _) =>
         if (elseBranch.isEmpty) {
           val next = if (thenBranch.asInstanceOf[NestedBlockStmt].body.isEmpty) {
@@ -217,10 +222,10 @@ class SymbolicState(
             val firstThenStatement = thenBranch.asInstanceOf[NestedBlockStmt].body.head
             programLocation.succ.find(s => s.ast == firstThenStatement).get
           }
-          return new SymbolicState(next, addToPathCondition(guard), symbolicStore.deepCopy(), copyCallStack(callStack), variableDecls)
+          return new SymbolicState(next, addToPathCondition(guard), symbolicStore.deepCopy(), copyCallStack(callStack))
         }
         val next = programLocation.succ.find(s => s.ast != elseBranch.head).get
-        new SymbolicState(next, addToPathCondition(guard), symbolicStore.deepCopy(), copyCallStack(callStack), variableDecls)
+        new SymbolicState(next, addToPathCondition(guard), symbolicStore.deepCopy(), copyCallStack(callStack))
     }
   }
 
@@ -235,7 +240,7 @@ class SymbolicState(
           val firstThenStatement = thenBranch.asInstanceOf[NestedBlockStmt].body.head
           programLocation.succ.find(s => s.ast != firstThenStatement).get
         }
-        new SymbolicState(next, addToPathCondition(Not(guard, loc)), symbolicStore.deepCopy(), copyCallStack(callStack), variableDecls)
+        new SymbolicState(next, addToPathCondition(Not(guard, loc)), symbolicStore.deepCopy(), copyCallStack(callStack))
       case IfStmt(guard, thenBranch, None, loc) =>
         val next = if (thenBranch.asInstanceOf[NestedBlockStmt].body.isEmpty) {
           programLocation.succ.head
@@ -244,7 +249,7 @@ class SymbolicState(
           val firstThenStatement = thenBranch.asInstanceOf[NestedBlockStmt].body.head
           programLocation.succ.find(s => s.ast != firstThenStatement).get
         }
-        new SymbolicState(next, addToPathCondition(Not(guard, loc)), symbolicStore.deepCopy(), copyCallStack(callStack), variableDecls)
+        new SymbolicState(next, addToPathCondition(Not(guard, loc)), symbolicStore.deepCopy(), copyCallStack(callStack))
       case IfStmt(guard, thenBranch, Some(NestedBlockStmt(elseBranch, loc)), _) =>
         if (elseBranch.isEmpty) {
           val next = if (thenBranch.asInstanceOf[NestedBlockStmt].body.isEmpty) {
@@ -254,35 +259,19 @@ class SymbolicState(
             val firstThenStatement = thenBranch.asInstanceOf[NestedBlockStmt].body.head
             programLocation.succ.find(s => s.ast != firstThenStatement).get
           }
-          return new SymbolicState(next, addToPathCondition(Not(guard, loc)), symbolicStore.deepCopy(), copyCallStack(callStack), variableDecls)
+          return new SymbolicState(next, addToPathCondition(Not(guard, loc)), symbolicStore.deepCopy(), copyCallStack(callStack))
         }
         val next = programLocation.succ.find(s => s.ast == elseBranch.head).get
-        new SymbolicState(next, addToPathCondition(Not(guard, loc)), symbolicStore.deepCopy(), copyCallStack(callStack), variableDecls)
+        new SymbolicState(next, addToPathCondition(Not(guard, loc)), symbolicStore.deepCopy(), copyCallStack(callStack))
     }
   }
 
-  def applyChanges(changes: mutable.HashMap[String, Expr => Val]): SymbolicState = {
-    for (change <- changes) {
-      getValueOfVar(change._1, CodeLoc(0, 0)) match {
-        case SymbolicExpr(expr, _) => {
-          val newVal = change._2(expr)
-          updateVar(change._1, newVal)
-        }
-        case _ =>
-      }
-    }
-    this
-  }
 
   def applyChange(memoryLoc: Expr, change: Expr => SymbolicState => Expr, mapping: mutable.HashMap[Val, Expr]): SymbolicState = {
     val ptr = getMemoryLoc(memoryLoc)
     val n = SymbolicExpr(change.apply(symbolicStore.getValOfPtr(ptr, true).get.asInstanceOf[Symbolic]).apply(this), CodeLoc(0, 0))
     updateMemoryLocation(ptr, Utility.removeUnnecessarySymbolicExpr(SymbolicExpr(Utility.replaceWithMapping(n.asInstanceOf[Symbolic], mapping, this), CodeLoc(0, 0))))
     this
-  }
-
-  def stateEquals(other: SymbolicState): Boolean = {
-    this.symbolicStore.storeEquals(other.symbolicStore)
   }
 
   def mergeStates(other: SymbolicState): SymbolicState = {
@@ -294,7 +283,6 @@ class SymbolicState(
       expr,
       symbolicStore,
       callStack = this.callStack,
-      variableDecls = this.variableDecls,
       (this, other)
     )
     if (end - start > 50) {
@@ -303,8 +291,8 @@ class SymbolicState(
     res
   }
 
-  def copyCallStack(callStack: List[(CfgNode, List[IdentifierDecl])]): List[(CfgNode, List[IdentifierDecl])] = {
-    var res = List[(CfgNode, List[IdentifierDecl])]()
+  def copyCallStack(callStack: List[CfgNode]): List[CfgNode] = {
+    var res = List[CfgNode]()
     for (fceCall <- callStack) {
       res = res.appended(fceCall)
     }

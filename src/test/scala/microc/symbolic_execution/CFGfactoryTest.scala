@@ -7,7 +7,7 @@ import munit.FunSuite
 
 class CFGfactoryTest extends FunSuite with MicrocSupport with Examples {
 
-  test("get all paths in a sequential loop") {//TODO this is the normalized version
+  test("get all paths in a sequential loop") {
     val code =
       """
         |main() {
@@ -74,7 +74,7 @@ class CFGfactoryTest extends FunSuite with MicrocSupport with Examples {
   }
 
 
-  test("test empty block") {//TODO this is the normalized version
+  test("test empty block") {
     val code =
     """
       |main() {

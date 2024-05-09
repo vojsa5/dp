@@ -971,7 +971,7 @@ class PathSubsumptionTest extends FunSuite with MicrocSupport with Examples {
       fail("there should be timeout")
     } catch {
       case _: TimeoutException =>
-      case _ => fail("there should be timeout")
+      case _: Throwable => fail("there should be timeout")
     }
   }
 
@@ -1199,7 +1199,7 @@ class PathSubsumptionTest extends FunSuite with MicrocSupport with Examples {
       Await.ready(future, 2.seconds) // Use Await.result if you need the result of the future
     } catch {
       case _: TimeoutException =>
-      case _ => fail("")
+      case _: Throwable => fail("")
     }
   }
 
@@ -1451,7 +1451,7 @@ class PathSubsumptionTest extends FunSuite with MicrocSupport with Examples {
       Await.ready(future, 2.seconds) // Use Await.result if you need the result of the future
     } catch {
       case _: TimeoutException =>
-      case _ => fail("")
+      case _: Throwable => fail("")
     }
 
   }

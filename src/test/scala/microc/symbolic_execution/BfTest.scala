@@ -10,6 +10,10 @@ import microc.{Examples, MicrocSupport}
 import munit.FunSuite
 
 import scala.collection.mutable
+import scala.concurrent.{Await, Future, TimeoutException}
+
+import scala.concurrent.duration.DurationInt
+import scala.concurrent.ExecutionContext.Implicits.global
 
 class BfTest extends FunSuite with MicrocSupport with Examples {
   val bfCode = """
@@ -402,6 +406,22 @@ class BfTest extends FunSuite with MicrocSupport with Examples {
     executor.run()
   }
 
+  test("bf") {
+    val future = Future {
+      val code = bfCode
+      val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
+      val executor = new SymbolicExecutor(cfg)
+      executor.run()
+    }
+    try {
+      Await.ready(future, 10.seconds) // Use Await.result if you need the result of the future
+      fail("there should be timeout")
+    } catch {
+      case _: TimeoutException =>
+      case _: Throwable => fail("there should be timeout")
+    }
+  }
+
   test("bf if instead of while coverage search") {
     val code = bfCodeNoWhile
     val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
@@ -409,6 +429,7 @@ class BfTest extends FunSuite with MicrocSupport with Examples {
     val executor = new SymbolicExecutor(cfg, searchStrategy = new CoverageSearchStrategy(covered.get), covered = covered)
     executor.run()
   }
+
 
   test("bf if instead of while random path search") {
     val code = bfCodeNoWhile

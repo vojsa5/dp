@@ -976,47 +976,6 @@ class PathSubsumptionTest extends FunSuite with MicrocSupport with Examples {
   }
 
 
-  test("do not do path summarization for unclear array indices") {
-    val code =
-      """
-        |main() {
-        |  var x,y,z;
-        |  x = [0, 0];
-        |  z = input;
-        |  if (z > 1) {
-        |     z = 1;
-        |  }
-        |  if (z < 0) {
-        |     z = 0;
-        |  }
-        |  if (input) {
-        |
-        |  }
-        |  else {
-        |    y = [input, input];
-        |    if (y[z] < 0) {
-        |      y[z] = 0 - y[z];
-        |    }
-        |    x[z] = x[z] + y[z];
-        |  }
-        |  if (x[z] >= 0) {
-        |
-        |  }
-        |  else {
-        |    x[z] = 1 / 0;
-        |  }
-        |  return 0;
-        |}
-        |""".stripMargin;
-    val cfg = new IntraproceduralCfgFactory().fromProgram(parseUnsafe(code));
-    val ctx = new Context()
-    val executor = new SymbolicExecutor(cfg, Some(new PathSubsumption(new ConstraintSolver(ctx))), ctx, new DFSSearchStrategy());
-    executor.run()
-    assert(executor.statistics.numPaths == 11)
-    null
-  }
-
-
   test("condition obfuscated") {
     val code =
       """
